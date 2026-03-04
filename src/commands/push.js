@@ -29,9 +29,9 @@ export async function pushCommand() {
       return;
     }
 
-    if (config.provider === 'local') {
+    if (config.provider === 'local' || config.provider.includes('local')) {
       await syncToLocal(config, stagingDir);
-    } else if (config.provider === 'git') {
+    } else if (config.provider === 'git' || config.provider.includes('git')) {
       await syncToGit(config, stagingDir);
     } else {
       console.log(chalk.red(`Unknown provider: ${config.provider}`));
