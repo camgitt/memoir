@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Your AI remembers everything. Sync it everywhere.",
   "main": "src/index.js",
   "type": "module",

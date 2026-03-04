@@ -22,6 +22,15 @@ export const adapters = [
       const basename = path.basename(src);
       return !basename.endsWith('.key') && basename !== '.env';
     }
+  },
+  {
+    name: 'OpenAI Codex',
+    source: path.join(home, '.codex'),
+    filter: (src) => {
+      const basename = path.basename(src);
+      const ignored = ['.git', 'sessions', 'cache'];
+      return !ignored.includes(basename) && !basename.endsWith('.key') && basename !== '.env';
+    }
   }
 ];
 
