@@ -14,8 +14,7 @@ export async function restoreMemories(sourceDir, spinner) {
     if (await fs.pathExists(backupDir)) {
       spinner.stop();
       
-      console.log('
-' + chalk.yellow(`⚠ Found backup for ${chalk.bold(adapter.name)}.`));
+      console.log('\\n' + chalk.yellow(`⚠ Found backup for ${chalk.bold(adapter.name)}.`));
       const { confirm } = await inquirer.prompt([
         {
           type: 'confirm',

@@ -10,10 +10,8 @@ export async function restoreCommand() {
   const config = await getConfig();
   
   if (!config) {
-    console.log('
-' + chalk.red('✖ ai-sync is not configured.'));
-    console.log(`Run ${chalk.cyan('ai-sync init')} to set up your storage provider and fetch your files.
-`);
+    console.log('\\n' + chalk.red('✖ ai-sync is not configured.'));
+    console.log(`Run ${chalk.cyan('ai-sync init')} to set up your storage provider and fetch your files.\\n`);
     return;
   }
 
