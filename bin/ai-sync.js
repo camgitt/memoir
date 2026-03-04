@@ -1,12 +1,10 @@
-#!/usr/bin/env node
-
 import { program } from 'commander';
 import chalk from 'chalk';
+import boxen from 'boxen';
+import gradient from 'gradient-string';
 import { initCommand } from '../src/commands/init.js';
 import { pushCommand } from '../src/commands/push.js';
 
-// Read version from package.json
-// (In an actual package, you might import the package.json directly or parse it)
 const VERSION = '1.0.0';
 
 program
@@ -21,7 +19,7 @@ program
     try {
       await initCommand();
     } catch (err) {
-      console.error(chalk.red('Error during initialization:'), err.message);
+      console.error(chalk.red('\\n✖ Error during initialization:'), err.message);
       process.exit(1);
     }
   });
@@ -34,9 +32,22 @@ program
     try {
       await pushCommand();
     } catch (err) {
-      console.error(chalk.red('Error during sync:'), err.message);
+      console.error(chalk.red('\\n✖ Error during sync:'), err.message);
       process.exit(1);
     }
+  });
+
+program
+  .command('migrate')
+  .description('Migrate memory/context from one AI bot to another (e.g. Claude to Gemini)')
+  .action(() => {
+    console.log('\\n' + boxen(
+      gradient.pastel('ai-sync migrate (Coming Soon)') + '\\n\\n' +
+      chalk.white('We are actively developing the ability to instantly translate') + '\\n' +
+      chalk.white('and swap your context/memories between different AI providers.') + '\\n\\n' +
+      chalk.cyan('Stay tuned for updates!'),
+      { padding: 1, borderStyle: 'round', borderColor: 'yellow', align: 'center' }
+    ) + '\\n');
   });
 
 program.parse();
