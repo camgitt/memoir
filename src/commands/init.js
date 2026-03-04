@@ -1,11 +1,21 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import open from 'open';
+import boxen from 'boxen';
+import gradient from 'gradient-string';
 import { saveConfig } from '../config.js';
 
 export async function initCommand() {
-  console.log(chalk.blue('Welcome to ai-sync! 🚀'));
-  console.log("Let's set up where you want to store your AI memory.\\n");
+  const title = gradient.pastel.multiline('ai-sync \\nUniversal AI Memory Manager');
+  console.log('\\n' + boxen(title, { 
+    padding: 1, 
+    margin: 1, 
+    borderStyle: 'round', 
+    borderColor: 'cyan',
+    align: 'center'
+  }));
+
+  console.log(chalk.gray('Let\\'s configure where your AI knowledge will be safely stored.\\n'));
 
   const answers = await inquirer.prompt([
     {
@@ -13,28 +23,28 @@ export async function initCommand() {
       name: 'provider',
       message: 'Choose your storage provider:',
       choices: [
-        { name: '📂 Local Directory (e.g. Dropbox, iCloud Drive)', value: 'local' },
-        { name: '☁️  Git Repository (e.g. private GitHub repo)', value: 'git' }
+        { name: '☁️  Git Repository ' + chalk.gray('(GitHub, GitLab - Best for syncing across computers)'), value: 'git' },
+        { name: '📂 Local Directory ' + chalk.gray('(Dropbox, iCloud - Best for local backups)'), value: 'local' }
       ]
     },
     {
       type: 'input',
       name: 'localPath',
-      message: 'Enter the full path to your sync directory (e.g., /Users/name/Dropbox/ai-sync):',
+      message: 'Enter the full path to your sync directory ' + chalk.gray('(e.g., ~/Dropbox/ai-sync):'),
       when: (answers) => answers.provider === 'local',
-      validate: (input) => input.trim() !== '' ? true : 'Path is required'
+      validate: (input) => input.trim() !== '' ? true : chalk.red('✖ Path is required')
     },
     {
       type: 'confirm',
       name: 'openBrowser',
-      message: 'Do you need to create a new private GitHub repository right now?',
+      message: 'Need to create an empty GitHub repository right now?',
       when: (answers) => answers.provider === 'git',
       default: false
     }
   ]);
 
   if (answers.openBrowser) {
-    console.log(chalk.yellow('Opening GitHub in your browser... Create an empty private repository, then come back here!'));
+    console.log(chalk.cyan('\\n↗ Opening GitHub... Create an empty private repository, then return here.\\n'));
     await open('https://github.com/new');
   }
 
@@ -42,11 +52,13 @@ export async function initCommand() {
     {
       type: 'input',
       name: 'gitRepo',
-      message: 'Enter your private git repository URL (e.g., git@github.com:username/ai-memory.git):',
+      message: 'Repository URL ' + chalk.gray('(e.g., git@github.com:username/ai-memory.git):'),
       when: () => answers.provider === 'git',
       validate: (input) => {
-        if (input.trim() === '') return 'Repo URL is required';
-        if (!input.includes('github.com') && !input.includes('gitlab.com')) return 'Please enter a valid Git URL';
+        if (input.trim() === '') return chalk.red('✖ Repo URL is required');
+        if (!input.includes('github.com') && !input.includes('gitlab.com')) {
+          return chalk.yellow('⚠ Warning: This does not look like a standard GitHub/GitLab URL. Please verify.');
+        }
         return true;
       }
     }
@@ -60,6 +72,10 @@ export async function initCommand() {
 
   await saveConfig(config);
 
-  console.log(chalk.green('\\n✅ Configuration saved!'));
-  console.log(`You can now run ${chalk.cyan('ai-sync push')} or ${chalk.cyan('ai-sync remember')} to back up your CLI memories.`);
+  console.log('\\n' + boxen(
+    chalk.green('✔ Configuration saved successfully!') + '\\n\\n' +
+    chalk.white('To backup your memory, run:') + '\\n' +
+    chalk.cyan.bold('ai-sync push'),
+    { padding: 1, borderStyle: 'single', borderColor: 'green' }
+  ) + '\\n');
 }

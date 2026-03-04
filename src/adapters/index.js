@@ -7,9 +7,8 @@ const home = os.homedir();
 
 export const adapters = [
   {
-    name: 'gemini',
+    name: 'Gemini CLI',
     source: path.join(home, '.gemini'),
-    // Only copy safe configuration and memory, ignore tokens/cache
     filter: (src) => {
       const basename = path.basename(src);
       const ignored = ['.git', 'oauth_creds.json', 'google_accounts.json', 'tmp', 'history'];
@@ -17,24 +16,22 @@ export const adapters = [
     }
   },
   {
-    name: 'claude',
+    name: 'Claude CLI',
     source: path.join(home, '.claude'),
     filter: (src) => {
-      // Just an example, Claude CLI doesn't exist standardly like Gemini yet, 
-      // but this shows the structure for any AI bot.
       const basename = path.basename(src);
       return !basename.endsWith('.key') && basename !== '.env';
     }
   }
 ];
 
-export async function extractMemories(stagingDir) {
+export async function extractMemories(stagingDir, spinner) {
   let foundAny = false;
   
   for (const adapter of adapters) {
     if (await fs.pathExists(adapter.source)) {
-      console.log(`🔍 Found ${chalk.cyan(adapter.name)} memory...`);
-      const dest = path.join(stagingDir, adapter.name);
+      spinner.text = `Found ${chalk.cyan(adapter.name)} memory... copying to staging`;
+      const dest = path.join(stagingDir, adapter.name.toLowerCase().replace(' ', '-'));
       await fs.ensureDir(dest);
       await fs.copy(adapter.source, dest, { filter: adapter.filter });
       foundAny = true;
