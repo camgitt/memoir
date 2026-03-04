@@ -4,8 +4,7 @@ import { saveConfig } from '../config.js';
 
 export async function initCommand() {
   console.log(chalk.blue('Welcome to ai-sync! 🚀'));
-  console.log('Let's set up where you want to store your AI memory.
-');
+  console.log("Let's set up where you want to store your AI memory.\\n");
 
   const answers = await inquirer.prompt([
     {
@@ -41,7 +40,6 @@ export async function initCommand() {
 
   await saveConfig(config);
 
-  console.log(chalk.green('
-✅ Configuration saved!'));
+  console.log(chalk.green('\\n✅ Configuration saved!'));
   console.log(`You can now run ${chalk.cyan('ai-sync push')} or ${chalk.cyan('ai-sync remember')} to back up your CLI memories.`);
 }
