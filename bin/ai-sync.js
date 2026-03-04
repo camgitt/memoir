@@ -4,6 +4,7 @@ import boxen from 'boxen';
 import gradient from 'gradient-string';
 import { initCommand } from '../src/commands/init.js';
 import { pushCommand } from '../src/commands/push.js';
+import { restoreCommand } from '../src/commands/restore.js';
 
 const VERSION = '1.0.0';
 
@@ -33,6 +34,19 @@ program
       await pushCommand();
     } catch (err) {
       console.error(chalk.red('\\n✖ Error during sync:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('restore')
+  .alias('pull')
+  .description('Restore your AI CLI memory from your configured storage')
+  .action(async () => {
+    try {
+      await restoreCommand();
+    } catch (err) {
+      console.error(chalk.red('\\n✖ Error during restore:'), err.message);
       process.exit(1);
     }
   });
