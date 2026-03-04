@@ -10,8 +10,8 @@ export async function restoreCommand() {
   const config = await getConfig();
   
   if (!config) {
-    console.log('\\n' + chalk.red('✖ ai-sync is not configured.'));
-    console.log(`Run ${chalk.cyan('ai-sync init')} to set up your storage provider and fetch your files.\\n`);
+    console.log('\\n' + chalk.red('✖ memoir is not configured.'));
+    console.log(`Run ${chalk.cyan('memoir init')} to set up your storage provider and fetch your files.\\n`);
     return;
   }
 
@@ -19,7 +19,7 @@ export async function restoreCommand() {
   const spinner = ora('Initializing AI memory restore...').start();
 
   // Create a temporary staging directory to hold the downloaded files
-  const stagingDir = path.join(os.tmpdir(), `ai-sync-restore-${Date.now()}`);
+  const stagingDir = path.join(os.tmpdir(), `memoir-restore-${Date.now()}`);
   await fs.ensureDir(stagingDir);
 
   try {

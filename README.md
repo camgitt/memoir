@@ -1,9 +1,9 @@
 <div align="center">
 
-# 🧠 ai-sync
-**The Universal Memory Manager for AI Developers**
+# 🧠 memoir
+**Your AI Remembers Everything. Sync It Everywhere.**
 
-[![npm version](https://img.shields.io/npm/v/ai-sync-cli.svg?style=flat-square)](https://npmjs.org/package/ai-sync-cli)
+[![npm version](https://img.shields.io/npm/v/memoir.svg?style=flat-square)](https://npmjs.org/package/memoir)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 *Never lose your AI's context again. Sync Gemini CLI, Claude Code, and more across all your devices instantly.*
@@ -14,15 +14,15 @@
 
 ## 💡 The Problem
 
-You spend weeks teaching your local AI CLI exactly how you like your code formatted, your preferred architectural patterns, and your project's unique context. 
+You spend weeks teaching your local AI CLI exactly how you like your code formatted, your preferred architectural patterns, and your project's unique context.
 
 Then, you switch laptops. Or you want to share that setup with your team.
 
-Suddenly, you're starting from scratch. Your AI's "memory" is trapped in hidden `.gemini` or `.claude` folders on a single machine. 
+Suddenly, you're starting from scratch. Your AI's "memory" is trapped in hidden `.gemini` or `.claude` folders on a single machine.
 
 ## 🚀 The Solution
 
-`ai-sync` is a zero-friction CLI tool that seamlessly extracts, backs up, and restores your AI's memory across any computer. You bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `ai-sync` handles the rest safely and securely.
+`memoir` is a zero-friction CLI tool that seamlessly extracts, backs up, and restores your AI's memory across any computer. You bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `memoir` handles the rest safely and securely.
 
 No locked-in SaaS, no lost context, no complex shell scripts.
 
@@ -39,7 +39,7 @@ No locked-in SaaS, no lost context, no complex shell scripts.
 Install globally via npm so you can use it anywhere on your machine:
 
 ```bash
-npm install -g ai-sync-cli
+npm install -g memoir
 ```
 
 ## ⚡ Quick Start
@@ -48,43 +48,43 @@ npm install -g ai-sync-cli
 Run the setup wizard. We'll help you securely link a private GitHub repository or a local sync folder.
 
 ```bash
-ai-sync init
+memoir init
 ```
 
 ### 2. Backup Your Memory
 Just had a great session? Save your AI's learned context to the cloud:
 
 ```bash
-ai-sync push
+memoir push
 # or simply use the alias:
-ai-sync remember
+memoir remember
 ```
 
 ### 3. Restore Anywhere
 Got a new machine? Pull your brain down instantly:
 
 ```bash
-ai-sync restore
+memoir restore
 # or:
-ai-sync pull
+memoir pull
 ```
 
 ---
 
 ## 🔒 Security First
 
-Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`ai-sync` is designed to be paranoid.**
+Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`memoir` is designed to be paranoid.**
 
-Our specialized adapters intelligently filter your directories. We **only** sync configuration files, custom prompts, and markdown memory (`GEMINI.md`, `CLAUDE.md`). We will never touch, copy, or push `.env` files, `.key` files, or credential caches. 
+Our specialized adapters intelligently filter your directories. We **only** sync configuration files, custom prompts, and markdown memory (`GEMINI.md`, `CLAUDE.md`). We will never touch, copy, or push `.env` files, `.key` files, or credential caches.
 
 ---
 
 ## 🗺️ Roadmap: The Future of Data Portability
 
-We believe developers shouldn't be locked into a single AI ecosystem. 
+We believe developers shouldn't be locked into a single AI ecosystem.
 
 **Coming in v2.0: The Migration Engine**
-Currently, `ai-sync` backs up your files exactly as they are. Soon, you will be able to run `ai-sync migrate --from claude --to gemini`. The CLI will automatically translate your Claude Code instructions into Gemini CLI facts, allowing you to fluidly swap AI providers without losing a drop of context.
+Currently, `memoir` backs up your files exactly as they are. Soon, you will be able to run `memoir migrate --from claude --to gemini`. The CLI will automatically translate your Claude Code instructions into Gemini CLI facts, allowing you to fluidly swap AI providers without losing a drop of context.
 
 ---
 

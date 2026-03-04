@@ -1,14 +1,14 @@
 {
-  "name": "ai-sync-cli",
+  "name": "memoir",
   "version": "1.0.0",
-  "description": "Universal AI CLI memory synchronization tool",
+  "description": "Your AI remembers everything. Sync it everywhere.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
-    "ai-sync": "./bin/ai-sync.js"
+    "memoir": "./bin/memoir.js"
   },
   "scripts": {
-    "start": "node bin/ai-sync.js",
+    "start": "node bin/memoir.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -16,8 +16,11 @@
     "cli",
     "sync",
     "memory",
+    "memoir",
     "gemini",
-    "claude"
+    "claude",
+    "backup",
+    "restore"
   ],
   "author": "",
   "license": "ISC",

@@ -28,8 +28,8 @@ export async function syncToGit(config, stagingDir, spinner) {
     execSync('git init', { cwd: stagingDir, stdio: 'ignore' });
     execSync('git branch -m main', { cwd: stagingDir, stdio: 'ignore' });
     execSync('git add .', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git config user.name "ai-sync" && git config user.email "bot@ai-sync.cli"', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git commit -m "chore: ai-sync backup"', { cwd: stagingDir, stdio: 'ignore' });
+    execSync('git config user.name "memoir" && git config user.email "bot@memoir.dev"', { cwd: stagingDir, stdio: 'ignore' });
+    execSync('git commit -m "chore: memoir backup"', { cwd: stagingDir, stdio: 'ignore' });
     
     spinner.text = `Pushing data to ${chalk.cyan(repoUrl)}...`;
     // We ignore stdio to prevent spam, but if it fails it will throw
