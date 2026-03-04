@@ -15,7 +15,7 @@ export async function initCommand() {
     align: 'center'
   }));
 
-  console.log(chalk.gray('Let\\'s configure where your AI knowledge will be safely stored.\\n'));
+  console.log(chalk.gray("Let's configure where your AI knowledge will be safely stored.\\n"));
 
   const answers = await inquirer.prompt([
     {
