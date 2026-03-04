@@ -3,7 +3,7 @@
 # 🧠 memoir
 **Your AI Remembers Everything. Sync It Everywhere.**
 
-[![npm version](https://img.shields.io/npm/v/@camgitt/memoir.svg?style=flat-square)](https://npmjs.org/package/@camgitt/memoir)
+[![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square)](https://npmjs.org/package/memoir-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 *Never lose your AI's context again. Sync Gemini CLI, Claude Code, and more across all your devices instantly.*
@@ -39,7 +39,7 @@ No locked-in SaaS, no lost context, no complex shell scripts.
 Install globally via npm so you can use it anywhere on your machine:
 
 ```bash
-npm install -g @camgitt/memoir
+npm install -g memoir-cli
 ```
 
 ## ⚡ Quick Start
