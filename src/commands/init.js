@@ -6,7 +6,7 @@ import gradient from 'gradient-string';
 import { saveConfig } from '../config.js';
 
 export async function initCommand() {
-  const title = gradient.pastel.multiline('memoir \\nYour AI Remembers Everything');
+  const title = gradient.pastel.multiline('recall \\nTotal Recall for Your AI');
   console.log('\\n' + boxen(title, { 
     padding: 1, 
     margin: 1, 
@@ -30,7 +30,7 @@ export async function initCommand() {
     {
       type: 'input',
       name: 'localPath',
-      message: 'Enter the full path to your sync directory ' + chalk.gray('(e.g., ~/Dropbox/memoir):'),
+      message: 'Enter the full path to your sync directory ' + chalk.gray('(e.g., ~/Dropbox/recall):'),
       when: (answers) => answers.provider === 'local',
       validate: (input) => input.trim() !== '' ? true : chalk.red('✖ Path is required')
     },
@@ -75,7 +75,7 @@ export async function initCommand() {
   console.log('\\n' + boxen(
     chalk.green('✔ Configuration saved successfully!') + '\\n\\n' +
     chalk.white('To backup your memory, run:') + '\\n' +
-    chalk.cyan.bold('memoir push'),
+    chalk.cyan.bold('recall push'),
     { padding: 1, borderStyle: 'single', borderColor: 'green' }
   ) + '\\n');
 }

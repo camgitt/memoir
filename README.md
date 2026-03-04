@@ -1,9 +1,9 @@
 <div align="center">
 
-# 🧠 memoir
+# 🧠 Total Recall
 **Your AI Remembers Everything. Sync It Everywhere.**
 
-[![npm version](https://img.shields.io/npm/v/memoir.svg?style=flat-square)](https://npmjs.org/package/memoir)
+[![npm version](https://img.shields.io/npm/v/totalrecall.svg?style=flat-square)](https://npmjs.org/package/totalrecall)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 *Never lose your AI's context again. Sync Gemini CLI, Claude Code, and more across all your devices instantly.*
@@ -22,7 +22,7 @@ Suddenly, you're starting from scratch. Your AI's "memory" is trapped in hidden 
 
 ## 🚀 The Solution
 
-`memoir` is a zero-friction CLI tool that seamlessly extracts, backs up, and restores your AI's memory across any computer. You bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `memoir` handles the rest safely and securely.
+`recall` is a zero-friction CLI tool that seamlessly extracts, backs up, and restores your AI's memory across any computer. You bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `recall` handles the rest safely and securely.
 
 No locked-in SaaS, no lost context, no complex shell scripts.
 
@@ -39,7 +39,7 @@ No locked-in SaaS, no lost context, no complex shell scripts.
 Install globally via npm so you can use it anywhere on your machine:
 
 ```bash
-npm install -g memoir
+npm install -g totalrecall
 ```
 
 ## ⚡ Quick Start
@@ -48,32 +48,32 @@ npm install -g memoir
 Run the setup wizard. We'll help you securely link a private GitHub repository or a local sync folder.
 
 ```bash
-memoir init
+recall init
 ```
 
 ### 2. Backup Your Memory
 Just had a great session? Save your AI's learned context to the cloud:
 
 ```bash
-memoir push
+recall push
 # or simply use the alias:
-memoir remember
+recall remember
 ```
 
 ### 3. Restore Anywhere
 Got a new machine? Pull your brain down instantly:
 
 ```bash
-memoir restore
+recall restore
 # or:
-memoir pull
+recall pull
 ```
 
 ---
 
 ## 🔒 Security First
 
-Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`memoir` is designed to be paranoid.**
+Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`recall` is designed to be paranoid.**
 
 Our specialized adapters intelligently filter your directories. We **only** sync configuration files, custom prompts, and markdown memory (`GEMINI.md`, `CLAUDE.md`). We will never touch, copy, or push `.env` files, `.key` files, or credential caches.
 
@@ -84,7 +84,7 @@ Our specialized adapters intelligently filter your directories. We **only** sync
 We believe developers shouldn't be locked into a single AI ecosystem.
 
 **Coming in v2.0: The Migration Engine**
-Currently, `memoir` backs up your files exactly as they are. Soon, you will be able to run `memoir migrate --from claude --to gemini`. The CLI will automatically translate your Claude Code instructions into Gemini CLI facts, allowing you to fluidly swap AI providers without losing a drop of context.
+Currently, `recall` backs up your files exactly as they are. Soon, you will be able to run `recall migrate --from claude --to gemini`. The CLI will automatically translate your Claude Code instructions into Gemini CLI facts, allowing you to fluidly swap AI providers without losing a drop of context.
 
 ---
 

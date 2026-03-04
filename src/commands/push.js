@@ -11,8 +11,8 @@ export async function pushCommand() {
   const config = await getConfig();
   
   if (!config) {
-    console.log('\\n' + chalk.red('✖ memoir is not configured.'));
-    console.log(`Run ${chalk.cyan('memoir init')} to set up your storage provider.\\n`);
+    console.log('\\n' + chalk.red('✖ recall is not configured.'));
+    console.log(`Run ${chalk.cyan('recall init')} to set up your storage provider.\\n`);
     return;
   }
 
@@ -20,7 +20,7 @@ export async function pushCommand() {
   const spinner = ora('Initializing AI memory sync...').start();
 
   // Create a temporary staging directory
-  const stagingDir = path.join(os.tmpdir(), `memoir-staging-${Date.now()}`);
+  const stagingDir = path.join(os.tmpdir(), `recall-staging-${Date.now()}`);
   await fs.ensureDir(stagingDir);
 
   try {
