@@ -10,13 +10,13 @@ import { restoreCommand } from '../src/commands/restore.js';
 const VERSION = '1.0.0';
 
 program
-  .name('recall')
+  .name('memoir')
   .description('Your AI remembers everything. Sync it everywhere.')
   .version(VERSION);
 
 program
   .command('init')
-  .description('Initialize and configure recall storage preferences')
+  .description('Initialize and configure memoir storage preferences')
   .action(async () => {
     try {
       await initCommand();
@@ -57,7 +57,7 @@ program
   .description('Migrate memory/context from one AI bot to another (e.g. Claude to Gemini)')
   .action(() => {
     console.log('\n' + boxen(
-      gradient.pastel('recall migrate (Coming Soon)') + '\n\n' +
+      gradient.pastel('memoir migrate (Coming Soon)') + '\n\n' +
       chalk.white('We are actively developing the ability to instantly translate') + '\n' +
       chalk.white('and swap your context/memories between different AI providers.') + '\n\n' +
       chalk.cyan('Stay tuned for updates!'),
