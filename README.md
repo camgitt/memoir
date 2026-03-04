@@ -28,10 +28,12 @@ No locked-in SaaS, no lost context, no complex shell scripts.
 
 ### Supported Integrations
 - [x] **Gemini CLI**
-- [x] **Claude CLI**
+- [x] **Claude Code**
 - [x] **OpenAI Codex CLI**
-- [ ] *Cursor (Coming Soon)*
-- [ ] *GitHub Copilot (Coming Soon)*
+- [x] **Cursor**
+- [x] **GitHub Copilot**
+- [x] **Windsurf**
+- [x] **Aider**
 
 ---
 

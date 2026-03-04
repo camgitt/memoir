@@ -6,8 +6,9 @@ import gradient from 'gradient-string';
 import { initCommand } from '../src/commands/init.js';
 import { pushCommand } from '../src/commands/push.js';
 import { restoreCommand } from '../src/commands/restore.js';
+import { statusCommand } from '../src/commands/status.js';
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.1';
 
 program
   .name('memoir')
@@ -48,6 +49,18 @@ program
       await restoreCommand();
     } catch (err) {
       console.error(chalk.red('\n✖ Error during restore:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('status')
+  .description('Show detected AI tools and configuration status')
+  .action(async () => {
+    try {
+      await statusCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
   });

@@ -24,20 +24,46 @@ export async function syncToGit(config, stagingDir, spinner) {
   
   spinner.text = `Authenticating and syncing with Git remote: ${chalk.cyan(repoUrl)}`;
   
+  // Clone existing repo to preserve history, then replace contents
+  const gitDir = path.join(os.tmpdir(), `memoir-git-${Date.now()}`);
+  await fs.ensureDir(gitDir);
+
   try {
-    execSync('git init', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git branch -m main', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git add .', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git config user.name "memoir"', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git config user.email "bot@memoir.dev"', { cwd: stagingDir, stdio: 'ignore' });
-    execSync('git commit -m "chore: memoir backup"', { cwd: stagingDir, stdio: 'ignore' });
-    
+    try {
+      execSync(`git clone --depth 10 ${repoUrl} .`, { cwd: gitDir, stdio: 'ignore' });
+      // Remove old files so deleted configs don't persist
+      const files = await fs.readdir(gitDir);
+      for (const f of files) {
+        if (f !== '.git') await fs.remove(path.join(gitDir, f));
+      }
+    } catch {
+      // Repo is empty or doesn't exist yet — init fresh
+      execSync('git init', { cwd: gitDir, stdio: 'ignore' });
+      execSync('git branch -m main', { cwd: gitDir, stdio: 'ignore' });
+    }
+
+    // Copy staged memories into the git dir
+    await fs.copy(stagingDir, gitDir);
+
+    execSync('git add -A', { cwd: gitDir, stdio: 'ignore' });
+    execSync('git config user.name "memoir"', { cwd: gitDir, stdio: 'ignore' });
+    execSync('git config user.email "bot@memoir.dev"', { cwd: gitDir, stdio: 'ignore' });
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    try {
+      execSync(`git commit -m "memoir backup ${timestamp}"`, { cwd: gitDir, stdio: 'ignore' });
+    } catch {
+      spinner.succeed(chalk.green('Already up to date! ') + chalk.gray('No changes to push.'));
+      return;
+    }
+
     spinner.text = `Pushing data to ${chalk.cyan(repoUrl)}...`;
-    // We ignore stdio to prevent spam, but if it fails it will throw
-    execSync(`git push --force ${repoUrl} main`, { cwd: stagingDir, stdio: 'ignore' });
-    
+    execSync(`git push ${repoUrl} main`, { cwd: gitDir, stdio: 'ignore' });
+
     spinner.succeed(chalk.green('Sync complete! ') + chalk.gray('(Uploaded securely to GitHub)'));
   } catch (err) {
-    throw new Error('Failed to push to git repository. Ensure your SSH keys are configured and the repository exists.');
+    throw new Error('Failed to push to git repository. Ensure your credentials are configured and the repository exists.');
+  } finally {
+    await fs.remove(gitDir);
   }
 }
