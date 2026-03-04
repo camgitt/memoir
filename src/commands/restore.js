@@ -3,22 +3,26 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import ora from 'ora';
+import boxen from 'boxen';
+import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 
 export async function restoreCommand() {
   const config = await getConfig();
-  
+
   if (!config) {
-    console.log('\\n' + chalk.red('✖ memoir is not configured.'));
-    console.log(`Run ${chalk.cyan('memoir init')} to set up your storage provider and fetch your files.\\n`);
+    console.log('\n' + boxen(
+      chalk.red('✖ Not configured yet\n\n') +
+      chalk.white('Run ') + chalk.cyan.bold('memoir init') + chalk.white(' to get started.'),
+      { padding: 1, borderStyle: 'round', borderColor: 'red' }
+    ) + '\n');
     return;
   }
 
   console.log();
-  const spinner = ora('Initializing AI memory restore...').start();
+  const spinner = ora({ text: chalk.gray('Fetching memories from ' + (config.provider === 'git' ? 'GitHub' : 'local storage') + '...'), spinner: 'dots' }).start();
 
-  // Create a temporary staging directory to hold the downloaded files
   const stagingDir = path.join(os.tmpdir(), `memoir-restore-${Date.now()}`);
   await fs.ensureDir(stagingDir);
 
@@ -34,16 +38,26 @@ export async function restoreCommand() {
       return;
     }
 
+    spinner.stop();
+
     if (restored) {
-      spinner.succeed(chalk.green('Restore complete! Your AI bots have their memories back.'));
+      console.log('\n' + boxen(
+        gradient.pastel('  Restored!  ') + '\n\n' +
+        chalk.white('Your AI tools have their memories back.') + '\n' +
+        chalk.gray('They remember everything.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
+      ) + '\n');
     } else {
-      spinner.info(chalk.yellow('No memories were restored.'));
+      console.log('\n' + boxen(
+        chalk.yellow('No memories were restored.\n\n') +
+        chalk.gray('Run ') + chalk.cyan('memoir push') + chalk.gray(' on another machine first.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
+      ) + '\n');
     }
 
   } catch (error) {
     spinner.fail(chalk.red('Restore failed: ') + error.message);
   } finally {
-    // Clean up staging directory
     await fs.remove(stagingDir);
   }
 }

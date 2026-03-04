@@ -8,16 +8,23 @@ import { pushCommand } from '../src/commands/push.js';
 import { restoreCommand } from '../src/commands/restore.js';
 import { statusCommand } from '../src/commands/status.js';
 
-const VERSION = '1.1.1';
+const VERSION = '1.2.0';
+
+// Custom help banner
+program.addHelpText('beforeAll', '\n' + boxen(
+  gradient.pastel.multiline('  memoir  ') + '\n' +
+  chalk.gray('  Your AI remembers everything.'),
+  { padding: { top: 0, bottom: 0, left: 1, right: 1 }, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
+) + '\n');
 
 program
   .name('memoir')
-  .description('Your AI remembers everything. Sync it everywhere.')
+  .description(chalk.white('Sync your AI memory across every device.'))
   .version(VERSION);
 
 program
   .command('init')
-  .description('Initialize and configure memoir storage preferences')
+  .description('Set up memoir with your storage provider')
   .action(async () => {
     try {
       await initCommand();
@@ -30,7 +37,7 @@ program
 program
   .command('push')
   .alias('remember')
-  .description('Sync your AI memory to your configured storage')
+  .description('Back up your AI memory to the cloud')
   .action(async () => {
     try {
       await pushCommand();
@@ -43,7 +50,7 @@ program
 program
   .command('restore')
   .alias('pull')
-  .description('Restore your AI memory from your configured storage')
+  .description('Restore your AI memory on this machine')
   .action(async () => {
     try {
       await restoreCommand();
@@ -55,7 +62,7 @@ program
 
 program
   .command('status')
-  .description('Show detected AI tools and configuration status')
+  .description('See what AI tools are on this machine')
   .action(async () => {
     try {
       await statusCommand();
@@ -67,13 +74,13 @@ program
 
 program
   .command('migrate')
-  .description('Migrate memory/context from one AI bot to another (e.g. Claude to Gemini)')
+  .description('Translate memory between AI providers')
   .action(() => {
     console.log('\n' + boxen(
-      gradient.pastel('memoir migrate (Coming Soon)') + '\n\n' +
-      chalk.white('We are actively developing the ability to instantly translate') + '\n' +
-      chalk.white('and swap your context/memories between different AI providers.') + '\n\n' +
-      chalk.cyan('Stay tuned for updates!'),
+      gradient.pastel('  memoir migrate  ') + '\n\n' +
+      chalk.white('Instantly translate your context between') + '\n' +
+      chalk.white('Claude, Gemini, Codex, and more.') + '\n\n' +
+      chalk.cyan.bold('Coming soon.'),
       { padding: 1, borderStyle: 'round', borderColor: 'yellow', align: 'center' }
     ) + '\n');
   });

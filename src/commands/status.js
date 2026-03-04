@@ -1,6 +1,8 @@
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
+import boxen from 'boxen';
+import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
 
@@ -10,47 +12,52 @@ export async function statusCommand() {
   console.log();
 
   // Config status
+  let configLine;
   if (config) {
-    const provider = config.provider === 'git' ? `Git (${config.gitRepo})` : `Local (${config.localPath})`;
-    console.log(chalk.green('✔ Configured') + chalk.gray(` — ${provider}`));
+    const provider = config.provider === 'git'
+      ? chalk.cyan(config.gitRepo)
+      : chalk.cyan(config.localPath);
+    configLine = chalk.green('✔ Connected') + chalk.gray(' → ') + provider;
   } else {
-    console.log(chalk.red('✖ Not configured') + chalk.gray(' — run memoir init'));
-    console.log();
-    return;
+    configLine = chalk.red('✖ Not configured') + chalk.gray(' → run ') + chalk.cyan('memoir init');
   }
 
-  console.log();
-
   // Detected tools
-  console.log(chalk.bold('Detected AI tools:\n'));
-
+  const lines = [];
   let detected = 0;
+
   for (const adapter of adapters) {
+    let found = false;
     if (adapter.customExtract) {
-      let hasFiles = false;
       for (const file of adapter.files) {
         if (await fs.pathExists(path.join(adapter.source, file))) {
-          hasFiles = true;
+          found = true;
           break;
         }
       }
-      if (hasFiles) {
-        console.log(chalk.green('  ✔ ') + adapter.name);
-        detected++;
-      } else {
-        console.log(chalk.gray('  ○ ') + chalk.gray(adapter.name + ' — not found'));
-      }
     } else {
-      if (await fs.pathExists(adapter.source)) {
-        console.log(chalk.green('  ✔ ') + adapter.name);
-        detected++;
-      } else {
-        console.log(chalk.gray('  ○ ') + chalk.gray(adapter.name + ' — not found'));
-      }
+      found = await fs.pathExists(adapter.source);
+    }
+
+    if (found) {
+      lines.push(chalk.green('  ✔ ') + chalk.white(adapter.name));
+      detected++;
+    } else {
+      lines.push(chalk.gray('  ○ ' + adapter.name));
     }
   }
 
-  console.log();
-  console.log(chalk.white(`${detected} tool${detected !== 1 ? 's' : ''} detected on this machine.`));
-  console.log();
+  const summary = detected > 0
+    ? chalk.white(`${detected} tool${detected !== 1 ? 's' : ''} ready to sync`)
+    : chalk.yellow('No AI tools detected');
+
+  console.log(boxen(
+    gradient.pastel('  memoir status  ') + '\n\n' +
+    configLine + '\n\n' +
+    chalk.bold.white('AI Tools') + '\n' +
+    lines.join('\n') + '\n\n' +
+    chalk.gray('─'.repeat(30)) + '\n' +
+    summary,
+    { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
+  ) + '\n');
 }
