@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "description": "Sync and translate AI memory across devices and tools. Back up Claude, Gemini, Codex, Cursor, Copilot, Windsurf, and Aider configs. Migrate instructions between AI coding assistants with one command.",
   "main": "src/index.js",
   "type": "module",
