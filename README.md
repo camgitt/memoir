@@ -85,6 +85,86 @@ Your Claude instructions become a proper `GEMINI.md` — not a copy-paste, but a
 
 ---
 
+## 📖 All Commands
+
+| Command | What it does |
+|---------|-------------|
+| `memoir init` | Setup wizard — pick GitHub or local folder, upload or download |
+| `memoir push` | Extract all AI tool configs, back up to GitHub/local |
+| `memoir restore` | Pull backup down, restore missing files (non-destructive) |
+| `memoir status` | Show which AI tools are detected on this machine |
+| `memoir view` | Preview backup contents with diffs against local |
+| `memoir migrate` | Translate memory between tools via Gemini AI |
+
+---
+
+## 🎯 Common Workflows
+
+### New laptop setup
+```bash
+# Old machine — save everything
+memoir init    # → Upload → GitHub
+
+# New machine — restore everything
+memoir init    # → Download → GitHub
+# All your .claude/, .gemini/, .cursorrules configs restored in 30 seconds
+```
+
+### Switch from Claude to Gemini (or any tool)
+```bash
+memoir migrate --from claude --to gemini
+```
+Your CLAUDE.md + Claude memory files get intelligently rewritten as a proper GEMINI.md — not a copy-paste, but a real translation that follows Gemini's conventions.
+
+### Keep your whole team in sync
+```bash
+# Team lead writes CLAUDE.md, then generates for everyone else:
+memoir migrate --from claude --to cursor
+memoir migrate --from claude --to copilot
+memoir migrate --from claude --to codex
+```
+
+### Fan out to every tool at once
+```bash
+memoir migrate --from claude --to gemini
+memoir migrate --from claude --to codex
+memoir migrate --from claude --to cursor
+memoir migrate --from claude --to windsurf
+memoir migrate --from claude --to aider
+```
+Use one tool as the source of truth, propagate to all others.
+
+### Preview before committing
+```bash
+memoir migrate --from gemini --to claude --dry-run
+# Shows translated output but writes nothing
+```
+
+### Protect existing files
+```bash
+memoir migrate --from claude --to gemini
+# → "GEMINI.md already exists."
+# → Overwrite / Append / Skip
+# Append adds a dated separator so you keep your existing instructions
+```
+
+### Daily sync across machines
+```bash
+# End of day
+memoir push
+
+# Next morning, different machine
+memoir pull
+```
+
+### Check what's on this machine
+```bash
+memoir status
+# Shows checkmarks for every detected AI tool and their config locations
+```
+
+---
+
 ## 🔒 Security First
 
 Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`memoir` is designed to be paranoid.**
