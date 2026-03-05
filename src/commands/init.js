@@ -67,38 +67,23 @@ export async function initCommand() {
     }]);
     config.localPath = localPath;
   } else {
-    // Pre-fill username if detected, just ask for repo name
-    const prompts = [];
-
-    if (detectedUser) {
-      console.log(chalk.gray(`  GitHub user: ${chalk.cyan(detectedUser)}`));
-      prompts.push({
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'username',
+        message: 'GitHub username:',
+        default: detectedUser || undefined,
+        validate: (input) => input.trim() ? true : 'Required'
+      },
+      {
         type: 'input',
         name: 'repo',
-        message: `Repo name (${detectedUser}/???):`,
+        message: 'Repo name:',
         default: 'ai-memory',
         validate: (input) => input.trim() ? true : 'Required'
-      });
-    } else {
-      prompts.push(
-        {
-          type: 'input',
-          name: 'username',
-          message: 'GitHub username:',
-          validate: (input) => input.trim() ? true : 'Required'
-        },
-        {
-          type: 'input',
-          name: 'repo',
-          message: 'Repo name:',
-          default: 'ai-memory',
-          validate: (input) => input.trim() ? true : 'Required'
-        }
-      );
-    }
-
-    const answers = await inquirer.prompt(prompts);
-    const username = (answers.username || detectedUser).trim();
+      }
+    ]);
+    const username = answers.username.trim();
     const repo = answers.repo.trim();
 
     config.gitRepo = `https://github.com/${username}/${repo}.git`;
