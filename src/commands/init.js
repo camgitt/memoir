@@ -2,15 +2,25 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { saveConfig } from '../config.js';
 import { pushCommand } from './push.js';
 import { restoreCommand } from './restore.js';
 
 function getGitUsername() {
   try {
-    return execSync('git config --global user.name', { encoding: 'utf8' }).trim();
+    return execFileSync('git', ['config', '--global', 'user.name'], { encoding: 'utf8' }).trim();
   } catch { return ''; }
+}
+
+function getGitHubUsername() {
+  try {
+    // Try gh CLI first
+    return execFileSync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf8' }).trim();
+  } catch {
+    // Fall back to git config
+    return getGitUsername();
+  }
 }
 
 export async function initCommand() {
@@ -22,7 +32,7 @@ export async function initCommand() {
   ));
   console.log('');
 
-  const gitUser = getGitUsername();
+  const detectedUser = getGitHubUsername();
 
   const { direction, provider } = await inquirer.prompt([
     {
@@ -57,27 +67,46 @@ export async function initCommand() {
     }]);
     config.localPath = localPath;
   } else {
-    const { username, repo } = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'username',
-        message: 'GitHub username:',
-        validate: (input) => input.trim() ? true : 'Required'
-      },
-      {
+    // Pre-fill username if detected, just ask for repo name
+    const prompts = [];
+
+    if (detectedUser) {
+      console.log(chalk.gray(`  GitHub user: ${chalk.cyan(detectedUser)}`));
+      prompts.push({
         type: 'input',
         name: 'repo',
-        message: 'Repo name:',
+        message: `Repo name (${detectedUser}/???):`,
         default: 'ai-memory',
         validate: (input) => input.trim() ? true : 'Required'
-      }
-    ]);
+      });
+    } else {
+      prompts.push(
+        {
+          type: 'input',
+          name: 'username',
+          message: 'GitHub username:',
+          validate: (input) => input.trim() ? true : 'Required'
+        },
+        {
+          type: 'input',
+          name: 'repo',
+          message: 'Repo name:',
+          default: 'ai-memory',
+          validate: (input) => input.trim() ? true : 'Required'
+        }
+      );
+    }
 
-    config.gitRepo = `https://github.com/${username.trim()}/${repo.trim()}.git`;
+    const answers = await inquirer.prompt(prompts);
+    const username = (answers.username || detectedUser).trim();
+    const repo = answers.repo.trim();
+
+    config.gitRepo = `https://github.com/${username}/${repo}.git`;
+    console.log(chalk.gray(`  → ${config.gitRepo}\n`));
   }
 
   await saveConfig(config);
-  console.log(chalk.green('Saved!\n'));
+  console.log(chalk.green('✔ Saved!\n'));
 
   if (direction === 'upload') {
     await pushCommand();
