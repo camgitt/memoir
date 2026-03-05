@@ -18,12 +18,16 @@ const profiles = {
         files.push({ filePath: projectFile, content: fs.readFileSync(projectFile, 'utf-8'), scope: 'project' });
       }
 
-      // User-level auto-memory files
+      // User-level auto-memory files (scoped to current project)
       const memoryBase = path.join(home, '.claude', 'projects');
       if (fs.existsSync(memoryBase)) {
-        const projectDirs = fs.readdirSync(memoryBase).filter(d =>
-          fs.statSync(path.join(memoryBase, d)).isDirectory()
-        );
+        // Claude encodes project paths: /Users/foo/bar → -Users-foo-bar
+        const cwdEncoded = cwd.replace(/\//g, '-');
+        const projectDirs = fs.readdirSync(memoryBase).filter(d => {
+          if (!fs.statSync(path.join(memoryBase, d)).isDirectory()) return false;
+          // Match exact cwd or cwd is a parent (e.g. -Users-camarthur matches when cwd is /Users/camarthur)
+          return d === cwdEncoded || cwdEncoded.startsWith(d) || d.startsWith(cwdEncoded);
+        });
         for (const dir of projectDirs) {
           const memoryDir = path.join(memoryBase, dir, 'memory');
           if (fs.existsSync(memoryDir)) {
@@ -57,9 +61,10 @@ const profiles = {
       if (fs.existsSync(projectFile)) {
         files.push({ filePath: projectFile, content: fs.readFileSync(projectFile, 'utf-8'), scope: 'project' });
       }
-      // Check home-level (skip if same as cwd)
+      // Check home-level (skip if already found as project file)
       const homeFile = path.join(home, 'GEMINI.md');
-      if (fs.existsSync(homeFile) && path.resolve(homeFile) !== path.resolve(projectFile)) {
+      const alreadyFound = files.some(f => path.resolve(f.filePath) === path.resolve(homeFile));
+      if (fs.existsSync(homeFile) && !alreadyFound) {
         files.push({ filePath: homeFile, content: fs.readFileSync(homeFile, 'utf-8'), scope: 'user' });
       }
       return files;
@@ -142,9 +147,10 @@ const profiles = {
       if (fs.existsSync(projectFile)) {
         files.push({ filePath: projectFile, content: fs.readFileSync(projectFile, 'utf-8'), scope: 'project' });
       }
-      // Also check home dir (skip if same as cwd)
+      // Also check home dir (skip if already found as project file)
       const homeFile = path.join(home, '.aider.system-prompt.md');
-      if (fs.existsSync(homeFile) && path.resolve(homeFile) !== path.resolve(projectFile)) {
+      const alreadyFound = files.some(f => path.resolve(f.filePath) === path.resolve(homeFile));
+      if (fs.existsSync(homeFile) && !alreadyFound) {
         files.push({ filePath: homeFile, content: fs.readFileSync(homeFile, 'utf-8'), scope: 'user' });
       }
       return files;

@@ -3,11 +3,12 @@ import inquirer from 'inquirer';
 import ora from 'ora';
 import fs from 'fs-extra';
 import path from 'path';
+import os from 'os';
 import { getProfile, getProfileKeys, getProfileChoices } from '../migrate/profiles.js';
 import { resolveApiKey, translateMemory } from '../migrate/translator.js';
 
 export async function migrateCommand(options = {}) {
-  let { from, to } = options;
+  let { from, to, dryRun } = options;
 
   // 1. Pick source tool
   if (!from) {
@@ -66,7 +67,7 @@ export async function migrateCommand(options = {}) {
   // 5. Preview
   console.log(chalk.cyan(`\nFound ${sourceFiles.length} file${sourceFiles.length > 1 ? 's' : ''} from ${sourceProfile.name}:`));
   for (const f of sourceFiles) {
-    const display = f.filePath.replace(process.env.HOME, '~');
+    const display = f.filePath.replace(os.homedir(), '~');
     console.log(chalk.gray(`  ${display}`));
   }
 
@@ -120,7 +121,13 @@ export async function migrateCommand(options = {}) {
   }
   console.log(chalk.cyan('--- End preview ---\n'));
 
-  // 9. Handle existing target file
+  // 9. Dry run — stop here
+  if (dryRun) {
+    console.log(chalk.yellow('Dry run — no files written.\n'));
+    return;
+  }
+
+  // 10. Handle existing target file
   const targetPath = targetProfile.targetPath();
   let writeMode = 'write';
 
@@ -143,17 +150,18 @@ export async function migrateCommand(options = {}) {
     return;
   }
 
-  // 10. Write output
+  // 11. Write output
   await fs.ensureDir(path.dirname(targetPath));
 
   if (writeMode === 'append') {
     const existing = await fs.readFile(targetPath, 'utf-8');
-    await fs.writeFile(targetPath, existing + '\n\n' + finalContent);
+    const separator = `\n\n---\n<!-- Translated from ${sourceProfile.name} by memoir on ${new Date().toISOString().split('T')[0]} -->\n\n`;
+    await fs.writeFile(targetPath, existing + separator + finalContent);
   } else {
     await fs.writeFile(targetPath, finalContent);
   }
 
-  const displayTarget = targetPath.replace(process.env.HOME, '~');
+  const displayTarget = targetPath.replace(os.homedir(), '~');
   console.log(chalk.green(`\n✔ Translated ${sourceFiles.length} file${sourceFiles.length > 1 ? 's' : ''} from ${sourceProfile.name} → ${targetProfile.name}`));
   console.log(chalk.gray(`  Written to ${displayTarget}\n`));
 }

@@ -9,8 +9,10 @@ import { restoreCommand } from '../src/commands/restore.js';
 import { statusCommand } from '../src/commands/status.js';
 import { viewCommand } from '../src/commands/view.js';
 import { migrateCommand } from '../src/commands/migrate.js';
+import { createRequire } from 'module';
 
-const VERSION = '1.2.0';
+const require = createRequire(import.meta.url);
+const { version: VERSION } = require('../package.json');
 
 // Custom help banner
 program.addHelpText('beforeAll', '\n' + boxen(
@@ -92,6 +94,7 @@ program
   .description('Translate memory between AI tools (Claude, Gemini, Codex, Cursor, etc.)')
   .option('--from <tool>', 'Source tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
   .option('--to <tool>', 'Target tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
+  .option('--dry-run', 'Preview translation without writing files')
   .action(async (options) => {
     try {
       await migrateCommand(options);

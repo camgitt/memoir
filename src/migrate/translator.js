@@ -1,6 +1,7 @@
 import { getConfig, saveConfig } from '../config.js';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const RETRYABLE_CODES = [429, 500, 502, 503];
 
 export async function resolveApiKey(inquirer) {
   // 1. Check env var
@@ -30,6 +31,42 @@ export async function resolveApiKey(inquirer) {
   return apiKey;
 }
 
+async function callGeminiApi(prompt, apiKey) {
+  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 8192
+      }
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    if (response.status === 400 || response.status === 403) {
+      throw new Error('Invalid Gemini API key. Get a free key at https://aistudio.google.com');
+    }
+    if (RETRYABLE_CODES.includes(response.status)) {
+      const error = new Error(`Gemini API error (${response.status}): ${err}`);
+      error.retryable = true;
+      throw error;
+    }
+    throw new Error(`Gemini API error (${response.status}): ${err}`);
+  }
+
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!text) {
+    throw new Error('Empty response from Gemini API');
+  }
+
+  return text.trim();
+}
+
 export async function translateMemory(content, sourceProfile, targetProfile, apiKey) {
   const prompt = `You are an expert at translating AI coding assistant memory/instruction files between different tools.
 
@@ -50,32 +87,14 @@ INSTRUCTIONS:
 SOURCE CONTENT:
 ${content}`;
 
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 8192
-      }
-    })
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    if (response.status === 400 || response.status === 403) {
-      throw new Error('Invalid Gemini API key. Get a free key at https://aistudio.google.com');
+  try {
+    return await callGeminiApi(prompt, apiKey);
+  } catch (err) {
+    if (err.retryable) {
+      // Wait 3s and retry once
+      await new Promise(r => setTimeout(r, 3000));
+      return await callGeminiApi(prompt, apiKey);
     }
-    throw new Error(`Gemini API error (${response.status}): ${err}`);
+    throw err;
   }
-
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!text) {
-    throw new Error('Empty response from Gemini API');
-  }
-
-  return text.trim();
 }
