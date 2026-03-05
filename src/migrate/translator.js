@@ -32,9 +32,12 @@ export async function resolveApiKey(inquirer) {
 }
 
 async function callGeminiApi(prompt, apiKey) {
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+  const response = await fetch(GEMINI_API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey
+    },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -91,7 +94,6 @@ ${content}`;
     return await callGeminiApi(prompt, apiKey);
   } catch (err) {
     if (err.retryable) {
-      // Wait 3s and retry once
       await new Promise(r => setTimeout(r, 3000));
       return await callGeminiApi(prompt, apiKey);
     }

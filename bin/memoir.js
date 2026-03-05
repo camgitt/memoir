@@ -93,7 +93,7 @@ program
   .command('migrate')
   .description('Translate memory between AI tools (Claude, Gemini, Codex, Cursor, etc.)')
   .option('--from <tool>', 'Source tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
-  .option('--to <tool>', 'Target tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
+  .option('--to <tool>', 'Target tool (claude, gemini, codex, cursor, copilot, windsurf, aider, all)')
   .option('--dry-run', 'Preview translation without writing files')
   .action(async (options) => {
     try {
