@@ -6,7 +6,7 @@
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square)](https://npmjs.org/package/memoir-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
-*Never lose your AI's context again. Sync Gemini CLI, Claude Code, and more across all your devices instantly.*
+*Never lose your AI's context again. Sync and translate your AI memory across every device and tool.*
 
 </div>
 
@@ -22,9 +22,9 @@ Suddenly, you're starting from scratch. Your AI's "memory" is trapped in hidden 
 
 ## 🚀 The Solution
 
-`memoir` is a zero-friction CLI tool that seamlessly extracts, backs up, and restores your AI's memory across any computer. You bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `memoir` handles the rest safely and securely.
+`memoir` is a zero-friction CLI that extracts, backs up, restores, and **translates** your AI's memory across any computer and any tool. Bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `memoir` handles the rest.
 
-No locked-in SaaS, no lost context, no complex shell scripts.
+No locked-in SaaS, no lost context, no complex shell scripts. Switch from Claude to Gemini in one command.
 
 ### Supported Integrations
 - [x] **Gemini CLI**
@@ -72,6 +72,17 @@ memoir restore
 memoir pull
 ```
 
+### 4. Translate Between Tools
+Switch AI tools without losing context. Memoir uses Gemini AI to intelligently rewrite your memory files for any supported tool:
+
+```bash
+memoir migrate --from claude --to gemini
+# or run interactively:
+memoir migrate
+```
+
+Your Claude instructions become a proper `GEMINI.md` — not a copy-paste, but a real translation that follows each tool's conventions.
+
 ---
 
 ## 🔒 Security First
@@ -82,12 +93,12 @@ Our specialized adapters intelligently filter your directories. We **only** sync
 
 ---
 
-## 🗺️ Roadmap: The Future of Data Portability
+## 🗺️ Roadmap
 
-We believe developers shouldn't be locked into a single AI ecosystem.
-
-**Coming in v2.0: The Migration Engine**
-Currently, `memoir` backs up your files exactly as they are. Soon, you will be able to run `memoir migrate --from claude --to gemini`. The CLI will automatically translate your Claude Code instructions into Gemini CLI facts, allowing you to fluidly swap AI providers without losing a drop of context.
+**What's next:**
+- Team sharing — sync a shared memory repo across your whole team
+- Auto-detect new AI tools as they appear
+- Two-way merge — combine memories from multiple tools into one
 
 ---
 

@@ -1,81 +1,87 @@
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import open from 'open';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
+import { execSync } from 'child_process';
 import { saveConfig } from '../config.js';
+import { pushCommand } from './push.js';
+import { restoreCommand } from './restore.js';
+
+function getGitUsername() {
+  try {
+    return execSync('git config --global user.name', { encoding: 'utf8' }).trim();
+  } catch { return ''; }
+}
 
 export async function initCommand() {
-  const title = gradient.pastel.multiline('memoir \\nYour AI Remembers Everything');
-  console.log('\\n' + boxen(title, { 
-    padding: 1, 
-    margin: 1, 
-    borderStyle: 'round', 
-    borderColor: 'cyan',
-    align: 'center'
-  }));
+  console.log('');
+  console.log(boxen(
+    gradient.pastel('memoir') + '\n' +
+    chalk.gray('Your AI remembers everything.'),
+    { padding: 1, margin: 0, borderStyle: 'round', borderColor: 'cyan', align: 'center' }
+  ));
+  console.log('');
 
-  console.log(chalk.gray("Let's configure where your AI knowledge will be safely stored.\\n"));
+  const gitUser = getGitUsername();
 
-  const answers = await inquirer.prompt([
+  const { direction, provider } = await inquirer.prompt([
     {
       type: 'list',
-      name: 'provider',
-      message: 'Choose your storage provider:',
+      name: 'direction',
+      message: 'Upload or download?',
       choices: [
-        { name: '☁️  Git Repository ' + chalk.gray('(GitHub, GitLab - Best for syncing across computers)'), value: 'git' },
-        { name: '📂 Local Directory ' + chalk.gray('(Dropbox, iCloud - Best for local backups)'), value: 'local' }
+        { name: 'Upload — back up this machine', value: 'upload' },
+        { name: 'Download — restore from backup', value: 'download' }
       ]
     },
     {
+      type: 'list',
+      name: 'provider',
+      message: (answers) => answers.direction === 'upload' ? 'Back up to?' : 'Restore from?',
+      choices: [
+        { name: 'GitHub', value: 'git' },
+        { name: 'Local folder', value: 'local' }
+      ]
+    }
+  ]);
+
+  let config = { provider };
+
+  if (provider === 'local') {
+    const msg = direction === 'upload' ? 'Save to:' : 'Backup folder:';
+    const { localPath } = await inquirer.prompt([{
       type: 'input',
       name: 'localPath',
-      message: 'Enter the full path to your sync directory ' + chalk.gray('(e.g., ~/Dropbox/memoir):'),
-      when: (answers) => answers.provider === 'local',
-      validate: (input) => input.trim() !== '' ? true : chalk.red('✖ Path is required')
-    },
-    {
-      type: 'confirm',
-      name: 'openBrowser',
-      message: 'Need to create an empty GitHub repository right now?',
-      when: (answers) => answers.provider === 'git',
-      default: false
-    }
-  ]);
+      message: msg,
+      validate: (input) => input.trim() ? true : 'Required'
+    }]);
+    config.localPath = localPath;
+  } else {
+    const { username, repo } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'username',
+        message: 'GitHub username:',
+        validate: (input) => input.trim() ? true : 'Required'
+      },
+      {
+        type: 'input',
+        name: 'repo',
+        message: 'Repo name:',
+        default: 'ai-memory',
+        validate: (input) => input.trim() ? true : 'Required'
+      }
+    ]);
 
-  if (answers.openBrowser) {
-    console.log(chalk.cyan('\\n↗ Opening GitHub... Create an empty private repository, then return here.\\n'));
-    await open('https://github.com/new');
+    config.gitRepo = `https://github.com/${username.trim()}/${repo.trim()}.git`;
   }
 
-  const finalAnswers = await inquirer.prompt([
-    {
-      type: 'input',
-      name: 'gitRepo',
-      message: 'Repository URL ' + chalk.gray('(e.g., git@github.com:username/ai-memory.git):'),
-      when: () => answers.provider === 'git',
-      validate: (input) => {
-        if (input.trim() === '') return chalk.red('✖ Repo URL is required');
-        if (!input.includes('github.com') && !input.includes('gitlab.com')) {
-          return chalk.yellow('⚠ Warning: This does not look like a standard GitHub/GitLab URL. Please verify.');
-        }
-        return true;
-      }
-    }
-  ]);
-
-  const config = {
-    provider: answers.provider,
-    localPath: answers.localPath,
-    gitRepo: finalAnswers.gitRepo
-  };
-
   await saveConfig(config);
+  console.log(chalk.green('Saved!\n'));
 
-  console.log('\\n' + boxen(
-    chalk.green('✔ Configuration saved successfully!') + '\\n\\n' +
-    chalk.white('To backup your memory, run:') + '\\n' +
-    chalk.cyan.bold('memoir push'),
-    { padding: 1, borderStyle: 'single', borderColor: 'green' }
-  ) + '\\n');
+  if (direction === 'upload') {
+    await pushCommand();
+  } else {
+    await restoreCommand();
+  }
 }

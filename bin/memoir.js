@@ -7,6 +7,8 @@ import { initCommand } from '../src/commands/init.js';
 import { pushCommand } from '../src/commands/push.js';
 import { restoreCommand } from '../src/commands/restore.js';
 import { statusCommand } from '../src/commands/status.js';
+import { viewCommand } from '../src/commands/view.js';
+import { migrateCommand } from '../src/commands/migrate.js';
 
 const VERSION = '1.2.0';
 
@@ -73,16 +75,30 @@ program
   });
 
 program
+  .command('view')
+  .alias('ls')
+  .description('Preview what files are in your backup')
+  .action(async () => {
+    try {
+      await viewCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('migrate')
-  .description('Translate memory between AI providers')
-  .action(() => {
-    console.log('\n' + boxen(
-      gradient.pastel('  memoir migrate  ') + '\n\n' +
-      chalk.white('Instantly translate your context between') + '\n' +
-      chalk.white('Claude, Gemini, Codex, and more.') + '\n\n' +
-      chalk.cyan.bold('Coming soon.'),
-      { padding: 1, borderStyle: 'round', borderColor: 'yellow', align: 'center' }
-    ) + '\n');
+  .description('Translate memory between AI tools (Claude, Gemini, Codex, Cursor, etc.)')
+  .option('--from <tool>', 'Source tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
+  .option('--to <tool>', 'Target tool (claude, gemini, codex, cursor, copilot, windsurf, aider)')
+  .action(async (options) => {
+    try {
+      await migrateCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error during migration:'), err.message);
+      process.exit(1);
+    }
   });
 
 program.parse();

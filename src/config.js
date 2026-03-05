@@ -18,3 +18,14 @@ export async function saveConfig(config) {
   await fs.ensureDir(CONFIG_DIR);
   await fs.writeJson(CONFIG_FILE, config, { spaces: 2 });
 }
+
+export async function getGeminiApiKey() {
+  const config = await getConfig();
+  return config?.geminiApiKey || process.env.GEMINI_API_KEY || null;
+}
+
+export async function saveGeminiApiKey(apiKey) {
+  const config = await getConfig() || {};
+  config.geminiApiKey = apiKey;
+  await saveConfig(config);
+}
