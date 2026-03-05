@@ -1,11 +1,19 @@
 {
   "name": "memoir-cli",
   "version": "1.4.3",
-  "description": "Your AI remembers everything. Sync it everywhere.",
+  "description": "Sync and translate AI memory across devices and tools. Back up Claude, Gemini, Codex, Cursor, Copilot, Windsurf, and Aider configs. Migrate instructions between AI coding assistants with one command.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
     "memoir": "bin/memoir.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camgitt/memoir.git"
+  },
+  "homepage": "https://github.com/camgitt/memoir#readme",
+  "bugs": {
+    "url": "https://github.com/camgitt/memoir/issues"
   },
   "scripts": {
     "start": "node bin/memoir.js",
@@ -16,14 +24,30 @@
     "cli",
     "sync",
     "memory",
-    "memoir",
-    "gemini",
-    "claude",
     "backup",
-    "restore"
+    "restore",
+    "migrate",
+    "translate",
+    "claude",
+    "gemini",
+    "codex",
+    "cursor",
+    "copilot",
+    "windsurf",
+    "aider",
+    "ai-memory",
+    "ai-tools",
+    "dotfiles",
+    "developer-tools",
+    "claude-code",
+    "gemini-cli",
+    "openai",
+    "ai-assistant",
+    "coding-assistant",
+    "context-sync"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "camgitt",
+  "license": "MIT",
   "dependencies": {
     "boxen": "^7.1.1",
     "chalk": "^5.3.0",
