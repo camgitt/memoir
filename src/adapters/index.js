@@ -1,4 +1,5 @@
 import fs from 'fs-extra';
+import nodeFs from 'node:fs';
 import path from 'path';
 import os from 'os';
 import chalk from 'chalk';
@@ -14,18 +15,42 @@ export const adapters = [
     icon: '🔵',
     source: path.join(home, '.gemini'),
     filter: (src) => {
+      const geminiDir = path.join(home, '.gemini');
+      const rel = path.relative(geminiDir, src);
+      if (src === geminiDir) return true;
+      // Only sync config/settings files — skip caches, history, auth, sandbox, etc.
+      const allowed = ['settings.json', 'projects.json', 'state.json', 'installation_id', 'trustedFolders.json', '.gitignore', 'GEMINI.md'];
       const basename = path.basename(src);
-      const ignored = ['.git', 'oauth_creds.json', 'google_accounts.json', 'tmp', 'history'];
-      return !ignored.includes(basename);
+      return allowed.includes(basename) && !rel.includes(path.sep);
     }
   },
   {
     name: 'Claude CLI',
     icon: '🟣',
     source: path.join(home, '.claude'),
-    filter: (src) => {
+    filter: (src, dest) => {
       const basename = path.basename(src);
-      return !basename.endsWith('.key') && basename !== '.env';
+      const claudeDir = path.join(home, '.claude');
+      const rel = path.relative(claudeDir, src);
+      // Root dir itself
+      if (src === claudeDir) return true;
+      // Only allow these top-level dirs
+      const topDir = rel.split(path.sep)[0];
+      const allowedDirs = ['projects', 'settings'];
+      const allowedFiles = ['settings.json', 'settings.local.json'];
+      // Allow specific top-level config files
+      if (!rel.includes(path.sep) && allowedFiles.includes(basename)) return true;
+      // Allow projects dir (contains memory .md files)
+      if (topDir === 'projects') {
+        // Allow directory traversal
+        try { if (nodeFs.statSync(src).isDirectory()) return true; } catch {}
+        // Only sync memory markdown files
+        return basename.endsWith('.md');
+      }
+      // Allow settings dir
+      if (topDir === 'settings') return true;
+      // Block everything else
+      return false;
     }
   },
   {
@@ -33,9 +58,13 @@ export const adapters = [
     icon: '🟢',
     source: path.join(home, '.codex'),
     filter: (src) => {
+      const codexDir = path.join(home, '.codex');
+      const rel = path.relative(codexDir, src);
+      if (src === codexDir) return true;
       const basename = path.basename(src);
-      const ignored = ['.git', 'sessions', 'cache'];
-      return !ignored.includes(basename) && !basename.endsWith('.key') && basename !== '.env';
+      // Only sync config files
+      const allowed = ['config.json', 'settings.json', 'instructions.md'];
+      return allowed.includes(basename) && !rel.includes(path.sep);
     }
   },
   {
@@ -45,9 +74,19 @@ export const adapters = [
       ? path.join(appData, 'Cursor', 'User')
       : path.join(home, 'Library', 'Application Support', 'Cursor', 'User'),
     filter: (src) => {
+      const cursorDir = isWin
+        ? path.join(appData, 'Cursor', 'User')
+        : path.join(home, 'Library', 'Application Support', 'Cursor', 'User');
+      const rel = path.relative(cursorDir, src);
+      if (src === cursorDir) return true;
       const basename = path.basename(src);
-      const ignored = ['globalStorage', 'workspaceStorage', 'CachedData', 'Cache', 'GPUCache', 'logs', 'History', 'Backups', 'snippets'];
-      return !ignored.includes(basename);
+      // Only sync settings and keybindings — not extensions, cache, storage
+      const allowed = ['settings.json', 'keybindings.json', 'rules'];
+      const topDir = rel.split(path.sep)[0];
+      if (allowed.includes(basename) && !rel.includes(path.sep)) return true;
+      // Allow rules directory (cursor rules)
+      if (topDir === 'rules') return true;
+      return false;
     }
   },
   {
@@ -57,9 +96,14 @@ export const adapters = [
       ? path.join(appData, 'GitHub Copilot')
       : path.join(home, '.config', 'github-copilot'),
     filter: (src) => {
+      const copilotDir = isWin
+        ? path.join(appData, 'GitHub Copilot')
+        : path.join(home, '.config', 'github-copilot');
+      if (src === copilotDir) return true;
       const basename = path.basename(src);
-      const ignored = ['hosts.json', 'apps.json', 'versions.json'];
-      return !ignored.includes(basename);
+      // Only sync config — skip auth tokens and version files
+      const allowed = ['settings.json', 'config.json'];
+      return allowed.includes(basename);
     }
   },
   {
@@ -69,9 +113,18 @@ export const adapters = [
       ? path.join(appData, 'Windsurf', 'User')
       : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User'),
     filter: (src) => {
+      const windsurfDir = isWin
+        ? path.join(appData, 'Windsurf', 'User')
+        : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User');
+      const rel = path.relative(windsurfDir, src);
+      if (src === windsurfDir) return true;
       const basename = path.basename(src);
-      const ignored = ['workspaceStorage', 'CachedData', 'Cache', 'GPUCache', 'logs', 'History', 'Backups', 'memories', 'snippets'];
-      return !ignored.includes(basename);
+      // Only sync settings and keybindings
+      const allowed = ['settings.json', 'keybindings.json', 'rules'];
+      const topDir = rel.split(path.sep)[0];
+      if (allowed.includes(basename) && !rel.includes(path.sep)) return true;
+      if (topDir === 'rules') return true;
+      return false;
     }
   },
   {
@@ -118,11 +171,17 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
 }
 
-export async function extractMemories(stagingDir, spinner) {
+export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
   let foundAny = false;
   const results = [];
 
   for (const adapter of adapters) {
+    // Skip if --only filter is set and this adapter doesn't match
+    if (onlyFilter) {
+      const adapterKey = adapter.name.toLowerCase().replace(/ /g, '-').replace('cli', '').replace('openai-', '').trim().replace(/-$/, '');
+      const matches = onlyFilter.some(f => adapter.name.toLowerCase().includes(f) || adapterKey.includes(f));
+      if (!matches) continue;
+    }
     if (adapter.customExtract) {
       const dest = path.join(stagingDir, adapter.name.toLowerCase().replace(/ /g, '-'));
       let foundFile = false;

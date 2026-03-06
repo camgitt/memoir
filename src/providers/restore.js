@@ -5,7 +5,7 @@ import os from 'os';
 import { execFileSync } from 'child_process';
 import { restoreMemories } from '../adapters/restore.js';
 
-export async function fetchFromLocal(config, stagingDir, spinner) {
+export async function fetchFromLocal(config, stagingDir, spinner, onlyFilter = null) {
   const sourceDir = config.localPath;
   if (!sourceDir) throw new Error('Local path is not configured.');
 
@@ -18,10 +18,10 @@ export async function fetchFromLocal(config, stagingDir, spinner) {
   spinner.text = `Fetching data from local directory: ${chalk.cyan(resolvedSource)}`;
   await fs.copy(resolvedSource, stagingDir);
 
-  return await restoreMemories(stagingDir, spinner);
+  return await restoreMemories(stagingDir, spinner, onlyFilter);
 }
 
-export async function fetchFromGit(config, stagingDir, spinner) {
+export async function fetchFromGit(config, stagingDir, spinner, onlyFilter = null) {
   const repoUrl = config.gitRepo;
   if (!repoUrl) throw new Error('Git repository is not configured.');
 
@@ -33,5 +33,5 @@ export async function fetchFromGit(config, stagingDir, spinner) {
     throw new Error('Failed to pull from git repository. Ensure your SSH keys are configured and the repository is accessible.');
   }
 
-  return await restoreMemories(stagingDir, spinner);
+  return await restoreMemories(stagingDir, spinner, onlyFilter);
 }

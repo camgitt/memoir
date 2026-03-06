@@ -9,7 +9,7 @@ import { getConfig } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 
-export async function pushCommand() {
+export async function pushCommand(options = {}) {
   const config = await getConfig();
 
   if (!config) {
@@ -28,7 +28,8 @@ export async function pushCommand() {
   await fs.ensureDir(stagingDir);
 
   try {
-    const foundAny = await extractMemories(stagingDir, spinner);
+    const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
+    const foundAny = await extractMemories(stagingDir, spinner, onlyFilter);
 
     if (!foundAny) {
       spinner.stop();
@@ -68,12 +69,34 @@ export async function pushCommand() {
 
     spinner.stop();
 
+    // Count total files
+    let totalFiles = 0;
+    for (const adapter of adapters) {
+      const adapterDir = path.join(stagingDir, adapter.name.toLowerCase().replace(/ /g, '-'));
+      if (await fs.pathExists(adapterDir)) {
+        const countDir = async (dir) => {
+          let c = 0;
+          const entries = await fs.readdir(dir, { withFileTypes: true });
+          for (const e of entries) {
+            if (e.isDirectory()) c += await countDir(path.join(dir, e.name));
+            else c++;
+          }
+          return c;
+        };
+        totalFiles += await countDir(adapterDir);
+      }
+    }
+
+    const dest = config.provider === 'git' ? config.gitRepo : config.localPath;
+
     // Success output
     const toolList = found.map(t => chalk.cyan('  ✔ ' + t)).join('\n');
     console.log('\n' + boxen(
       gradient.pastel('  Backed up!  ') + '\n\n' +
       toolList + '\n\n' +
-      chalk.gray(`${found.length} tool${found.length !== 1 ? 's' : ''} synced to ${config.provider === 'git' ? 'GitHub' : 'local storage'}`),
+      chalk.white(`${totalFiles} files from ${found.length} tool${found.length !== 1 ? 's' : ''}`) + '\n' +
+      chalk.gray(`→ ${dest}`) + '\n\n' +
+      chalk.gray('Restore on another machine with: ') + chalk.cyan('memoir restore'),
       { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
     ) + '\n');
   } catch (error) {

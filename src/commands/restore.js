@@ -8,7 +8,7 @@ import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 
-export async function restoreCommand() {
+export async function restoreCommand(options = {}) {
   const config = await getConfig();
 
   if (!config) {
@@ -29,10 +29,12 @@ export async function restoreCommand() {
   try {
     let restored = false;
 
+    const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
+
     if (config.provider === 'local' || config.provider.includes('local')) {
-      restored = await fetchFromLocal(config, stagingDir, spinner);
+      restored = await fetchFromLocal(config, stagingDir, spinner, onlyFilter);
     } else if (config.provider === 'git' || config.provider.includes('git')) {
-      restored = await fetchFromGit(config, stagingDir, spinner);
+      restored = await fetchFromGit(config, stagingDir, spinner, onlyFilter);
     } else {
       spinner.fail(chalk.red(`Unknown provider: ${config.provider}`));
       return;
@@ -41,16 +43,20 @@ export async function restoreCommand() {
     spinner.stop();
 
     if (restored) {
-      console.log('\n' + boxen(
-        gradient.pastel('  Restored!  ') + '\n\n' +
+      console.log(boxen(
+        gradient.pastel('  Done!  ') + '\n\n' +
         chalk.white('Your AI tools have their memories back.') + '\n' +
-        chalk.gray('They remember everything.'),
+        chalk.gray('Restart your AI tools to pick up the changes.'),
         { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
       ) + '\n');
     } else {
       console.log('\n' + boxen(
-        chalk.yellow('No memories were restored.\n\n') +
-        chalk.gray('Run ') + chalk.cyan('memoir push') + chalk.gray(' on another machine first.'),
+        chalk.yellow('Nothing was restored.\n\n') +
+        chalk.white('This can happen if:\n') +
+        chalk.gray('  1. You haven\'t run ') + chalk.cyan('memoir push') + chalk.gray(' on another machine yet\n') +
+        chalk.gray('  2. You skipped all the restore prompts\n') +
+        chalk.gray('  3. The backup repo is empty\n\n') +
+        chalk.gray('Try: ') + chalk.cyan('memoir view') + chalk.gray(' to see what\'s in your backup'),
         { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
       ) + '\n');
     }

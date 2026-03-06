@@ -9,10 +9,31 @@ import { restoreCommand } from '../src/commands/restore.js';
 import { statusCommand } from '../src/commands/status.js';
 import { viewCommand } from '../src/commands/view.js';
 import { migrateCommand } from '../src/commands/migrate.js';
+import { snapshotCommand } from '../src/commands/snapshot.js';
+import { resumeCommand } from '../src/commands/resume.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
+
+// Show quick start when run with no args
+if (process.argv.length <= 2) {
+  console.log('\n' + boxen(
+    gradient.pastel.multiline('  memoir  ') + '\n' +
+    chalk.gray('  Your AI remembers everything.') + '\n\n' +
+    chalk.white.bold('Quick Start:') + '\n' +
+    chalk.cyan('  memoir init      ') + chalk.gray('— first-time setup') + '\n' +
+    chalk.cyan('  memoir push      ') + chalk.gray('— back up your AI memory') + '\n' +
+    chalk.cyan('  memoir restore   ') + chalk.gray('— restore on a new machine') + '\n' +
+    chalk.cyan('  memoir snapshot  ') + chalk.gray('— capture your current session') + '\n' +
+    chalk.cyan('  memoir resume    ') + chalk.gray('— pick up where you left off') + '\n' +
+    chalk.cyan('  memoir status    ') + chalk.gray('— see detected AI tools') + '\n\n' +
+    chalk.gray('  Tip: use --only claude,gemini to sync specific tools') + '\n\n' +
+    chalk.gray(`v${VERSION}`),
+    { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
+  ) + '\n');
+  process.exit(0);
+}
 
 // Custom help banner
 program.addHelpText('beforeAll', '\n' + boxen(
@@ -42,9 +63,10 @@ program
   .command('push')
   .alias('remember')
   .description('Back up your AI memory to the cloud')
-  .action(async () => {
+  .option('--only <tools>', 'Only sync specific tools (comma-separated: claude,gemini,codex,cursor,copilot,windsurf,aider)')
+  .action(async (options) => {
     try {
-      await pushCommand();
+      await pushCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error during sync:'), err.message);
       process.exit(1);
@@ -55,9 +77,10 @@ program
   .command('restore')
   .alias('pull')
   .description('Restore your AI memory on this machine')
-  .action(async () => {
+  .option('--only <tools>', 'Only restore specific tools (comma-separated: claude,gemini,codex,cursor,copilot,windsurf,aider)')
+  .action(async (options) => {
     try {
-      await restoreCommand();
+      await restoreCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error during restore:'), err.message);
       process.exit(1);
@@ -85,6 +108,35 @@ program
       await viewCommand();
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('snapshot')
+  .alias('handoff')
+  .description('Capture your current coding session for handoff')
+  .option('--smart', 'Use AI to generate a better summary (requires Gemini API key)')
+  .option('--goal <goal>', 'What you want to do next (goal-directed handoff)')
+  .action(async (options) => {
+    try {
+      await snapshotCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error during snapshot:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('resume')
+  .description('Pick up where you left off on another machine')
+  .option('--inject', 'Write the handoff where your AI tool will read it')
+  .option('--to <tool>', 'Target tool for injection (claude, gemini, cursor, codex)')
+  .action(async (options) => {
+    try {
+      await resumeCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error during resume:'), err.message);
       process.exit(1);
     }
   });
