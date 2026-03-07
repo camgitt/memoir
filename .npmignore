@@ -1,0 +1,9 @@
+CLAUDE.md
+TODO.md
+.claude/
+test-local.sh
+*.terminal
+*.itermcolors
+*.windowsterminal.json
+.DS_Store
+.env
