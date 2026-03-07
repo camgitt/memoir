@@ -78,6 +78,7 @@ program
   .alias('pull')
   .description('Restore your AI memory on this machine')
   .option('--only <tools>', 'Only restore specific tools (comma-separated: claude,gemini,codex,cursor,copilot,windsurf,aider)')
+  .option('-y, --yes', 'Skip confirmation prompts (restore all)')
   .action(async (options) => {
     try {
       await restoreCommand(options);

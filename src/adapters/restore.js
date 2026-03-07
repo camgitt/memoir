@@ -56,7 +56,7 @@ async function syncFiles(src, dest, changes) {
   }
 }
 
-export async function restoreMemories(sourceDir, spinner, onlyFilter = null) {
+export async function restoreMemories(sourceDir, spinner, onlyFilter = null, autoYes = false) {
   let restoredAny = false;
   const allResults = [];
 
@@ -74,14 +74,21 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null) {
 
       console.log('\n' + chalk.cyan(`${adapter.icon} Found backup for ${chalk.bold(adapter.name)}`));
       console.log(chalk.gray(`  Will restore to: ${adapter.source}`));
-      const { confirm } = await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'confirm',
-          message: `Restore ${adapter.name}?`,
-          default: true
-        }
-      ]);
+
+      let confirm = true;
+      if (!autoYes) {
+        const answer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: `Restore ${adapter.name}?`,
+            default: true
+          }
+        ]);
+        confirm = answer.confirm;
+      } else {
+        console.log(chalk.green(`  Auto-restoring ${adapter.name}...`));
+      }
 
       spinner.start();
 

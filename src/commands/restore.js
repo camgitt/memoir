@@ -31,10 +31,12 @@ export async function restoreCommand(options = {}) {
 
     const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
 
+    const autoYes = options.yes || false;
+
     if (config.provider === 'local' || config.provider.includes('local')) {
-      restored = await fetchFromLocal(config, stagingDir, spinner, onlyFilter);
+      restored = await fetchFromLocal(config, stagingDir, spinner, onlyFilter, autoYes);
     } else if (config.provider === 'git' || config.provider.includes('git')) {
-      restored = await fetchFromGit(config, stagingDir, spinner, onlyFilter);
+      restored = await fetchFromGit(config, stagingDir, spinner, onlyFilter, autoYes);
     } else {
       spinner.fail(chalk.red(`Unknown provider: ${config.provider}`));
       return;
