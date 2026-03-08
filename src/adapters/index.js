@@ -219,6 +219,86 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
     }
   }
 
+  // Scan for per-project AI config files
+  if (!onlyFilter || onlyFilter.some(f => 'projects'.includes(f))) {
+    spinner.text = `📁 Scanning for project-level AI configs...`;
+
+    const projectFiles = [
+      'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', '.cursorrules',
+      '.github/copilot-instructions.md', '.windsurfrules',
+      '.aider.conf.yml', '.clinerules'
+    ];
+
+    const skipDirs = new Set([
+      'node_modules', '.git', '.next', '.vercel', 'dist', 'build',
+      '__pycache__', '.venv', 'venv', '.cache', '.npm', '.bun',
+      'Library', '.Trash', 'Applications', 'Pictures', 'Music',
+      'Movies', 'Public', 'Downloads', '.local', '.cargo', '.rustup'
+    ]);
+
+    const projectsDest = path.join(stagingDir, 'projects');
+    let projectCount = 0;
+    let projectFileCount = 0;
+    const projectNames = [];
+
+    // Walk home dir up to 3 levels deep looking for project markers
+    const scanDir = async (dir, depth = 0) => {
+      if (depth > 3) return;
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch { return; }
+
+      // Check if this dir has any AI config files
+      const foundFiles = [];
+      for (const file of projectFiles) {
+        const filePath = path.join(dir, file);
+        if (await fs.pathExists(filePath)) {
+          foundFiles.push(file);
+        }
+      }
+
+      if (foundFiles.length > 0 && dir !== home) {
+        // This is a project with AI configs
+        const projectName = path.basename(dir);
+        const projectDestDir = path.join(projectsDest, projectName);
+        await fs.ensureDir(projectDestDir);
+
+        for (const file of foundFiles) {
+          const src = path.join(dir, file);
+          const dest = path.join(projectDestDir, file);
+          await fs.ensureDir(path.dirname(dest));
+          await fs.copy(src, dest);
+          projectFileCount++;
+        }
+
+        projectCount++;
+        projectNames.push(projectName);
+      }
+
+      // Recurse into subdirectories
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith('.') && entry.name !== '.github') continue;
+        if (skipDirs.has(entry.name)) continue;
+        await scanDir(path.join(dir, entry.name), depth + 1);
+      }
+    };
+
+    await scanDir(home);
+
+    if (projectCount > 0) {
+      const size = await dirSize(projectsDest);
+      foundAny = true;
+      results.push({
+        adapter: { name: `Projects (${projectCount})`, icon: '📁' },
+        fileCount: projectFileCount,
+        size
+      });
+      spinner.text = `📁 ${chalk.green(`${projectCount} projects`)} ${chalk.gray(`(${projectFileCount} files, ${formatSize(size)})`)}`;
+    }
+  }
+
   // Print tree after scanning
   if (results.length > 0) {
     spinner.stop();

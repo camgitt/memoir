@@ -17,6 +17,27 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { version: VERSION } = require('../package.json');
 
+// Check for updates (non-blocking)
+async function checkForUpdate() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('https://registry.npmjs.org/memoir-cli/latest', { signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await res.json();
+    const latest = data.version;
+    if (latest && latest !== VERSION) {
+      console.log(
+        '\n' + boxen(
+          chalk.yellow(`Update available: ${VERSION} → ${chalk.green.bold(latest)}`) + '\n' +
+          chalk.gray('Run: ') + chalk.cyan('npm install -g memoir-cli'),
+          { padding: { top: 0, bottom: 0, left: 1, right: 1 }, borderStyle: 'round', borderColor: 'yellow', dimBorder: true }
+        )
+      );
+    }
+  } catch {}
+}
+
 // Show quick start when run with no args
 if (process.argv.length <= 2) {
   console.log('\n' + boxen(
@@ -170,5 +191,9 @@ program
       process.exit(1);
     }
   });
+
+program.hook('postAction', async () => {
+  await checkForUpdate();
+});
 
 program.parse();

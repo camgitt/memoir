@@ -82,7 +82,24 @@ cat > "$FAKE_HOME/.config/github-copilot/settings.json" << 'EOF'
 { "editor.enableAutoCompletions": true }
 EOF
 
-echo -e "  ${GREEN}Created mock configs for: Gemini, Claude, Codex, Aider, Copilot${RESET}\n"
+# Per-project AI configs
+mkdir -p "$FAKE_HOME/mywebapp"
+cat > "$FAKE_HOME/mywebapp/CLAUDE.md" << 'EOF'
+# Webapp Rules
+Use Next.js 15 with App Router. Deploy to Vercel.
+EOF
+cat > "$FAKE_HOME/mywebapp/GEMINI.md" << 'EOF'
+# Webapp Gemini
+Same project, Gemini instructions here.
+EOF
+
+mkdir -p "$FAKE_HOME/pyserver"
+cat > "$FAKE_HOME/pyserver/AGENTS.md" << 'EOF'
+# Python Server
+FastAPI backend. Use SQLAlchemy for ORM.
+EOF
+
+echo -e "  ${GREEN}Created mock configs for: Gemini, Claude, Codex, Aider, Copilot + 2 projects${RESET}\n"
 
 # ── Step 2: Set up memoir config (local provider) ──
 echo -e "${BOLD}Step 2: Configuring memoir (local provider)${RESET}\n"
@@ -118,7 +135,10 @@ echo -e "  ${GREEN}$BACKUP_COUNT files backed up${RESET}\n"
 echo -e "${BOLD}Step 6: Simulating new machine (wiping AI configs)${RESET}\n"
 rm -rf "$FAKE_HOME/.gemini" "$FAKE_HOME/.claude" "$FAKE_HOME/.codex" "$FAKE_HOME/.config/github-copilot"
 rm -f "$FAKE_HOME/.aider.conf.yml" "$FAKE_HOME/.aider.system-prompt.md"
-echo -e "  ${YELLOW}All AI tool configs deleted${RESET}\n"
+# Wipe project AI configs too
+rm -f "$FAKE_HOME/mywebapp/CLAUDE.md" "$FAKE_HOME/mywebapp/GEMINI.md"
+rm -f "$FAKE_HOME/pyserver/AGENTS.md"
+echo -e "  ${YELLOW}All AI tool configs + project configs deleted${RESET}\n"
 
 # ── Step 7: Run memoir restore (auto-yes via echo) ──
 echo -e "${BOLD}Step 7: memoir restore${RESET}\n"
@@ -174,6 +194,22 @@ if echo "$CLAUDE_CONTENT" | grep -q "Next.js app"; then
   PASS=$((PASS + 1))
 else
   echo -e "  ${RED}FAIL${RESET} Content integrity — Claude project memory corrupted"
+  FAIL=$((FAIL + 1))
+fi
+
+# Project-level AI config tests
+echo ""
+echo -e "  ${BOLD}Per-project configs:${RESET}"
+check_file "$FAKE_HOME/mywebapp/CLAUDE.md" "Project mywebapp/CLAUDE.md"
+check_file "$FAKE_HOME/mywebapp/GEMINI.md" "Project mywebapp/GEMINI.md"
+check_file "$FAKE_HOME/pyserver/AGENTS.md" "Project pyserver/AGENTS.md"
+
+PROJ_CONTENT=$(cat "$FAKE_HOME/mywebapp/CLAUDE.md" 2>/dev/null || echo "")
+if echo "$PROJ_CONTENT" | grep -q "Next.js 15"; then
+  echo -e "  ${GREEN}PASS${RESET} Content integrity — project CLAUDE.md preserved"
+  PASS=$((PASS + 1))
+else
+  echo -e "  ${RED}FAIL${RESET} Content integrity — project CLAUDE.md corrupted"
   FAIL=$((FAIL + 1))
 fi
 

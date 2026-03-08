@@ -168,6 +168,106 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
     }
   }
 
+  // Restore per-project AI configs
+  const projectsDir = path.join(sourceDir, 'projects');
+  if (await fs.pathExists(projectsDir)) {
+    const projectEntries = await fs.readdir(projectsDir, { withFileTypes: true });
+    const projectDirs = projectEntries.filter(e => e.isDirectory() && e.name !== '.git');
+
+    if (projectDirs.length > 0) {
+      spinner.stop();
+      console.log('\n' + chalk.cyan(`📁 Found ${chalk.bold(projectDirs.length + ' project(s)')} with AI configs`));
+
+      // Try to find matching local project dirs
+      const home = os.homedir();
+      let totalRestored = 0;
+
+      for (const proj of projectDirs) {
+        const backupProjDir = path.join(projectsDir, proj.name);
+        const files = await fs.readdir(backupProjDir);
+
+        // Search for project on local machine (up to 3 levels deep)
+        let localProjDir = null;
+        const searchDirs = [home];
+        for (const searchDir of searchDirs) {
+          const candidate = path.join(searchDir, proj.name);
+          if (await fs.pathExists(candidate)) {
+            localProjDir = candidate;
+            break;
+          }
+          // Check one level deeper
+          try {
+            const entries = await fs.readdir(searchDir, { withFileTypes: true });
+            for (const e of entries) {
+              if (!e.isDirectory() || e.name.startsWith('.')) continue;
+              const deeper = path.join(searchDir, e.name, proj.name);
+              if (await fs.pathExists(deeper)) {
+                localProjDir = deeper;
+                break;
+              }
+            }
+          } catch {}
+          if (localProjDir) break;
+        }
+
+        if (!localProjDir) {
+          console.log(chalk.gray(`  ○ ${proj.name} — not found on this machine, skipping`));
+          continue;
+        }
+
+        console.log(chalk.white(`  📁 ${proj.name}`) + chalk.gray(` → ${localProjDir}`));
+
+        let confirm = true;
+        if (!autoYes) {
+          const answer = await inquirer.prompt([
+            {
+              type: 'confirm',
+              name: 'confirm',
+              message: `Restore AI configs to ${proj.name}?`,
+              default: true
+            }
+          ]);
+          confirm = answer.confirm;
+        }
+
+        if (confirm) {
+          for (const file of files) {
+            const src = path.join(backupProjDir, file);
+            const dest = path.join(localProjDir, file);
+            const stat = await fs.stat(src);
+
+            if (stat.isDirectory()) {
+              await fs.ensureDir(dest);
+              await syncFiles(src, dest, { added: [], updated: [], skipped: [] });
+            } else {
+              if (await fs.pathExists(dest)) {
+                const srcStat = await fs.stat(src);
+                const destStat = await fs.stat(dest);
+                if (srcStat.mtimeMs > destStat.mtimeMs) {
+                  await fs.copy(src, dest);
+                  console.log(chalk.yellow(`    ↻ ${file}`) + chalk.gray(` (updated)`));
+                } else {
+                  console.log(chalk.gray(`    = ${file} (up to date)`));
+                }
+              } else {
+                await fs.ensureDir(path.dirname(dest));
+                await fs.copy(src, dest);
+                console.log(chalk.green(`    + ${file}`) + chalk.gray(` (new)`));
+              }
+              totalRestored++;
+            }
+          }
+        }
+      }
+
+      if (totalRestored > 0) {
+        allResults.push({ name: `Projects (${projectDirs.length})`, icon: '📁', dest: 'various', added: totalRestored, updated: 0 });
+        restoredAny = true;
+      }
+      spinner.start();
+    }
+  }
+
   // Final recap
   if (allResults.length > 0) {
     spinner.stop();
