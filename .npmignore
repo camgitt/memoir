@@ -1,7 +1,11 @@
 CLAUDE.md
 TODO.md
+SHOW_HN.md
 .claude/
 test-local.sh
+demo.sh
+demo.cast
+demo.gif
 *.terminal
 *.itermcolors
 *.windowsterminal.json
