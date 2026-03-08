@@ -8,6 +8,7 @@ import { pushCommand } from '../src/commands/push.js';
 import { restoreCommand } from '../src/commands/restore.js';
 import { statusCommand } from '../src/commands/status.js';
 import { viewCommand } from '../src/commands/view.js';
+import { diffCommand } from '../src/commands/diff.js';
 import { migrateCommand } from '../src/commands/migrate.js';
 import { snapshotCommand } from '../src/commands/snapshot.js';
 import { resumeCommand } from '../src/commands/resume.js';
@@ -107,6 +108,19 @@ program
   .action(async () => {
     try {
       await viewCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('diff')
+  .alias('changes')
+  .description('Show what changed since your last backup')
+  .action(async () => {
+    try {
+      await diffCommand();
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);

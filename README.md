@@ -8,6 +8,8 @@
 
 *Never lose your AI's context again. Sync and translate your AI memory across every device and tool.*
 
+![memoir demo](demo.gif)
+
 </div>
 
 ---
