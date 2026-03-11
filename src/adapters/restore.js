@@ -70,17 +70,35 @@ function remapProjectPaths(backupDir, adapterSource) {
 
   // Step 3: Identify foreign home keys in the backup
   // A "home key" is a dir that: has memory/, OR is a prefix of other dirs, AND is not a sub-project
+  // Also detect alternate local encodings (e.g. -C-Users-X and C--Users-X are the same machine)
   const foreignHomeKeys = new Set();
+  const localAltKeys = new Set(); // alternate encodings of local home dir
+
+  // Detect alternate local encodings by checking if a dir resolves to the same homedir
+  const home = os.homedir();
+  const homeNormalized = home.toLowerCase().replace(/[\\/:]/g, '');
 
   for (const entry of backupEntries) {
-    // Skip dirs that already belong to this machine
+    // Skip dirs that already match the primary local key
     if (entry === localHomeKey || entry.startsWith(localHomeKey + '-')) continue;
+
+    // Check if this entry is an alternate encoding of the local home dir
+    const entryNormalized = entry.replace(/^[-]/, '').toLowerCase().replace(/[-]/g, '');
+    if (entryNormalized === homeNormalized || homeNormalized.endsWith(entryNormalized) || entryNormalized.endsWith(homeNormalized)) {
+      // This is an alternate encoding of the local home — treat as local, not foreign
+      localAltKeys.add(entry);
+      continue;
+    }
 
     // Is this a sub-project of another backup dir? Then skip — its parent handles it
     const isSubProject = backupEntries.some(other =>
       other !== entry && entry.startsWith(other + '-')
     );
     if (isSubProject) continue;
+
+    // Is this a sub-project of an alternate local key? Skip too
+    const isAltSubProject = [...localAltKeys].some(alt => entry.startsWith(alt + '-'));
+    if (isAltSubProject) continue;
 
     // Has memory/ subfolder = definitely a home key
     const hasMemory = fs.existsSync(path.join(projectsDir, entry, 'memory'));
@@ -114,6 +132,33 @@ function remapProjectPaths(backupDir, adapterSource) {
   }
 
   return remaps;
+}
+
+// Merge memory dirs from a foreign machine — copies files that don't exist locally,
+// and for files that exist on both, keeps the newer version.
+async function mergeMemoryDirs(src, dest) {
+  const entries = await fs.readdir(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await fs.ensureDir(destPath);
+      await mergeMemoryDirs(srcPath, destPath);
+    } else {
+      if (await fs.pathExists(destPath)) {
+        // Both machines have this file — keep the newer one
+        const srcStat = await fs.stat(srcPath);
+        const destStat = await fs.stat(destPath);
+        if (srcStat.mtimeMs > destStat.mtimeMs) {
+          await fs.copy(srcPath, destPath);
+        }
+      } else {
+        // File only exists on foreign machine — always copy it
+        await fs.copy(srcPath, destPath);
+      }
+    }
+  }
 }
 
 async function syncFiles(src, dest, changes) {
@@ -194,8 +239,8 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
               const newDir = path.join(backupDir, 'projects', remap.newName);
               if (await fs.pathExists(oldDir)) {
                 if (await fs.pathExists(newDir)) {
-                  // Merge into existing directory
-                  await syncFiles(oldDir, newDir, { added: [], updated: [], skipped: [] });
+                  // Merge into existing directory — force-copy new files from foreign machine
+                  await mergeMemoryDirs(oldDir, newDir);
                   await fs.remove(oldDir);
                 } else {
                   await fs.move(oldDir, newDir);
