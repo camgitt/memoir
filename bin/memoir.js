@@ -249,6 +249,7 @@ program
         chalk.white(`memoir ${VERSION} → ${chalk.green.bold(latest)}`),
         { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
       ) + '\n');
+      process.exit(0); // Exit immediately — old process still has old VERSION
     } catch (err) {
       console.error(chalk.red('\n✖ Update failed:'), err.message);
       console.log(chalk.gray('Try manually: ') + chalk.cyan('npm install -g memoir-cli'));
