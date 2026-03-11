@@ -298,7 +298,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
     spinner.text = `📁 Scanning for project-level AI configs...`;
 
     const projectFiles = [
-      'CLAUDE.md', 'GEMINI.md', 'AGENTS.md', '.cursorrules',
+      'CLAUDE.md', 'GEMINI.md', 'CHATGPT.md', 'AGENTS.md', '.cursorrules',
       '.github/copilot-instructions.md', '.windsurfrules',
       '.aider.conf.yml', '.clinerules'
     ];

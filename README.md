@@ -30,9 +30,10 @@ All that context is trapped in hidden dotfiles on one machine.
 npm install -g memoir-cli
 ```
 
-### Supported Tools (10)
+### Supported Tools (11)
 | Tool | Config synced |
 |------|--------------|
+| **ChatGPT** | `CHATGPT.md` — custom instructions, preferences |
 | **Claude Code** | `~/.claude/` — settings, projects, memory files |
 | **Gemini CLI** | `~/.gemini/` — settings, GEMINI.md |
 | **OpenAI Codex** | `~/.codex/` — config, instructions |
@@ -44,7 +45,7 @@ npm install -g memoir-cli
 | **Continue.dev** | Config, rules |
 | **Aider** | `.aider.conf.yml`, system prompt |
 
-Plus **per-project configs**: automatically finds `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `AGENTS.md` across all your projects.
+Plus **per-project configs**: automatically finds `CLAUDE.md`, `GEMINI.md`, `CHATGPT.md`, `.cursorrules`, `AGENTS.md` across all your projects.
 
 ---
 
@@ -127,13 +128,13 @@ memoir restore # All configs restored in seconds
 
 ### Translate between tools
 ```bash
-memoir migrate --from claude --to gemini
-# Your CLAUDE.md becomes a proper GEMINI.md
+memoir migrate --from chatgpt --to claude
+# Your ChatGPT custom instructions become a proper CLAUDE.md
 ```
 
 ### Fan out to every tool
 ```bash
-memoir migrate --from claude --to all
+memoir migrate --from chatgpt --to all
 # One source of truth, every tool gets its own format
 ```
 

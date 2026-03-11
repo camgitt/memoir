@@ -1,5 +1,6 @@
 import claude from './claude.js';
 import gemini from './gemini.js';
+import chatgpt from './chatgpt.js';
 import codex from './codex.js';
 import cursor from './cursor.js';
 import copilot from './copilot.js';
@@ -10,7 +11,7 @@ import continuedev from './continuedev.js';
 import aider from './aider.js';
 
 const registry = {};
-for (const tool of [claude, gemini, codex, cursor, copilot, windsurf, zed, cline, continuedev, aider]) {
+for (const tool of [claude, gemini, chatgpt, codex, cursor, copilot, windsurf, zed, cline, continuedev, aider]) {
   registry[tool.key] = tool;
 }
 

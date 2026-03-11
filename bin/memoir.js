@@ -14,6 +14,9 @@ import { migrateCommand } from '../src/commands/migrate.js';
 import { snapshotCommand } from '../src/commands/snapshot.js';
 import { resumeCommand } from '../src/commands/resume.js';
 import { profileListCommand, profileCreateCommand, profileSwitchCommand, profileDeleteCommand } from '../src/commands/profile.js';
+import { loginCommand, logoutCommand } from '../src/commands/login.js';
+import { cloudPushCommand, cloudRestoreCommand } from '../src/commands/cloud.js';
+import { historyCommand } from '../src/commands/history.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -60,6 +63,11 @@ if (process.argv.length <= 2) {
     chalk.cyan('  memoir status    ') + chalk.gray('— see detected AI tools') + '\n' +
     chalk.cyan('  memoir profile   ') + chalk.gray('— manage profiles (personal/work)') + '\n' +
     chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n\n' +
+    chalk.white.bold('Cloud (Pro):') + '\n' +
+    chalk.cyan('  memoir login         ') + chalk.gray('— sign in to memoir cloud') + '\n' +
+    chalk.cyan('  memoir cloud push    ') + chalk.gray('— back up to the cloud') + '\n' +
+    chalk.cyan('  memoir cloud restore ') + chalk.gray('— restore from cloud') + '\n' +
+    chalk.cyan('  memoir history       ') + chalk.gray('— view backup versions') + '\n\n' +
     chalk.gray('  Tip: use --profile work to sync a specific profile') + '\n\n' +
     chalk.gray(`v${VERSION}`),
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
@@ -259,6 +267,74 @@ program
       await migrateCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error during migration:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Cloud auth
+program
+  .command('login')
+  .description('Sign in to memoir cloud')
+  .action(async () => {
+    try {
+      await loginCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('logout')
+  .description('Sign out of memoir cloud')
+  .action(async () => {
+    try {
+      await logoutCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Cloud sync
+const cloud = program.command('cloud').description('Cloud backup and restore (Pro)');
+
+cloud
+  .command('push')
+  .description('Back up your AI memory to the cloud')
+  .option('--only <tools>', 'Only sync specific tools (comma-separated)')
+  .action(async (options) => {
+    try {
+      await cloudPushCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+cloud
+  .command('restore')
+  .description('Restore your AI memory from the cloud')
+  .option('--only <tools>', 'Only restore specific tools (comma-separated)')
+  .option('-y, --yes', 'Skip confirmation prompts')
+  .option('--version <number>', 'Restore a specific version')
+  .action(async (options) => {
+    try {
+      await cloudRestoreCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('history')
+  .description('View your cloud backup history')
+  .action(async () => {
+    try {
+      await historyCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
   });

@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "2.3.0",
+  "version": "2.5.0",
   "description": "Sync AI memory across devices. Back up and restore Claude, Gemini, Codex, Cursor, Copilot, Windsurf configs. Snapshot coding sessions and resume on another machine. Migrate instructions between AI assistants.",
   "main": "src/index.js",
   "type": "module",
@@ -46,6 +46,7 @@
     "claude-code",
     "gemini-cli",
     "openai",
+    "chatgpt",
     "ai-assistant",
     "coding-assistant",
     "context-sync",
