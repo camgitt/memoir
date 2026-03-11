@@ -1,88 +1,129 @@
 <div align="center">
 
 # memoir
-**Your AI Remembers Everything. Sync It Everywhere.**
 
-[![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square)](https://npmjs.org/package/memoir-cli)
+**Sync your AI memory across every device and every tool.**
+
+[![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
+[![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 
-*Never lose your AI's context again. Sync and translate your AI memory across every device and tool.*
+Your AI tools forget you on every new machine. memoir fixes that.
+
+[Website](https://memoir.sh) &bull; [npm](https://npmjs.org/package/memoir-cli) &bull; [Blog](https://memoir.sh/blog)
+
+<br />
 
 ![memoir demo](demo.gif)
 
 </div>
 
----
+## Why memoir
 
-## The Problem
+You spend weeks teaching your AI tools how you code. Your CLAUDE.md is dialed in. Your .cursorrules are perfect. Your ChatGPT custom instructions know your stack.
 
-You spend weeks teaching your AI tools how you code — your preferred patterns, project context, coding standards.
+Then you get a new laptop. **Everything is gone.**
 
-Then you switch laptops. Or try a new AI tool. Or want your team on the same page.
-
-All that context is trapped in hidden dotfiles on one machine.
-
-## The Solution
-
-`memoir` extracts, backs up, restores, and **translates** your AI memory across any computer and any tool. One command to save. One command to restore. One command to translate between tools.
+memoir backs up, restores, and **translates** your AI memory across any machine and any tool. One command to save. One command to restore.
 
 ```bash
 npm install -g memoir-cli
 ```
 
-### Supported Tools (11)
-| Tool | Config synced |
-|------|--------------|
-| **ChatGPT** | `CHATGPT.md` — custom instructions, preferences |
-| **Claude Code** | `~/.claude/` — settings, projects, memory files |
-| **Gemini CLI** | `~/.gemini/` — settings, GEMINI.md |
-| **OpenAI Codex** | `~/.codex/` — config, instructions |
-| **Cursor** | Settings, keybindings, rules |
-| **GitHub Copilot** | Config, settings |
-| **Windsurf** | Settings, keybindings, rules |
+## Supported Tools (11)
+
+| Tool | What gets synced |
+|------|-----------------|
+| **ChatGPT** | CHATGPT.md custom instructions |
+| **Claude Code** | ~/.claude/ settings, memory, CLAUDE.md files |
+| **Gemini CLI** | ~/.gemini/ config, GEMINI.md files |
+| **OpenAI Codex** | ~/.codex/ config, AGENTS.md, codex.md |
+| **Cursor** | Settings, keybindings, .cursorrules |
+| **GitHub Copilot** | Config, copilot-instructions.md |
+| **Windsurf** | Settings, keybindings, .windsurfrules |
 | **Zed** | Settings, keymap, tasks |
-| **Cline** | Settings, rules |
-| **Continue.dev** | Config, rules |
-| **Aider** | `.aider.conf.yml`, system prompt |
+| **Cline** | Settings, .clinerules |
+| **Continue.dev** | Config, .continuerules |
+| **Aider** | .aider.conf.yml, system prompt |
 
-Plus **per-project configs**: automatically finds `CLAUDE.md`, `GEMINI.md`, `CHATGPT.md`, `.cursorrules`, `AGENTS.md` across all your projects.
-
----
+Plus **per-project configs** — memoir scans your filesystem for CLAUDE.md, GEMINI.md, CHATGPT.md, .cursorrules, and AGENTS.md across all your projects.
 
 ## Quick Start
 
-### 1. Initialize
 ```bash
+# Install
+npm install -g memoir-cli
+
+# First-time setup (GitHub repo or local)
 memoir init
-# Walks you through setup — GitHub repo or local folder
-# Auto-creates a private repo if you have gh CLI
-```
 
-### 2. Back up your memory
-```bash
+# Back up all your AI configs
 memoir push
-```
 
-### 3. Restore on a new machine
-```bash
+# Restore on a new machine
 memoir restore
 ```
 
-### 4. Translate between tools
+That's it. Every AI tool gets its memory back.
+
+## Key Features
+
+### Translate between AI tools
 ```bash
-memoir migrate --from claude --to gemini
-# AI-powered translation — not copy-paste, real rewriting
+memoir migrate --from chatgpt --to claude
+# AI-powered — rewrites conventions, not copy-paste
 ```
 
----
+Works between any combination: ChatGPT, Claude, Gemini, Cursor, Copilot, Codex, Windsurf, Aider, and more. Translate to one tool or all at once:
+
+```bash
+memoir migrate --from chatgpt --to all
+```
+
+### Session handoff
+```bash
+# Laptop dying? Capture your session
+memoir snapshot
+
+# Pick up on another machine
+memoir resume --inject --to claude
+```
+
+### Profiles (personal / work)
+```bash
+memoir profile create work
+memoir push --profile work
+memoir profile switch personal
+```
+
+Each profile has its own repo and tool filters. Work configs never mix with personal.
+
+### Cloud sync (Pro)
+```bash
+memoir login
+memoir cloud push      # encrypted cloud backup
+memoir cloud restore   # restore from any version
+memoir history         # view all backup versions
+```
+
+Free tier: 3 cloud backups. Pro ($5/mo): unlimited + version history.
+
+### Security
+```bash
+memoir doctor
+# Scans for secrets, API keys, .env files before pushing
+```
+
+memoir **never** syncs credentials, API keys, .env files, or auth tokens.
 
 ## All Commands
 
 | Command | What it does |
 |---------|-------------|
-| `memoir init` | Setup wizard — GitHub or local, upload or download |
+| `memoir init` | Setup wizard — GitHub or local storage |
 | `memoir push` | Back up all AI configs |
-| `memoir restore` | Restore on a new machine (non-destructive) |
+| `memoir restore` | Restore on a new machine |
 | `memoir status` | Show detected AI tools |
 | `memoir doctor` | Diagnose issues, scan for secrets |
 | `memoir view` | Preview what's in your backup |
@@ -91,28 +132,27 @@ memoir migrate --from claude --to gemini
 | `memoir snapshot` | Capture current coding session |
 | `memoir resume` | Pick up where you left off |
 | `memoir profile` | Manage profiles (personal/work) |
+| `memoir cloud push` | Back up to memoir cloud |
+| `memoir cloud restore` | Restore from memoir cloud |
+| `memoir history` | View cloud backup versions |
+| `memoir login` | Sign in to memoir cloud |
 | `memoir update` | Self-update to latest version |
 
----
+## How memoir compares
 
-## Profiles
+| Feature | memoir | skillshare | ai-rulez | memories.sh |
+|---------|--------|-----------|----------|-------------|
+| Cross-device sync | **Yes** | Yes (git) | No | Yes |
+| AI-powered translation | **Yes** | No | No | No |
+| Tools supported | **11** | 40+ | 18 | 3 |
+| Cloud backup | **Yes** | No | No | Yes ($15/mo) |
+| Version history | **Yes** | No | No | No |
+| Session handoff | **Yes** | No | No | No |
+| Profiles | **Yes** | No | No | No |
+| Secret scanning | **Yes** | Yes | No | No |
+| Free & open source | **Yes** | Yes | Yes | No |
 
-Separate personal and work configs — different repos, different tools.
-
-```bash
-memoir profile create work      # set up work profile with its own repo
-memoir profile create personal  # personal side projects
-
-memoir push --profile work      # sync only work configs
-memoir restore --profile personal
-
-memoir profile list             # see all profiles
-memoir profile switch work      # change default
-```
-
-Each profile can filter which tools to sync, so your personal side project memory never mixes with work.
-
----
+memoir is free and open source. Cloud sync starts at $0 (3 backups free).
 
 ## Common Workflows
 
@@ -122,46 +162,36 @@ Each profile can filter which tools to sync, so your personal side project memor
 memoir push
 
 # New machine
-memoir init    # → Download → same GitHub repo
-memoir restore # All configs restored in seconds
+npm install -g memoir-cli
+memoir init      # connect to same repo
+memoir restore   # all configs restored in seconds
 ```
 
-### Translate between tools
+### Switching from ChatGPT to Claude
 ```bash
 memoir migrate --from chatgpt --to claude
-# Your ChatGPT custom instructions become a proper CLAUDE.md
+# Your custom instructions become a proper CLAUDE.md
 ```
 
-### Fan out to every tool
+### Daily sync between machines
 ```bash
-memoir migrate --from chatgpt --to all
-# One source of truth, every tool gets its own format
+memoir push      # end of day on laptop
+memoir restore   # next morning on desktop
 ```
 
-### Daily sync
+### Cross-platform (Mac ↔ Windows ↔ Linux)
 ```bash
-memoir push      # end of day
-memoir restore   # next morning, different machine
+# Push from Mac
+memoir push
+
+# Restore on Windows — paths remap automatically
+memoir restore
 ```
 
----
+## Requirements
 
-## Security
-
-Memoir **only** syncs config files, instructions, and memory markdown. It never touches credentials, API keys, `.env` files, or auth tokens.
-
-Run `memoir doctor` to see exactly what would be synced and scan for accidental secrets before pushing.
-
----
-
-## Roadmap
-
-- **Universal format** — write one `MEMOIR.md`, generate all tool-specific configs
-- **Cloud sync** — no GitHub needed, encrypted backups
-- **Teams** — shared coding standards across your whole team
-- **Templates** — community-shared AI tool configs
-
----
+- Node.js >= 18
+- Works on macOS, Windows, Linux
 
 ## Contributing
 
@@ -171,6 +201,13 @@ Contributions welcome — especially new tool adapters and migration improvement
 2. Create your branch (`git checkout -b feature/my-feature`)
 3. Commit and push
 4. Open a PR
+
+## Links
+
+- **Website:** [memoir.sh](https://memoir.sh)
+- **npm:** [memoir-cli](https://npmjs.org/package/memoir-cli)
+- **Blog:** [memoir.sh/blog](https://memoir.sh/blog)
+- **Issues:** [GitHub Issues](https://github.com/camgitt/memoir/issues)
 
 ## License
 
