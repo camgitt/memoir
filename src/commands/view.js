@@ -36,8 +36,8 @@ function isBinaryFile(filePath) {
   return binaryExts.includes(path.extname(filePath).toLowerCase());
 }
 
-export async function viewCommand() {
-  const config = await getConfig();
+export async function viewCommand(options = {}) {
+  const config = await getConfig(options.profile);
   if (!config) {
     console.log(chalk.red('\n✖ Not configured yet. Run: memoir init\n'));
     return;

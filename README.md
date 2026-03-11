@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧠 memoir
+# memoir
 **Your AI Remembers Everything. Sync It Everywhere.**
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square)](https://npmjs.org/package/memoir-cli)
@@ -14,186 +14,163 @@
 
 ---
 
-## 💡 The Problem
+## The Problem
 
-You spend weeks teaching your local AI CLI exactly how you like your code formatted, your preferred architectural patterns, and your project's unique context.
+You spend weeks teaching your AI tools how you code — your preferred patterns, project context, coding standards.
 
-Then, you switch laptops. Or you want to share that setup with your team.
+Then you switch laptops. Or try a new AI tool. Or want your team on the same page.
 
-Suddenly, you're starting from scratch. Your AI's "memory" is trapped in hidden `.gemini` or `.claude` folders on a single machine.
+All that context is trapped in hidden dotfiles on one machine.
 
-## 🚀 The Solution
+## The Solution
 
-`memoir` is a zero-friction CLI that extracts, backs up, restores, and **translates** your AI's memory across any computer and any tool. Bring your own storage (a private GitHub repo or an iCloud/Dropbox folder), and `memoir` handles the rest.
-
-No locked-in SaaS, no lost context, no complex shell scripts. Switch from Claude to Gemini in one command.
-
-### Supported Integrations
-- [x] **Gemini CLI**
-- [x] **Claude Code**
-- [x] **OpenAI Codex CLI**
-- [x] **Cursor**
-- [x] **GitHub Copilot**
-- [x] **Windsurf**
-- [x] **Aider**
-
----
-
-## 🛠️ Installation
-
-Install globally via npm so you can use it anywhere on your machine:
+`memoir` extracts, backs up, restores, and **translates** your AI memory across any computer and any tool. One command to save. One command to restore. One command to translate between tools.
 
 ```bash
 npm install -g memoir-cli
 ```
 
-## ⚡ Quick Start
+### Supported Tools (10)
+| Tool | Config synced |
+|------|--------------|
+| **Claude Code** | `~/.claude/` — settings, projects, memory files |
+| **Gemini CLI** | `~/.gemini/` — settings, GEMINI.md |
+| **OpenAI Codex** | `~/.codex/` — config, instructions |
+| **Cursor** | Settings, keybindings, rules |
+| **GitHub Copilot** | Config, settings |
+| **Windsurf** | Settings, keybindings, rules |
+| **Zed** | Settings, keymap, tasks |
+| **Cline** | Settings, rules |
+| **Continue.dev** | Config, rules |
+| **Aider** | `.aider.conf.yml`, system prompt |
 
-### 1. Initialize
-Run the setup wizard. We'll help you securely link a private GitHub repository or a local sync folder.
-
-```bash
-memoir init
-```
-
-### 2. Backup Your Memory
-Just had a great session? Save your AI's learned context to the cloud:
-
-```bash
-memoir push
-# or simply use the alias:
-memoir remember
-```
-
-### 3. Restore Anywhere
-Got a new machine? Pull your brain down instantly:
-
-```bash
-memoir restore
-# or:
-memoir pull
-```
-
-### 4. Translate Between Tools
-Switch AI tools without losing context. Memoir uses Gemini AI to intelligently rewrite your memory files for any supported tool:
-
-```bash
-memoir migrate --from claude --to gemini
-# or run interactively:
-memoir migrate
-```
-
-Your Claude instructions become a proper `GEMINI.md` — not a copy-paste, but a real translation that follows each tool's conventions.
+Plus **per-project configs**: automatically finds `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `AGENTS.md` across all your projects.
 
 ---
 
-## 📖 All Commands
+## Quick Start
+
+### 1. Initialize
+```bash
+memoir init
+# Walks you through setup — GitHub repo or local folder
+# Auto-creates a private repo if you have gh CLI
+```
+
+### 2. Back up your memory
+```bash
+memoir push
+```
+
+### 3. Restore on a new machine
+```bash
+memoir restore
+```
+
+### 4. Translate between tools
+```bash
+memoir migrate --from claude --to gemini
+# AI-powered translation — not copy-paste, real rewriting
+```
+
+---
+
+## All Commands
 
 | Command | What it does |
 |---------|-------------|
-| `memoir init` | Setup wizard — pick GitHub or local folder, upload or download |
-| `memoir push` | Extract all AI tool configs, back up to GitHub/local |
-| `memoir restore` | Pull backup down, restore missing files (non-destructive) |
-| `memoir status` | Show which AI tools are detected on this machine |
-| `memoir view` | Preview backup contents with diffs against local |
-| `memoir migrate` | Translate memory between tools via Gemini AI |
+| `memoir init` | Setup wizard — GitHub or local, upload or download |
+| `memoir push` | Back up all AI configs |
+| `memoir restore` | Restore on a new machine (non-destructive) |
+| `memoir status` | Show detected AI tools |
+| `memoir doctor` | Diagnose issues, scan for secrets |
+| `memoir view` | Preview what's in your backup |
+| `memoir diff` | Show changes since last backup |
+| `memoir migrate` | Translate memory between tools via AI |
+| `memoir snapshot` | Capture current coding session |
+| `memoir resume` | Pick up where you left off |
+| `memoir profile` | Manage profiles (personal/work) |
+| `memoir update` | Self-update to latest version |
 
 ---
 
-## 🎯 Common Workflows
+## Profiles
+
+Separate personal and work configs — different repos, different tools.
+
+```bash
+memoir profile create work      # set up work profile with its own repo
+memoir profile create personal  # personal side projects
+
+memoir push --profile work      # sync only work configs
+memoir restore --profile personal
+
+memoir profile list             # see all profiles
+memoir profile switch work      # change default
+```
+
+Each profile can filter which tools to sync, so your personal side project memory never mixes with work.
+
+---
+
+## Common Workflows
 
 ### New laptop setup
 ```bash
-# Old machine — save everything
-memoir init    # → Upload → GitHub
-
-# New machine — restore everything
-memoir init    # → Download → GitHub
-# All your .claude/, .gemini/, .cursorrules configs restored in 30 seconds
-```
-
-### Switch from Claude to Gemini (or any tool)
-```bash
-memoir migrate --from claude --to gemini
-```
-Your CLAUDE.md + Claude memory files get intelligently rewritten as a proper GEMINI.md — not a copy-paste, but a real translation that follows Gemini's conventions.
-
-### Keep your whole team in sync
-```bash
-# Team lead writes CLAUDE.md, then generates for everyone else:
-memoir migrate --from claude --to cursor
-memoir migrate --from claude --to copilot
-memoir migrate --from claude --to codex
-```
-
-### Fan out to every tool at once
-```bash
-memoir migrate --from claude --to gemini
-memoir migrate --from claude --to codex
-memoir migrate --from claude --to cursor
-memoir migrate --from claude --to windsurf
-memoir migrate --from claude --to aider
-```
-Use one tool as the source of truth, propagate to all others.
-
-### Preview before committing
-```bash
-memoir migrate --from gemini --to claude --dry-run
-# Shows translated output but writes nothing
-```
-
-### Protect existing files
-```bash
-memoir migrate --from claude --to gemini
-# → "GEMINI.md already exists."
-# → Overwrite / Append / Skip
-# Append adds a dated separator so you keep your existing instructions
-```
-
-### Daily sync across machines
-```bash
-# End of day
+# Old machine
 memoir push
 
-# Next morning, different machine
-memoir pull
+# New machine
+memoir init    # → Download → same GitHub repo
+memoir restore # All configs restored in seconds
 ```
 
-### Check what's on this machine
+### Translate between tools
 ```bash
-memoir status
-# Shows checkmarks for every detected AI tool and their config locations
+memoir migrate --from claude --to gemini
+# Your CLAUDE.md becomes a proper GEMINI.md
+```
+
+### Fan out to every tool
+```bash
+memoir migrate --from claude --to all
+# One source of truth, every tool gets its own format
+```
+
+### Daily sync
+```bash
+memoir push      # end of day
+memoir restore   # next morning, different machine
 ```
 
 ---
 
-## 🔒 Security First
+## Security
 
-Your AI memory files often sit right next to sensitive API keys and OAuth tokens. **`memoir` is designed to be paranoid.**
+Memoir **only** syncs config files, instructions, and memory markdown. It never touches credentials, API keys, `.env` files, or auth tokens.
 
-Our specialized adapters intelligently filter your directories. We **only** sync configuration files, custom prompts, and markdown memory (`GEMINI.md`, `CLAUDE.md`). We will never touch, copy, or push `.env` files, `.key` files, or credential caches.
-
----
-
-## 🗺️ Roadmap
-
-**What's next:**
-- Team sharing — sync a shared memory repo across your whole team
-- Auto-detect new AI tools as they appear
-- Two-way merge — combine memories from multiple tools into one
+Run `memoir doctor` to see exactly what would be synced and scan for accidental secrets before pushing.
 
 ---
 
-## 🤝 Contributing
+## Roadmap
 
-We welcome contributions! Whether it's adding an adapter for a new AI CLI, improving the UI, or helping build the Migration Engine.
+- **Universal format** — write one `MEMOIR.md`, generate all tool-specific configs
+- **Cloud sync** — no GitHub needed, encrypted backups
+- **Teams** — shared coding standards across your whole team
+- **Templates** — community-shared AI tool configs
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+---
 
-## 📄 License
+## Contributing
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Contributions welcome — especially new tool adapters and migration improvements.
+
+1. Fork the repo
+2. Create your branch (`git checkout -b feature/my-feature`)
+3. Commit and push
+4. Open a PR
+
+## License
+
+MIT

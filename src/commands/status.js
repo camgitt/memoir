@@ -6,8 +6,8 @@ import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
 
-export async function statusCommand() {
-  const config = await getConfig();
+export async function statusCommand(options = {}) {
+  const config = await getConfig(options.profile);
 
   console.log();
 
@@ -23,8 +23,8 @@ export async function statusCommand() {
   }
 
   // Detected tools
-  const lines = [];
-  let detected = 0;
+  const foundTools = [];
+  const notFound = [];
 
   for (const adapter of adapters) {
     let found = false;
@@ -40,22 +40,30 @@ export async function statusCommand() {
     }
 
     if (found) {
-      lines.push(chalk.green('  ✔ ') + chalk.white(adapter.name));
-      detected++;
+      foundTools.push(chalk.green('  ✔ ') + chalk.white(adapter.name));
     } else {
-      lines.push(chalk.gray('  ○ ' + adapter.name));
+      notFound.push(adapter.name);
     }
   }
 
-  const summary = detected > 0
-    ? chalk.white(`${detected} tool${detected !== 1 ? 's' : ''} ready to sync`)
-    : chalk.yellow('No AI tools detected');
+  const lines = foundTools.length > 0
+    ? foundTools
+    : [chalk.yellow('  No AI tools detected')];
+
+  const summary = foundTools.length > 0
+    ? chalk.white(`${foundTools.length} tool${foundTools.length !== 1 ? 's' : ''} ready to sync`)
+    : chalk.gray(`Supports: ${adapters.map(a => a.name).join(', ')}`);
+
+  // Show not-found tools as a compact line if there are found tools
+  const notFoundLine = foundTools.length > 0 && notFound.length > 0
+    ? '\n' + chalk.gray(`  Also supports: ${notFound.join(', ')}`)
+    : '';
 
   console.log(boxen(
     gradient.pastel('  memoir status  ') + '\n\n' +
     configLine + '\n\n' +
     chalk.bold.white('AI Tools') + '\n' +
-    lines.join('\n') + '\n\n' +
+    lines.join('\n') + notFoundLine + '\n\n' +
     chalk.gray('─'.repeat(30)) + '\n' +
     summary,
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }

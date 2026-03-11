@@ -50,8 +50,8 @@ function simpleDiff(oldText, newText) {
   return output;
 }
 
-export async function diffCommand() {
-  const config = await getConfig();
+export async function diffCommand(options = {}) {
+  const config = await getConfig(options.profile);
   if (!config) {
     console.log(chalk.red('\n✖ Not configured yet. Run: memoir init\n'));
     return;

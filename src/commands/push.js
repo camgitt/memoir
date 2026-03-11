@@ -10,7 +10,7 @@ import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 
 export async function pushCommand(options = {}) {
-  const config = await getConfig();
+  const config = await getConfig(options.profile);
 
   if (!config) {
     console.log('\n' + boxen(
@@ -28,7 +28,9 @@ export async function pushCommand(options = {}) {
   await fs.ensureDir(stagingDir);
 
   try {
-    const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
+    // Profile-level tool filter (config.only) merged with CLI --only flag
+    const onlyRaw = options.only || (config.only ? config.only.join(',') : null);
+    const onlyFilter = onlyRaw ? onlyRaw.split(',').map(t => t.trim().toLowerCase()) : null;
     const foundAny = await extractMemories(stagingDir, spinner, onlyFilter);
 
     if (!foundAny) {

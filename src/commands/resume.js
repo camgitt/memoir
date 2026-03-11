@@ -92,7 +92,7 @@ async function injectHandoff(content, tool) {
 }
 
 export async function resumeCommand(options = {}) {
-  const config = await getConfig();
+  const config = await getConfig(options.profile);
 
   if (!config) {
     console.log('\n' + boxen(

@@ -5,27 +5,115 @@ import os from 'os';
 import inquirer from 'inquirer';
 import { adapters } from '../adapters/index.js';
 
-// Claude CLI stores projects under paths like `projects/-Users-camarthur/`
-// This converts the path from the backup machine to match the current machine
-function remapProjectPath(backupDir, adapterSource) {
-  const projectsDir = path.join(backupDir, 'projects');
-  if (!fs.existsSync(projectsDir)) return null;
+// Detect the local home key by looking at what Claude has ALREADY created
+// on this machine, rather than trying to compute the encoding ourselves.
+// Claude's path encoding varies across platforms and versions, so detection
+// is the only reliable approach.
+function detectLocalHomeKey(adapterSource) {
+  const localProjectsDir = path.join(adapterSource, 'projects');
+  if (!fs.existsSync(localProjectsDir)) return null;
 
-  const entries = fs.readdirSync(projectsDir);
-  // Find the backed-up home dir key (e.g., "-Users-camarthur")
-  const oldHomeKey = entries.find(e => {
-    return fs.statSync(path.join(projectsDir, e)).isDirectory();
+  const entries = fs.readdirSync(localProjectsDir)
+    .filter(e => fs.statSync(path.join(localProjectsDir, e)).isDirectory());
+  if (entries.length === 0) return null;
+
+  // Find dirs with a memory/ subfolder that aren't sub-projects of another dir
+  const candidates = entries.filter(entry => {
+    const hasMemory = fs.existsSync(path.join(localProjectsDir, entry, 'memory'));
+    if (!hasMemory) return false;
+    // A sub-project dir starts with another dir + '-'
+    const isSubProject = entries.some(other =>
+      other !== entry && entry.startsWith(other + '-')
+    );
+    return !isSubProject;
   });
-  if (!oldHomeKey) return null;
 
-  // Build the current machine's home dir key
-  // Claude uses the homedir path with / replaced by - and leading -
-  const home = os.homedir();
-  const newHomeKey = '-' + home.replace(/^\//, '').replace(/\\/g, '-').replace(/\//g, '-').replace(/:/g, '');
+  if (candidates.length === 1) return candidates[0];
 
-  if (oldHomeKey === newHomeKey) return null; // Same machine, no remap needed
+  if (candidates.length > 1) {
+    // Multiple home-key candidates (e.g. encoding changed between Claude versions)
+    // Pick the most recently modified one — that's what Claude is actively using
+    return candidates.sort((a, b) => {
+      const aDir = path.join(localProjectsDir, a, 'memory');
+      const bDir = path.join(localProjectsDir, b, 'memory');
+      return fs.statSync(bDir).mtimeMs - fs.statSync(aDir).mtimeMs;
+    })[0];
+  }
 
-  return { oldHomeKey, newHomeKey };
+  // No dir has memory/ — fall back to shortest dir that's a prefix of others
+  const prefixDirs = entries.filter(entry =>
+    entries.some(other => other !== entry && other.startsWith(entry + '-'))
+  ).sort((a, b) => a.length - b.length);
+
+  return prefixDirs[0] || entries[0];
+}
+
+// Claude CLI stores projects under paths like `projects/-Users-camarthur/`
+// This remaps ALL foreign machine dirs to match the current machine.
+function remapProjectPaths(backupDir, adapterSource) {
+  const projectsDir = path.join(backupDir, 'projects');
+  if (!fs.existsSync(projectsDir)) return [];
+
+  const backupEntries = fs.readdirSync(projectsDir)
+    .filter(e => fs.statSync(path.join(projectsDir, e)).isDirectory());
+  if (backupEntries.length === 0) return [];
+
+  // Step 1: Detect the local home key from existing Claude dirs
+  let localHomeKey = detectLocalHomeKey(adapterSource);
+
+  // Step 2: Fallback — compute from homedir (only for fresh installs)
+  if (!localHomeKey) {
+    const home = os.homedir();
+    // Use the same encoding Claude uses: path with separators → dashes
+    localHomeKey = '-' + home.replace(/^\//, '').replace(/\\/g, '-').replace(/\//g, '-').replace(/:/g, '');
+  }
+
+  // Step 3: Identify foreign home keys in the backup
+  // A "home key" is a dir that: has memory/, OR is a prefix of other dirs, AND is not a sub-project
+  const foreignHomeKeys = new Set();
+
+  for (const entry of backupEntries) {
+    // Skip dirs that already belong to this machine
+    if (entry === localHomeKey || entry.startsWith(localHomeKey + '-')) continue;
+
+    // Is this a sub-project of another backup dir? Then skip — its parent handles it
+    const isSubProject = backupEntries.some(other =>
+      other !== entry && entry.startsWith(other + '-')
+    );
+    if (isSubProject) continue;
+
+    // Has memory/ subfolder = definitely a home key
+    const hasMemory = fs.existsSync(path.join(projectsDir, entry, 'memory'));
+    // Is a prefix of other dirs = likely a home key
+    const isPrefix = backupEntries.some(other =>
+      other !== entry && other.startsWith(entry + '-')
+    );
+
+    if (hasMemory || isPrefix) {
+      foreignHomeKeys.add(entry);
+    }
+  }
+
+  // Step 4: Build remaps — remap each foreign home key and its sub-projects
+  const remaps = [];
+  const processed = new Set();
+
+  for (const foreignKey of foreignHomeKeys) {
+    // Find all dirs belonging to this foreign home key
+    for (const dir of backupEntries) {
+      if (processed.has(dir)) continue;
+      if (dir !== foreignKey && !dir.startsWith(foreignKey + '-')) continue;
+
+      processed.add(dir);
+      const suffix = dir.slice(foreignKey.length); // "" or "-alfred" etc.
+      const newName = localHomeKey + suffix;
+      if (dir !== newName) {
+        remaps.push({ oldName: dir, newName });
+      }
+    }
+  }
+
+  return remaps;
 }
 
 async function syncFiles(src, dest, changes) {
@@ -97,17 +185,24 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
 
         // Remap Claude project paths from source machine to this machine
         if (adapter.name === 'Claude CLI') {
-          const remap = remapProjectPath(backupDir, adapter.source);
-          if (remap) {
+          const remaps = remapProjectPaths(backupDir, adapter.source);
+          if (remaps.length > 0) {
             spinner.stop();
-            console.log(chalk.gray(`  Remapping project path: ${remap.oldHomeKey} → ${remap.newHomeKey}`));
-            spinner.start();
-            // Rename the directory in staging so it restores to the right place
-            const oldDir = path.join(backupDir, 'projects', remap.oldHomeKey);
-            const newDir = path.join(backupDir, 'projects', remap.newHomeKey);
-            if (await fs.pathExists(oldDir) && !(await fs.pathExists(newDir))) {
-              await fs.move(oldDir, newDir);
+            for (const remap of remaps) {
+              console.log(chalk.gray(`  Remapping: ${remap.oldName} → ${remap.newName}`));
+              const oldDir = path.join(backupDir, 'projects', remap.oldName);
+              const newDir = path.join(backupDir, 'projects', remap.newName);
+              if (await fs.pathExists(oldDir)) {
+                if (await fs.pathExists(newDir)) {
+                  // Merge into existing directory
+                  await syncFiles(oldDir, newDir, { added: [], updated: [], skipped: [] });
+                  await fs.remove(oldDir);
+                } else {
+                  await fs.move(oldDir, newDir);
+                }
+              }
             }
+            spinner.start();
           }
         }
 

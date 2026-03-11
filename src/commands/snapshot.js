@@ -264,7 +264,7 @@ Keep it under 300 words total. Be specific about file names and features.`;
 }
 
 export async function snapshotCommand(options = {}) {
-  const config = await getConfig();
+  const config = await getConfig(options.profile);
 
   console.log();
   const spinner = ora({ text: chalk.gray('Finding latest session...'), spinner: 'dots' }).start();

@@ -128,6 +128,80 @@ export const adapters = [
     }
   },
   {
+    name: 'Zed',
+    icon: '🔶',
+    source: isWin
+      ? path.join(appData, 'Zed')
+      : path.join(home, '.config', 'zed'),
+    filter: (src) => {
+      const zedDir = isWin
+        ? path.join(appData, 'Zed')
+        : path.join(home, '.config', 'zed');
+      const rel = path.relative(zedDir, src);
+      if (src === zedDir) return true;
+      const basename = path.basename(src);
+      // Skip known heavy/non-config directories
+      const skipDirs = ['extensions', 'themes', 'logs', 'db', 'copilot', 'node', 'languages'];
+      const topDir = rel.split(path.sep)[0];
+      if (skipDirs.includes(topDir)) return false;
+      // Only sync specific config files in root
+      const allowed = ['settings.json', 'keymap.json', 'tasks.json'];
+      if (allowed.includes(basename) && !rel.includes(path.sep)) return true;
+      // Allow .md files in root
+      if (basename.endsWith('.md') && !rel.includes(path.sep)) return true;
+      return false;
+    }
+  },
+  {
+    name: 'Cline',
+    icon: '🤖',
+    source: isWin
+      ? path.join(appData, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')
+      : path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev'),
+    filter: (src) => {
+      const clineDir = isWin
+        ? path.join(appData, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')
+        : path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev');
+      const rel = path.relative(clineDir, src);
+      if (src === clineDir) return true;
+      const basename = path.basename(src);
+      const topDir = rel.split(path.sep)[0];
+      // Skip known heavy/non-config directories
+      const skipDirs = ['tasks', 'checkpoints', '.cache', 'images'];
+      if (skipDirs.includes(topDir)) return false;
+      // Allow settings/ and rules/ directories
+      if (topDir === 'settings' || topDir === 'rules') return true;
+      // Allow .md files in root
+      if (basename.endsWith('.md') && !rel.includes(path.sep)) return true;
+      return false;
+    }
+  },
+  {
+    name: 'Continue.dev',
+    icon: '🔄',
+    source: isWin
+      ? path.join(process.env.USERPROFILE || home, '.continue')
+      : path.join(home, '.continue'),
+    filter: (src) => {
+      const continueDir = isWin
+        ? path.join(process.env.USERPROFILE || home, '.continue')
+        : path.join(home, '.continue');
+      const rel = path.relative(continueDir, src);
+      if (src === continueDir) return true;
+      const basename = path.basename(src);
+      // Skip known heavy/non-config directories
+      const skipDirs = ['sessions', 'dev_data', 'logs', 'index', 'cache', 'types'];
+      const topDir = rel.split(path.sep)[0];
+      if (skipDirs.includes(topDir)) return false;
+      // Only sync specific config files in root
+      const allowed = ['config.json', 'config.ts', 'config.yaml', '.continuerules'];
+      if (allowed.includes(basename) && !rel.includes(path.sep)) return true;
+      // Allow .md files in root
+      if (basename.endsWith('.md') && !rel.includes(path.sep)) return true;
+      return false;
+    }
+  },
+  {
     name: 'Aider',
     icon: '🔧',
     source: home,

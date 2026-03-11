@@ -9,7 +9,7 @@ import { getConfig } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 
 export async function restoreCommand(options = {}) {
-  const config = await getConfig();
+  const config = await getConfig(options.profile);
 
   if (!config) {
     console.log('\n' + boxen(

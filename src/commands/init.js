@@ -87,7 +87,25 @@ export async function initCommand() {
     const repo = answers.repo.trim();
 
     config.gitRepo = `https://github.com/${username}/${repo}.git`;
-    console.log(chalk.gray(`  → ${config.gitRepo}\n`));
+    console.log(chalk.gray(`  → ${config.gitRepo}`));
+
+    // Auto-create the repo if gh CLI is available and repo doesn't exist
+    if (direction === 'upload') {
+      try {
+        execFileSync('gh', ['repo', 'view', `${username}/${repo}`], { stdio: 'ignore' });
+        console.log(chalk.gray('  ✔ Repo exists\n'));
+      } catch {
+        // Repo doesn't exist — try to create it
+        try {
+          execFileSync('gh', ['repo', 'create', `${username}/${repo}`, '--private', '--description', 'AI memory backup (memoir-cli)'], { stdio: 'ignore' });
+          console.log(chalk.green('  ✔ Created private repo\n'));
+        } catch {
+          console.log(chalk.yellow('  ⚠ Could not auto-create repo. Create it manually on GitHub.\n'));
+        }
+      }
+    } else {
+      console.log('');
+    }
   }
 
   await saveConfig(config);

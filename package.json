@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "description": "Sync AI memory across devices. Back up and restore Claude, Gemini, Codex, Cursor, Copilot, Windsurf configs. Snapshot coding sessions and resume on another machine. Migrate instructions between AI assistants.",
   "main": "src/index.js",
   "type": "module",
@@ -35,6 +35,10 @@
     "copilot",
     "windsurf",
     "aider",
+    "zed",
+    "cline",
+    "continue-dev",
+    "profiles",
     "ai-memory",
     "ai-tools",
     "dotfiles",
@@ -58,7 +62,6 @@
     "fs-extra": "^11.2.0",
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.15",
-    "open": "^11.0.0",
-    "ora": "^7.0.1"
+"ora": "^7.0.1"
   }
 }
