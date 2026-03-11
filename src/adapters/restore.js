@@ -72,33 +72,35 @@ function remapProjectPaths(backupDir, adapterSource) {
   // A "home key" is a dir that: has memory/, OR is a prefix of other dirs, AND is not a sub-project
   // Also detect alternate local encodings (e.g. -C-Users-X and C--Users-X are the same machine)
   const foreignHomeKeys = new Set();
-  const localAltKeys = new Set(); // alternate encodings of local home dir
 
-  // Detect alternate local encodings by checking if a dir resolves to the same homedir
+  // Extract the local username from homedir for matching alternate encodings
   const home = os.homedir();
-  const homeNormalized = home.toLowerCase().replace(/[\\/:]/g, '');
+  const localUsername = path.basename(home).toLowerCase();
+
+  // All dirs that belong to this machine (primary key + alternate encodings)
+  const localDirs = new Set();
+  localDirs.add(localHomeKey);
+
+  // Find alternate local encodings — dirs that contain the same username
+  // e.g. on Windows with user "Asian-Beast": both -C-Users-Asian-Beast and C--Users-Asian-Beast
+  for (const entry of backupEntries) {
+    if (entry === localHomeKey) continue;
+    // Check if this dir contains the local username (case-insensitive)
+    if (entry.toLowerCase().includes(localUsername)) {
+      localDirs.add(entry);
+    }
+  }
 
   for (const entry of backupEntries) {
-    // Skip dirs that already match the primary local key
-    if (entry === localHomeKey || entry.startsWith(localHomeKey + '-')) continue;
-
-    // Check if this entry is an alternate encoding of the local home dir
-    const entryNormalized = entry.replace(/^[-]/, '').toLowerCase().replace(/[-]/g, '');
-    if (entryNormalized === homeNormalized || homeNormalized.endsWith(entryNormalized) || entryNormalized.endsWith(homeNormalized)) {
-      // This is an alternate encoding of the local home — treat as local, not foreign
-      localAltKeys.add(entry);
-      continue;
-    }
+    // Skip dirs that belong to this machine (primary or alternate)
+    const isLocal = [...localDirs].some(ld => entry === ld || entry.startsWith(ld + '-'));
+    if (isLocal) continue;
 
     // Is this a sub-project of another backup dir? Then skip — its parent handles it
     const isSubProject = backupEntries.some(other =>
       other !== entry && entry.startsWith(other + '-')
     );
     if (isSubProject) continue;
-
-    // Is this a sub-project of an alternate local key? Skip too
-    const isAltSubProject = [...localAltKeys].some(alt => entry.startsWith(alt + '-'));
-    if (isAltSubProject) continue;
 
     // Has memory/ subfolder = definitely a home key
     const hasMemory = fs.existsSync(path.join(projectsDir, entry, 'memory'));
