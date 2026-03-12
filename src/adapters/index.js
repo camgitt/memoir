@@ -3,6 +3,7 @@ import nodeFs from 'node:fs';
 import path from 'path';
 import os from 'os';
 import chalk from 'chalk';
+import { shouldIgnoreProject } from '../context/capture.js';
 
 const home = os.homedir();
 
@@ -332,7 +333,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
         }
       }
 
-      if (foundFiles.length > 0 && dir !== home) {
+      if (foundFiles.length > 0 && dir !== home && !shouldIgnoreProject(dir)) {
         // This is a project with AI configs
         const projectName = path.basename(dir);
         const projectDestDir = path.join(projectsDest, projectName);

@@ -51,7 +51,13 @@ async function injectHandoff(content, tool) {
     claude: () => {
       // Write to Claude's project memory dir so it's auto-loaded
       const cwd = process.cwd();
-      const cwdKey = '-' + cwd.replace(/^\//, '').replace(/\\/g, '-').replace(/\//g, '-').replace(/:/g, '');
+      // Match Claude's actual path encoding: each separator → dash
+      let cwdKey;
+      if (process.platform === 'win32') {
+        cwdKey = cwd.replace(/\\/g, '-').replace(/:/g, '-');
+      } else {
+        cwdKey = '-' + cwd.replace(/^\//, '').replace(/\//g, '-');
+      }
       const memDir = path.join(home, '.claude', 'projects', cwdKey, 'memory');
       return path.join(memDir, 'handoff.md');
     },

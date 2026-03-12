@@ -9,9 +9,10 @@ import { getConfig } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import inquirer from 'inquirer';
-import { findClaudeSessions, parseSession, generateContextHandoff } from '../context/capture.js';
+import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject } from '../context/capture.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
+import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
 
 export async function pushCommand(options = {}) {
   const config = await getConfig(options.profile);
@@ -113,10 +114,42 @@ export async function pushCommand(options = {}) {
       }
     }
 
-    // Encrypt if enabled
+    // Encrypt if enabled (or ask on first push if not configured)
     let uploadDir = stagingDir;
     let encrypted = false;
-    if (config.encrypt) {
+    let shouldEncrypt = config.encrypt;
+
+    if (shouldEncrypt === undefined) {
+      // First push since encryption was added — ask once and save preference
+      spinner.stop();
+      const { wantEncrypt } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'wantEncrypt',
+        message: 'Enable E2E encryption? (protects your backup even if compromised)',
+        default: true
+      }]);
+      shouldEncrypt = wantEncrypt;
+
+      // Save to config so we don't ask again
+      try {
+        let raw = await getRawConfig();
+        if (raw) {
+          if (!raw.version || raw.version < 2) {
+            raw = migrateConfigToV2(raw);
+          }
+          const profileName = options.profile || raw.activeProfile || 'default';
+          if (raw.profiles?.[profileName]) {
+            raw.profiles[profileName].encrypt = shouldEncrypt;
+          } else {
+            raw.encrypt = shouldEncrypt;
+          }
+          await saveConfig(raw);
+        }
+      } catch {}
+      spinner.start();
+    }
+
+    if (shouldEncrypt) {
       spinner.stop();
       const { passphrase } = await inquirer.prompt([{
         type: 'password',
@@ -199,7 +232,7 @@ export async function pushCommand(options = {}) {
   } finally {
     await fs.remove(stagingDir);
     // Clean up encrypted dir if it was created
-    if (config.encrypt) {
+    if (true) {
       const encDirs = await fs.readdir(os.tmpdir());
       for (const d of encDirs) {
         if (d.startsWith('memoir-encrypted-')) {

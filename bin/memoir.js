@@ -62,6 +62,7 @@ if (process.argv.length <= 2) {
     chalk.cyan('  memoir resume    ') + chalk.gray('— pick up where you left off') + '\n' +
     chalk.cyan('  memoir status    ') + chalk.gray('— see detected AI tools') + '\n' +
     chalk.cyan('  memoir profile   ') + chalk.gray('— manage profiles (personal/work)') + '\n' +
+    chalk.cyan('  memoir encrypt   ') + chalk.gray('— toggle E2E encryption') + '\n' +
     chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n\n' +
     chalk.white.bold('Cloud (Pro):') + '\n' +
     chalk.cyan('  memoir login         ') + chalk.gray('— sign in to memoir cloud') + '\n' +
@@ -238,9 +239,8 @@ program
       console.log('\n' + chalk.cyan(`Updating memoir ${VERSION} → ${chalk.green.bold(latest)}...`) + '\n');
 
       const { execSync } = await import('child_process');
-      const execPath = process.argv[1] || '';
-      const useBun = execPath.includes('.bun') || process.env.BUN_INSTALL;
-      const cmd = useBun ? 'bun install -g memoir-cli' : 'npm install -g memoir-cli';
+      // Always use npm — bun installs to a different location and can cause PATH conflicts
+      const cmd = 'npm install -g memoir-cli';
 
       execSync(cmd, { stdio: 'inherit' });
 
@@ -253,6 +253,44 @@ program
     } catch (err) {
       console.error(chalk.red('\n✖ Update failed:'), err.message);
       console.log(chalk.gray('Try manually: ') + chalk.cyan('npm install -g memoir-cli'));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('encrypt')
+  .description('Toggle E2E encryption for your backups')
+  .action(async () => {
+    try {
+      const { getConfig, getRawConfig, saveConfig, migrateConfigToV2 } = await import('../src/config.js');
+      const config = await getConfig();
+      if (!config) {
+        console.error(chalk.red('\n✖ Not configured. Run memoir init first.'));
+        process.exit(1);
+      }
+      const current = config.encrypt || false;
+      console.log(chalk.white(`\n  Encryption is currently: ${current ? chalk.green('ON') : chalk.red('OFF')}`));
+      const inquirer = (await import('inquirer')).default;
+      const { toggle } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'toggle',
+        message: current ? 'Disable encryption?' : 'Enable encryption?',
+        default: !current
+      }]);
+      if (toggle !== current) {
+        let raw = await getRawConfig();
+        if (!raw.version || raw.version < 2) raw = migrateConfigToV2(raw);
+        const profileName = raw.activeProfile || 'default';
+        if (raw.profiles?.[profileName]) {
+          raw.profiles[profileName].encrypt = !current;
+        } else {
+          raw.encrypt = !current;
+        }
+        await saveConfig(raw);
+        console.log(chalk.green(`\n  ✔ Encryption ${!current ? 'enabled' : 'disabled'}. Next push will ${!current ? 'encrypt' : 'skip encryption'}.\n`));
+      }
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
   });

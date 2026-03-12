@@ -9,7 +9,7 @@ import { adapters } from '../adapters/index.js';
 // on this machine, rather than trying to compute the encoding ourselves.
 // Claude's path encoding varies across platforms and versions, so detection
 // is the only reliable approach.
-function detectLocalHomeKey(adapterSource) {
+export function detectLocalHomeKey(adapterSource) {
   const localProjectsDir = path.join(adapterSource, 'projects');
   if (!fs.existsSync(localProjectsDir)) return null;
 
@@ -65,7 +65,14 @@ function remapProjectPaths(backupDir, adapterSource) {
   if (!localHomeKey) {
     const home = os.homedir();
     // Use the same encoding Claude uses: path with separators → dashes
-    localHomeKey = '-' + home.replace(/^\//, '').replace(/\\/g, '-').replace(/\//g, '-').replace(/:/g, '');
+    // Claude encodes paths: each separator (/ \ :) → dash
+    // macOS /Users/cam → -Users-cam (leading / stripped, prefixed with -)
+    // Windows C:\Users\X → C--Users-X (C + dash for colon + dash for backslash)
+    if (process.platform === 'win32') {
+      localHomeKey = home.replace(/\\/g, '-').replace(/:/g, '-');
+    } else {
+      localHomeKey = '-' + home.replace(/^\//, '').replace(/\//g, '-');
+    }
   }
 
   // Step 3: Identify foreign home keys in the backup

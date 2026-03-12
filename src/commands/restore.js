@@ -9,6 +9,7 @@ import inquirer from 'inquirer';
 import { getConfig } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
+import { detectLocalHomeKey } from '../adapters/restore.js';
 
 const home = os.homedir();
 
@@ -135,21 +136,31 @@ export async function restoreCommand(options = {}) {
           await fs.writeFile(path.join(localHandoffDir, 'latest.md'), handoffContent);
 
           // Inject into Claude's home-level memory so it's always loaded
-          const cwdKey = '-' + home.replace(/^\//, '').replace(/\\/g, '-').replace(/\//g, '-').replace(/:/g, '');
-          const claudeMemDir = path.join(home, '.claude', 'projects', cwdKey, 'memory');
-          if (await fs.pathExists(path.join(home, '.claude'))) {
+          // Use detection (reads what Claude actually created) with corrected fallback
+          const claudeDir = path.join(home, '.claude');
+          if (await fs.pathExists(claudeDir)) {
+            let homeKey = detectLocalHomeKey(claudeDir);
+            if (!homeKey) {
+              // Fallback: compute key matching Claude's actual encoding
+              if (process.platform === 'win32') {
+                homeKey = home.replace(/\\/g, '-').replace(/:/g, '-');
+              } else {
+                homeKey = '-' + home.replace(/^\//, '').replace(/\//g, '-');
+              }
+            }
+            const claudeMemDir = path.join(claudeDir, 'projects', homeKey, 'memory');
             await fs.ensureDir(claudeMemDir);
             await fs.writeFile(path.join(claudeMemDir, 'handoff.md'), handoffContent);
             handoffInjected = true;
           }
 
-          // Extract info for display
-          const fromMatch = handoffContent.match(/\*\*From:\*\*\s*(.+)/);
-          const whenMatch = handoffContent.match(/\*\*When:\*\*\s*(.+)/);
-          const durationMatch = handoffContent.match(/\*\*Duration:\*\*\s*(.+)/);
+          // Extract info for display — handles both old and new handoff formats
+          const fromMatch = handoffContent.match(/\*\*From:\*\*\s*(.+)/) || handoffContent.match(/from \*\*(.+?)\*\*/);
+          const whenMatch = handoffContent.match(/\*\*When:\*\*\s*(.+)/) || handoffContent.match(/on (\d{4}-\d{2}-\d{2}) at (.+)/);
+          const durationMatch = handoffContent.match(/\*\*Duration:\*\*\s*(.+)/) || handoffContent.match(/Session: (\w+)/);
           handoffInfo = {
             from: fromMatch ? fromMatch[1] : 'another machine',
-            when: whenMatch ? whenMatch[1] : 'recently',
+            when: whenMatch ? (whenMatch[2] ? `${whenMatch[1]} ${whenMatch[2]}` : whenMatch[1]) : 'recently',
             duration: durationMatch ? durationMatch[1] : null,
           };
         }

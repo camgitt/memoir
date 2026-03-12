@@ -168,46 +168,40 @@ export function generateContextHandoff(parsed) {
     .filter(m => m.length > 10 && !/^(ok|yes|no|sure|yea|yeah|yep|nah|nope|thanks|ty|thx|good|great|nice|cool|done|hmm)$/i.test(m.trim()))
     .map(m => m.length > 150 ? m.slice(0, 150) + '...' : m);
 
+  // Build a concise, actionable handoff
   let md = `---
 name: Session Handoff
-description: Auto-generated context from last coding session for seamless cross-device continuity
+description: Coding session context — resume on any machine, any AI tool
 type: project
 ---
 
-# Session Handoff
+# Continue where I left off
 
-**From:** ${hostname} (${platform})
-**When:** ${now.toISOString().split('T')[0]} ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-**Duration:** ${duration}
-**Project:** ${cwd}
-**Branch:** ${parsed.gitBranch || 'unknown'}
+> Handed off from **${hostname}** (${platform}) on ${now.toISOString().split('T')[0]} at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+> Session: ${duration} | Branch: \`${parsed.gitBranch || 'unknown'}\` | Project: \`${cwd}\`
 
-## What was being worked on
+## What I was working on
 ${meaningful.length > 0 ? meaningful.slice(0, 8).map(m => `- ${m}`).join('\n') : '_No significant messages captured_'}
 
-## Files modified
+## Files I changed
 ${parsed.filesWritten.length > 0
     ? parsed.filesWritten.slice(0, 15).map(f => `- \`${shorten(f)}\``).join('\n')
     : '_None_'}
-
-## Key files referenced
-${parsed.filesRead.length > 0
-    ? parsed.filesRead.filter(f => !parsed.filesWritten.includes(f)).slice(0, 10).map(f => `- \`${shorten(f)}\``).join('\n')
-    : '_None_'}
 `;
 
-  if (parsed.errors.length > 0) {
-    md += `\n## Errors hit\n${parsed.errors.slice(0, 5).map(e => `- ${e}`).join('\n')}\n`;
+  // Only show referenced files that weren't also modified
+  const readOnly = parsed.filesRead.filter(f => !parsed.filesWritten.includes(f));
+  if (readOnly.length > 0) {
+    md += `\n## Files I was looking at\n${readOnly.slice(0, 10).map(f => `- \`${shorten(f)}\``).join('\n')}\n`;
   }
 
-  md += `\n## Context for continuing
-This session ran for ${duration} on ${platform}. ${parsed.filesWritten.length} files were modified and ${parsed.bashCommands.length} commands were run.`;
+  if (parsed.errors.length > 0) {
+    md += `\n## Issues I ran into\n${parsed.errors.slice(0, 5).map(e => `- ${e}`).join('\n')}\n`;
+  }
 
   if (parsed.filesWritten.length > 0) {
-    md += ` Start by reviewing: ${parsed.filesWritten.slice(0, 3).map(f => '`' + shorten(f) + '`').join(', ')}.`;
+    md += `\n## Pick up here\nStart by reviewing: ${parsed.filesWritten.slice(0, 3).map(f => '`' + shorten(f) + '`').join(', ')}. ${parsed.filesWritten.length} files were modified in total.\n`;
   }
-
-  md += '\n';
 
   return md;
 }
