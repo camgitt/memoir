@@ -8,6 +8,10 @@ import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
+import inquirer from 'inquirer';
+import { findClaudeSessions, parseSession, generateContextHandoff } from '../context/capture.js';
+import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
+import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 
 export async function pushCommand(options = {}) {
   const config = await getConfig(options.profile);
@@ -43,6 +47,57 @@ export async function pushCommand(options = {}) {
       return;
     }
 
+    // Capture session context from latest Claude session
+    let contextCaptured = false;
+    let sessionInfo = null;
+    spinner.text = chalk.gray('Capturing session context...');
+    try {
+      const sessions = findClaudeSessions();
+      if (sessions.length > 0) {
+        const parsed = parseSession(sessions[0].path);
+        if (parsed.userMessages.length > 0) {
+          // Scan the generated handoff for any remaining secrets
+          const handoff = generateContextHandoff(parsed);
+          const { found, clean } = scanForSecrets(handoff);
+
+          // Save handoff to staging dir
+          const handoffDir = path.join(stagingDir, 'handoffs');
+          await fs.ensureDir(handoffDir);
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          await fs.writeFile(path.join(handoffDir, `${timestamp}-claude.md`), clean);
+          await fs.writeFile(path.join(handoffDir, 'latest.md'), clean);
+
+          // Also save locally for memoir resume
+          const localHandoffDir = path.join(os.homedir(), '.config', 'memoir', 'handoffs');
+          await fs.ensureDir(localHandoffDir);
+          await fs.writeFile(path.join(localHandoffDir, `${timestamp}-claude.md`), clean);
+          await fs.writeFile(path.join(localHandoffDir, 'latest.md'), clean);
+
+          contextCaptured = true;
+          sessionInfo = {
+            slug: parsed.slug,
+            filesModified: parsed.filesWritten.length,
+            duration: parsed.firstTimestamp && parsed.lastTimestamp
+              ? (() => {
+                  const ms = new Date(parsed.lastTimestamp) - new Date(parsed.firstTimestamp);
+                  const mins = Math.floor(ms / 60000);
+                  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+                })()
+              : null,
+            secretsRedacted: found.length
+          };
+
+          spinner.stop();
+          if (found.length > 0) {
+            printSecurityReport(found);
+          }
+          spinner.start();
+        }
+      }
+    } catch {
+      // Context capture is best-effort — don't fail the push
+    }
+
     // Count what was found
     const found = [];
     for (const adapter of adapters) {
@@ -58,12 +113,38 @@ export async function pushCommand(options = {}) {
       }
     }
 
+    // Encrypt if enabled
+    let uploadDir = stagingDir;
+    let encrypted = false;
+    if (config.encrypt) {
+      spinner.stop();
+      const { passphrase } = await inquirer.prompt([{
+        type: 'password',
+        name: 'passphrase',
+        message: '🔒 Encryption passphrase:',
+        mask: '*',
+        validate: (input) => input.length >= 6 ? true : 'Passphrase must be at least 6 characters'
+      }]);
+      spinner.start(chalk.gray('Encrypting...'));
+
+      const encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
+      await fs.ensureDir(encryptedDir);
+      await encryptDirectory(stagingDir, encryptedDir, passphrase);
+
+      // Save verify token so restore can check passphrase before decrypting
+      const token = createVerifyToken(passphrase);
+      await fs.writeFile(path.join(encryptedDir, 'verify.enc'), token);
+
+      uploadDir = encryptedDir;
+      encrypted = true;
+    }
+
     spinner.text = chalk.gray('Uploading to ' + (config.provider === 'git' ? 'GitHub' : 'local storage') + '...');
 
     if (config.provider === 'local' || config.provider.includes('local')) {
-      await syncToLocal(config, stagingDir, spinner);
+      await syncToLocal(config, uploadDir, spinner);
     } else if (config.provider === 'git' || config.provider.includes('git')) {
-      await syncToGit(config, stagingDir, spinner);
+      await syncToGit(config, uploadDir, spinner);
     } else {
       spinner.fail(chalk.red(`Unknown provider: ${config.provider}`));
       return;
@@ -93,10 +174,22 @@ export async function pushCommand(options = {}) {
 
     // Success output
     const toolList = found.map(t => chalk.cyan('  ✔ ' + t)).join('\n');
+    let contextLine = '';
+    if (contextCaptured && sessionInfo) {
+      const parts = [];
+      if (sessionInfo.slug) parts.push(sessionInfo.slug);
+      if (sessionInfo.duration) parts.push(sessionInfo.duration);
+      if (sessionInfo.filesModified) parts.push(`${sessionInfo.filesModified} files changed`);
+      contextLine = '\n' + chalk.green('  ✔ Session Context') + chalk.gray(` (${parts.join(', ')})`) + '\n';
+      if (sessionInfo.secretsRedacted > 0) {
+        contextLine += chalk.yellow(`  🔒 ${sessionInfo.secretsRedacted} secret(s) auto-redacted`) + '\n';
+      }
+    }
     console.log('\n' + boxen(
       gradient.pastel('  Backed up!  ') + '\n\n' +
-      toolList + '\n\n' +
+      toolList + contextLine + '\n' +
       chalk.white(`${totalFiles} files from ${found.length} tool${found.length !== 1 ? 's' : ''}`) + '\n' +
+      (encrypted ? chalk.green('  🔒 E2E encrypted') + '\n' : '') +
       chalk.gray(`→ ${dest}`) + '\n\n' +
       chalk.gray('Restore on another machine with: ') + chalk.cyan('memoir restore'),
       { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
@@ -105,5 +198,14 @@ export async function pushCommand(options = {}) {
     spinner.fail(chalk.red('Sync failed: ') + error.message);
   } finally {
     await fs.remove(stagingDir);
+    // Clean up encrypted dir if it was created
+    if (config.encrypt) {
+      const encDirs = await fs.readdir(os.tmpdir());
+      for (const d of encDirs) {
+        if (d.startsWith('memoir-encrypted-')) {
+          await fs.remove(path.join(os.tmpdir(), d)).catch(() => {});
+        }
+      }
+    }
   }
 }

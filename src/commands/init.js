@@ -108,6 +108,19 @@ export async function initCommand() {
     }
   }
 
+  // Ask about encryption
+  const { encrypt } = await inquirer.prompt([{
+    type: 'confirm',
+    name: 'encrypt',
+    message: 'Enable E2E encryption? (protects your data even if backup is compromised)',
+    default: true
+  }]);
+  config.encrypt = encrypt;
+
+  if (encrypt) {
+    console.log(chalk.gray('  You\'ll set a passphrase on first push. Same passphrase on all machines.'));
+  }
+
   await saveConfig(config);
   console.log(chalk.green('✔ Saved!\n'));
 
