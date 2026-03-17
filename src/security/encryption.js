@@ -72,7 +72,7 @@ export function decryptBuffer(data, passphrase) {
  * Encrypt all files in srcDir → destDir.
  * File names are HMAC-hashed (hidden). Manifest maps hashes → real paths.
  */
-export async function encryptDirectory(srcDir, destDir, passphrase) {
+export async function encryptDirectory(srcDir, destDir, passphrase, spinner = null) {
   const { key, salt } = deriveKey(passphrase);
   const dataDir = path.join(destDir, 'data');
   await fs.ensureDir(dataDir);
@@ -109,6 +109,7 @@ export async function encryptDirectory(srcDir, destDir, passphrase) {
 
         manifest[hashedName] = relPath;
         count++;
+        if (spinner) spinner.text = `Encrypting... (${count} files)`;
       }
     }
   }

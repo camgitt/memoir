@@ -36,7 +36,7 @@ export async function syncToGit(config, stagingDir, spinner) {
 
   try {
     try {
-      execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: gitDir, stdio: 'ignore' });
+      execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: gitDir, stdio: 'ignore', timeout: 60000 });
       const files = await fs.readdir(gitDir);
       for (const f of files) {
         if (f !== '.git') await fs.remove(path.join(gitDir, f));
@@ -48,20 +48,20 @@ export async function syncToGit(config, stagingDir, spinner) {
 
     await fs.copy(stagingDir, gitDir);
 
-    execFileSync('git', ['add', '-A'], { cwd: gitDir, stdio: 'ignore' });
-    execFileSync('git', ['config', 'user.name', 'memoir'], { cwd: gitDir, stdio: 'ignore' });
-    execFileSync('git', ['config', 'user.email', 'bot@memoir.dev'], { cwd: gitDir, stdio: 'ignore' });
+    execFileSync('git', ['add', '-A'], { cwd: gitDir, stdio: 'ignore', timeout: 30000 });
+    execFileSync('git', ['config', 'user.name', 'memoir'], { cwd: gitDir, stdio: 'ignore', timeout: 5000 });
+    execFileSync('git', ['config', 'user.email', 'bot@memoir.dev'], { cwd: gitDir, stdio: 'ignore', timeout: 5000 });
 
     const timestamp = new Date().toISOString().split('T')[0];
     try {
-      execFileSync('git', ['commit', '-m', `memoir backup ${timestamp}`], { cwd: gitDir, stdio: 'ignore' });
+      execFileSync('git', ['commit', '-m', `memoir backup ${timestamp}`], { cwd: gitDir, stdio: 'ignore', timeout: 30000 });
     } catch {
       spinner.succeed(chalk.green('Already up to date! ') + chalk.gray('No changes to push.'));
       return;
     }
 
     spinner.text = `Pushing data to ${chalk.cyan(repoUrl)}...`;
-    execFileSync('git', ['push', repoUrl, 'main'], { cwd: gitDir, stdio: 'ignore' });
+    execFileSync('git', ['push', repoUrl, 'main'], { cwd: gitDir, stdio: 'ignore', timeout: 120000 });
 
     spinner.succeed(chalk.green('Sync complete! ') + chalk.gray('(Uploaded securely to GitHub)'));
   } catch (err) {

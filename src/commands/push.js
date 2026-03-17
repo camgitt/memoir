@@ -9,10 +9,11 @@ import { getConfig } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import inquirer from 'inquirer';
-import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject } from '../context/capture.js';
+import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions } from '../context/capture.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
+import { scanWorkspace } from '../workspace/tracker.js';
 
 export async function pushCommand(options = {}) {
   const config = await getConfig(options.profile);
@@ -31,6 +32,8 @@ export async function pushCommand(options = {}) {
 
   const stagingDir = path.join(os.tmpdir(), `memoir-staging-${Date.now()}`);
   await fs.ensureDir(stagingDir);
+
+  let encryptedDir = null;
 
   try {
     // Profile-level tool filter (config.only) merged with CLI --only flag
@@ -74,10 +77,19 @@ export async function pushCommand(options = {}) {
           await fs.writeFile(path.join(localHandoffDir, `${timestamp}-claude.md`), clean);
           await fs.writeFile(path.join(localHandoffDir, 'latest.md'), clean);
 
+          // Persist decisions to Claude's memory so they survive across sessions
+          let decisionCount = 0;
+          if (parsed.decisions.length > 0) {
+            try {
+              decisionCount = persistDecisions(parsed.decisions);
+            } catch {}
+          }
+
           contextCaptured = true;
           sessionInfo = {
             slug: parsed.slug,
             filesModified: parsed.filesWritten.length,
+            decisions: decisionCount,
             duration: parsed.firstTimestamp && parsed.lastTimestamp
               ? (() => {
                   const ms = new Date(parsed.lastTimestamp) - new Date(parsed.firstTimestamp);
@@ -97,6 +109,15 @@ export async function pushCommand(options = {}) {
       }
     } catch {
       // Context capture is best-effort — don't fail the push
+    }
+
+    // Scan workspace for projects (git repos + unbacked projects)
+    let workspaceManifest = null;
+    spinner.text = chalk.gray('Scanning workspace...');
+    try {
+      workspaceManifest = await scanWorkspace(stagingDir, spinner);
+    } catch {
+      // Workspace scan is best-effort
     }
 
     // Count what was found
@@ -160,9 +181,9 @@ export async function pushCommand(options = {}) {
       }]);
       spinner.start(chalk.gray('Encrypting...'));
 
-      const encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
+      encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
       await fs.ensureDir(encryptedDir);
-      await encryptDirectory(stagingDir, encryptedDir, passphrase);
+      await encryptDirectory(stagingDir, encryptedDir, passphrase, spinner);
 
       // Save verify token so restore can check passphrase before decrypting
       const token = createVerifyToken(passphrase);
@@ -214,13 +235,25 @@ export async function pushCommand(options = {}) {
       if (sessionInfo.duration) parts.push(sessionInfo.duration);
       if (sessionInfo.filesModified) parts.push(`${sessionInfo.filesModified} files changed`);
       contextLine = '\n' + chalk.green('  ✔ Session Context') + chalk.gray(` (${parts.join(', ')})`) + '\n';
+      if (sessionInfo.decisions > 0) {
+        contextLine += chalk.green(`  ✔ ${sessionInfo.decisions} decision(s) saved to persistent memory`) + '\n';
+      }
       if (sessionInfo.secretsRedacted > 0) {
         contextLine += chalk.yellow(`  🔒 ${sessionInfo.secretsRedacted} secret(s) auto-redacted`) + '\n';
       }
     }
+    let workspaceLine = '';
+    if (workspaceManifest && workspaceManifest.projects.length > 0) {
+      const gitCount = workspaceManifest.projects.filter(p => p.type === 'git' && p.gitRemote).length;
+      const bundleCount = workspaceManifest.projects.filter(p => p.bundleFile).length;
+      const parts = [];
+      if (gitCount > 0) parts.push(`${gitCount} git`);
+      if (bundleCount > 0) parts.push(`${bundleCount} bundled`);
+      workspaceLine = '\n' + chalk.green('  ✔ Workspace') + chalk.gray(` (${workspaceManifest.projects.length} projects — ${parts.join(', ')})`) + '\n';
+    }
     console.log('\n' + boxen(
       gradient.pastel('  Backed up!  ') + '\n\n' +
-      toolList + contextLine + '\n' +
+      toolList + contextLine + workspaceLine + '\n' +
       chalk.white(`${totalFiles} files from ${found.length} tool${found.length !== 1 ? 's' : ''}`) + '\n' +
       (encrypted ? chalk.green('  🔒 E2E encrypted') + '\n' : '') +
       chalk.gray(`→ ${dest}`) + '\n\n' +
@@ -232,13 +265,8 @@ export async function pushCommand(options = {}) {
   } finally {
     await fs.remove(stagingDir);
     // Clean up encrypted dir if it was created
-    if (true) {
-      const encDirs = await fs.readdir(os.tmpdir());
-      for (const d of encDirs) {
-        if (d.startsWith('memoir-encrypted-')) {
-          await fs.remove(path.join(os.tmpdir(), d)).catch(() => {});
-        }
-      }
+    if (encryptedDir) {
+      await fs.remove(encryptedDir).catch(() => {});
     }
   }
 }
