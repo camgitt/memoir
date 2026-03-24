@@ -170,6 +170,60 @@ async function mergeMemoryDirs(src, dest) {
   }
 }
 
+// After restore, ensure every memory .md file is referenced in its MEMORY.md index.
+// Without this, files synced from another machine exist but Claude won't know about them.
+async function reconcileMemoryIndexes(claudeSource) {
+  const projectsDir = path.join(claudeSource, 'projects');
+  if (!fs.existsSync(projectsDir)) return;
+
+  const entries = fs.readdirSync(projectsDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const memDir = path.join(projectsDir, entry.name, 'memory');
+    if (!fs.existsSync(memDir)) continue;
+
+    const memoryMdPath = path.join(memDir, 'MEMORY.md');
+    let memoryMd = '';
+    if (fs.existsSync(memoryMdPath)) {
+      memoryMd = fs.readFileSync(memoryMdPath, 'utf8');
+    }
+
+    // Find all .md files in this memory dir
+    const mdFiles = fs.readdirSync(memDir)
+      .filter(f => f.endsWith('.md') && f !== 'MEMORY.md');
+
+    // Check which ones are NOT referenced in MEMORY.md
+    const unreferenced = mdFiles.filter(f => {
+      const name = f.replace('.md', '');
+      // Check for markdown link [text](file.md) or plain filename mention
+      return !memoryMd.includes(f) && !memoryMd.includes(`(${f})`);
+    });
+
+    if (unreferenced.length === 0) continue;
+
+    // Read each unreferenced file to get its name/description from frontmatter
+    let additions = '\n\n## Synced from another machine\n';
+    for (const file of unreferenced) {
+      const content = fs.readFileSync(path.join(memDir, file), 'utf8');
+      // Try to extract name from frontmatter
+      const nameMatch = content.match(/^name:\s*(.+)/m);
+      const descMatch = content.match(/^description:\s*(.+)/m);
+      const name = nameMatch ? nameMatch[1].trim() : file.replace('.md', '').replace(/-/g, ' ');
+      const desc = descMatch ? descMatch[1].trim() : '';
+      additions += `- [${name}](${file})${desc ? ' — ' + desc : ''}\n`;
+    }
+
+    // Append to MEMORY.md
+    if (!memoryMd) {
+      memoryMd = '# Project Memory\n';
+    }
+    // Remove old "Synced from another machine" section if it exists, then re-add
+    memoryMd = memoryMd.replace(/\n\n## Synced from another machine\n[\s\S]*$/, '');
+    memoryMd = memoryMd.trimEnd() + additions;
+    fs.writeFileSync(memoryMdPath, memoryMd);
+  }
+}
+
 async function syncFiles(src, dest, changes) {
   const entries = await fs.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
@@ -282,6 +336,13 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
           spinner.text = `Restoring ${chalk.cyan(adapter.name)} to ${adapter.source}...`;
           await fs.ensureDir(adapter.source);
           await syncFiles(backupDir, adapter.source, changes);
+        }
+
+        // After syncing, reconcile MEMORY.md files
+        // MEMORY.md is an INDEX — it must reference all memory files from both machines
+        // This MUST run after syncFiles so newly copied files are included
+        if (adapter.name === 'Claude CLI') {
+          await reconcileMemoryIndexes(adapter.source);
         }
 
         // Show summary of changes

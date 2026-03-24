@@ -73,50 +73,73 @@ export function decryptBuffer(data, passphrase) {
  * File names are HMAC-hashed (hidden). Manifest maps hashes → real paths.
  */
 export async function encryptDirectory(srcDir, destDir, passphrase, spinner = null) {
+  const startTime = Date.now();
+
+  // Phase 1: Derive encryption key
+  if (spinner) spinner.text = 'Deriving encryption key (scrypt)...';
   const { key, salt } = deriveKey(passphrase);
+
   const dataDir = path.join(destDir, 'data');
   await fs.ensureDir(dataDir);
 
-  const manifest = {};
-  let count = 0;
-
-  async function walk(dir, relBase = '') {
+  // Phase 2: Index files
+  if (spinner) spinner.text = 'Indexing files...';
+  const fileList = [];
+  async function index(dir, relBase = '') {
     const entries = await fs.readdir(dir, { withFileTypes: true });
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       const relPath = path.join(relBase, entry.name);
       if (entry.isDirectory()) {
-        await walk(fullPath, relPath);
+        await index(fullPath, relPath);
       } else {
-        // Hash filename so it's opaque
-        const hashedName = crypto
-          .createHmac('sha256', key)
-          .update(relPath)
-          .digest('hex')
-          .slice(0, 24);
-
-        const plaintext = await fs.readFile(fullPath);
-        const iv = crypto.randomBytes(IV_LENGTH);
-        const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
-        const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-        const tag = cipher.getAuthTag();
-
-        // Write: iv | tag | ciphertext (salt shared via manifest file)
-        await fs.writeFile(
-          path.join(dataDir, `${hashedName}.enc`),
-          Buffer.concat([iv, tag, encrypted])
-        );
-
-        manifest[hashedName] = relPath;
-        count++;
-        if (spinner) spinner.text = `Encrypting... (${count} files)`;
+        const stat = await fs.stat(fullPath);
+        fileList.push({ fullPath, relPath, size: stat.size });
       }
     }
   }
+  await index(srcDir);
 
-  await walk(srcDir);
+  const totalFiles = fileList.length;
+  const totalBytes = fileList.reduce((sum, f) => sum + f.size, 0);
 
-  // Encrypt the manifest (it contains real file names)
+  // Phase 3: Encrypt files
+  const manifest = {};
+  let count = 0;
+  let bytesProcessed = 0;
+
+  for (const { fullPath, relPath, size } of fileList) {
+    const hashedName = crypto
+      .createHmac('sha256', key)
+      .update(relPath)
+      .digest('hex')
+      .slice(0, 24);
+
+    const plaintext = await fs.readFile(fullPath);
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
+    const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const tag = cipher.getAuthTag();
+
+    await fs.writeFile(
+      path.join(dataDir, `${hashedName}.enc`),
+      Buffer.concat([iv, tag, encrypted])
+    );
+
+    manifest[hashedName] = relPath;
+    count++;
+    bytesProcessed += size;
+
+    if (spinner) {
+      const pct = Math.round((count / totalFiles) * 100);
+      const sizeStr = formatBytes(bytesProcessed);
+      const totalStr = formatBytes(totalBytes);
+      spinner.text = `Encrypting (AES-256-GCM) ${count}/${totalFiles} files — ${sizeStr}/${totalStr} [${pct}%]`;
+    }
+  }
+
+  // Phase 4: Encrypt manifest
+  if (spinner) spinner.text = 'Encrypting file manifest...';
   const manifestJson = Buffer.from(JSON.stringify(manifest));
   const manifestEncrypted = encryptBuffer(manifestJson, passphrase);
   await fs.writeFile(path.join(destDir, 'manifest.enc'), manifestEncrypted);
@@ -124,25 +147,41 @@ export async function encryptDirectory(srcDir, destDir, passphrase, spinner = nu
   // Salt is not secret — store it so decrypt can re-derive the same key
   await fs.writeFile(path.join(destDir, 'salt'), salt);
 
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  if (spinner) spinner.text = `Encrypted ${count} files (${formatBytes(totalBytes)}) in ${elapsed}s`;
+
   return count;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
  * Decrypt an encrypted directory back to plaintext.
  */
-export async function decryptDirectory(encDir, destDir, passphrase) {
-  // Decrypt manifest first
+export async function decryptDirectory(encDir, destDir, passphrase, spinner = null) {
+  const startTime = Date.now();
+
+  // Phase 1: Decrypt manifest
+  if (spinner) spinner.text = 'Decrypting file manifest...';
   const manifestData = await fs.readFile(path.join(encDir, 'manifest.enc'));
   const manifestJson = decryptBuffer(manifestData, passphrase);
   const manifest = JSON.parse(manifestJson.toString('utf8'));
 
-  // Re-derive key with stored salt
+  // Phase 2: Derive key
+  if (spinner) spinner.text = 'Deriving decryption key (scrypt)...';
   const salt = await fs.readFile(path.join(encDir, 'salt'));
   const { key } = deriveKey(passphrase, salt);
 
   const dataDir = path.join(encDir, 'data');
+  const totalFiles = Object.keys(manifest).length;
   let count = 0;
+  let bytesProcessed = 0;
 
+  // Phase 3: Decrypt files
   for (const [hashedName, relPath] of Object.entries(manifest)) {
     const encFilePath = path.join(dataDir, `${hashedName}.enc`);
     if (!(await fs.pathExists(encFilePath))) continue;
@@ -160,7 +199,16 @@ export async function decryptDirectory(encDir, destDir, passphrase) {
     await fs.ensureDir(path.dirname(outPath));
     await fs.writeFile(outPath, decrypted);
     count++;
+    bytesProcessed += decrypted.length;
+
+    if (spinner) {
+      const pct = Math.round((count / totalFiles) * 100);
+      spinner.text = `Decrypting ${count}/${totalFiles} files — ${formatBytes(bytesProcessed)} [${pct}%]`;
+    }
   }
+
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  if (spinner) spinner.text = `Decrypted ${count} files (${formatBytes(bytesProcessed)}) in ${elapsed}s`;
 
   return count;
 }

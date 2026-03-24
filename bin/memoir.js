@@ -17,6 +17,7 @@ import { profileListCommand, profileCreateCommand, profileSwitchCommand, profile
 import { loginCommand, logoutCommand } from '../src/commands/login.js';
 import { cloudPushCommand, cloudRestoreCommand } from '../src/commands/cloud.js';
 import { historyCommand } from '../src/commands/history.js';
+import { projectsListCommand, projectsTodoCommand } from '../src/commands/projects.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -62,6 +63,7 @@ if (process.argv.length <= 2) {
     chalk.cyan('  memoir resume    ') + chalk.gray('— pick up where you left off') + '\n' +
     chalk.cyan('  memoir status    ') + chalk.gray('— see detected AI tools') + '\n' +
     chalk.cyan('  memoir profile   ') + chalk.gray('— manage profiles (personal/work)') + '\n' +
+    chalk.cyan('  memoir projects   ') + chalk.gray('— see all your projects at a glance') + '\n' +
     chalk.cyan('  memoir encrypt   ') + chalk.gray('— toggle E2E encryption') + '\n' +
     chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n\n' +
     chalk.white.bold('Cloud (Pro):') + '\n' +
@@ -120,7 +122,7 @@ program
   .alias('pull')
   .description('Restore your AI memory on this machine')
   .option('--only <tools>', 'Only restore specific tools (comma-separated)')
-  .option('-y, --yes', 'Skip confirmation prompts (restore all)')
+  .option('-i, --interactive', 'Confirm each tool before restoring')
   .option('-p, --profile <name>', 'Use a specific profile')
   .action(async (options) => {
     try {
@@ -426,6 +428,39 @@ profile
   .action(async (name) => {
     try {
       await profileDeleteCommand(name);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Project tracker
+const projects = program.command('projects').alias('p').description('Track and manage your projects');
+
+projects
+  .command('list', { isDefault: true })
+  .alias('ls')
+  .description('List all projects with recent activity')
+  .option('--all', 'Show all projects (default: top 15)')
+  .option('-v, --verbose', 'Show more commits and todos')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      await projectsListCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+projects
+  .command('todo <project> [text]')
+  .description('Add or manage todos for a project')
+  .option('--done <index>', 'Mark a todo as done by number')
+  .option('--clear', 'Clear all todos for this project')
+  .action(async (project, text, options) => {
+    try {
+      await projectsTodoCommand(project, text, options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);

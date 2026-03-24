@@ -10,6 +10,7 @@ import { getConfig } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
 import { detectLocalHomeKey } from '../adapters/restore.js';
+import { restoreWorkspace } from '../workspace/tracker.js';
 
 const home = os.homedir();
 
@@ -36,7 +37,7 @@ export async function restoreCommand(options = {}) {
 
     const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
 
-    const autoYes = options.yes || false;
+    const autoYes = !options.interactive;
 
     if (config.provider === 'local' || config.provider.includes('local')) {
       restored = await fetchFromLocal(config, stagingDir, spinner, onlyFilter, autoYes);
@@ -84,7 +85,7 @@ export async function restoreCommand(options = {}) {
       spinner.start(chalk.gray('Decrypting...'));
       const decryptedDir = path.join(os.tmpdir(), `memoir-decrypted-${Date.now()}`);
       try {
-        const count = await decryptDirectory(stagingDir, decryptedDir, passphrase);
+        const count = await decryptDirectory(stagingDir, decryptedDir, passphrase, spinner);
         spinner.succeed(chalk.green(`Decrypted ${count} files`));
 
         // Now restore from decrypted dir
@@ -169,6 +170,39 @@ export async function restoreCommand(options = {}) {
       }
     }
 
+    // Restore workspace (clone git projects, unpack bundles)
+    let workspaceResults = null;
+    try {
+      spinner.start(chalk.gray('Checking workspace...'));
+      workspaceResults = await restoreWorkspace(stagingDir, spinner, autoYes);
+      spinner.stop();
+
+      if (workspaceResults) {
+        const { cloned, unpacked, patched, skipped } = workspaceResults;
+        if (cloned.length > 0 || unpacked.length > 0) {
+          console.log('\n' + chalk.cyan.bold('  📁 Workspace restored:'));
+          for (const p of cloned) {
+            console.log(chalk.green(`    ✔ ${p.name}`) + chalk.gray(` → ${p.path}`));
+          }
+          for (const p of unpacked) {
+            console.log(chalk.green(`    ✔ ${p.name}`) + chalk.gray(` → ${p.path} (unpacked)`));
+          }
+          if (patched.length > 0) {
+            for (const p of patched) {
+              console.log(chalk.yellow(`    ↻ ${p.name}`) + chalk.gray(` — uncommitted changes applied`));
+            }
+          }
+          const existingCount = skipped.filter(s => s.reason === 'exists').length;
+          if (existingCount > 0) {
+            console.log(chalk.gray(`    ⏭ ${existingCount} project(s) already on this machine`));
+          }
+          restored = true;
+        }
+      }
+    } catch {
+      // Workspace restore is best-effort
+    }
+
     if (restored) {
       let handoffMsg = '';
       if (handoffInjected && handoffInfo) {
@@ -178,10 +212,17 @@ export async function restoreCommand(options = {}) {
           (handoffInfo.duration ? '\n' + chalk.gray(`   Duration: ${handoffInfo.duration}`) : '') + '\n' +
           chalk.gray('   Your AI will pick up where you left off.');
       }
+      let workspaceMsg = '';
+      if (workspaceResults) {
+        const total = workspaceResults.cloned.length + workspaceResults.unpacked.length;
+        if (total > 0) {
+          workspaceMsg = '\n' + chalk.cyan(`📁 ${total} project(s) restored to this machine`);
+        }
+      }
       console.log(boxen(
         gradient.pastel('  Done!  ') + '\n\n' +
         chalk.white('Your AI tools have their memories back.') +
-        handoffMsg + '\n' +
+        handoffMsg + workspaceMsg + '\n' +
         chalk.gray(handoffInjected ? '' : 'Restart your AI tools to pick up the changes.'),
         { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
       ) + '\n');

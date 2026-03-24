@@ -37,15 +37,22 @@ export const adapters = [
       if (src === claudeDir) return true;
       // Only allow these top-level dirs
       const topDir = rel.split(path.sep)[0];
-      const allowedDirs = ['projects', 'settings'];
       const allowedFiles = ['settings.json', 'settings.local.json'];
       // Allow specific top-level config files
       if (!rel.includes(path.sep) && allowedFiles.includes(basename)) return true;
       // Allow projects dir (contains memory .md files)
       if (topDir === 'projects') {
-        // Allow directory traversal
-        try { if (nodeFs.statSync(src).isDirectory()) return true; } catch {}
-        // Only sync memory markdown files
+        // Allow directory traversal but skip dirs that only contain session data
+        try {
+          if (nodeFs.statSync(src).isDirectory()) {
+            // Skip subagents and UUID-named session dirs (contain large .jsonl files, no .md)
+            if (basename === 'subagents') return false;
+            // UUID pattern: 8-4-4-4-12 hex chars
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(basename)) return false;
+            return true;
+          }
+        } catch {}
+        // Only sync memory markdown files — skip .jsonl session files
         return basename.endsWith('.md');
       }
       // Allow settings dir

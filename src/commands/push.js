@@ -179,11 +179,13 @@ export async function pushCommand(options = {}) {
         mask: '*',
         validate: (input) => input.length >= 6 ? true : 'Passphrase must be at least 6 characters'
       }]);
-      spinner.start(chalk.gray('Encrypting...'));
+      spinner.start(chalk.gray('Deriving encryption key...'));
 
       encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
       await fs.ensureDir(encryptedDir);
-      await encryptDirectory(stagingDir, encryptedDir, passphrase, spinner);
+      const encryptedCount = await encryptDirectory(stagingDir, encryptedDir, passphrase, spinner);
+      spinner.succeed(chalk.green(spinner.text));
+      spinner.start();
 
       // Save verify token so restore can check passphrase before decrypting
       const token = createVerifyToken(passphrase);
