@@ -11,10 +11,18 @@ import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
 import { detectLocalHomeKey } from '../adapters/restore.js';
 import { restoreWorkspace } from '../workspace/tracker.js';
+import { getSession } from '../cloud/auth.js';
+import { unbundleToDir } from '../cloud/storage.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 
 const home = os.homedir();
 
 export async function restoreCommand(options = {}) {
+  // Handle --from <token> for shared links
+  if (options.from) {
+    return restoreFromShare(options);
+  }
+
   const config = await getConfig(options.profile);
 
   if (!config) {
@@ -68,7 +76,7 @@ export async function restoreCommand(options = {}) {
 
         if (await fs.pathExists(verifyPath)) {
           const token = await fs.readFile(verifyPath);
-          if (!verifyPassphrase(token, passphrase)) {
+          if (!(await verifyPassphrase(token, passphrase))) {
             console.log(chalk.red('  Wrong passphrase. Try again.'));
             passphrase = null;
             continue;
@@ -240,6 +248,192 @@ export async function restoreCommand(options = {}) {
 
   } catch (error) {
     spinner.fail(chalk.red('Restore failed: ') + error.message);
+  } finally {
+    await fs.remove(stagingDir);
+  }
+}
+
+async function restoreFromShare(options) {
+  const shareToken = options.from;
+
+  console.log();
+  const spinner = ora({ text: chalk.gray('Fetching share link...'), spinner: 'dots' }).start();
+
+  const stagingDir = path.join(os.tmpdir(), `memoir-share-restore-${Date.now()}`);
+  await fs.ensureDir(stagingDir);
+
+  try {
+    // Fetch share metadata from Supabase
+    const metaRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/shared_links?select=*&token=eq.${shareToken}&limit=1`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!metaRes.ok) {
+      throw new Error('Failed to fetch share link');
+    }
+
+    const links = await metaRes.json();
+    if (!links || links.length === 0) {
+      spinner.stop();
+      console.log('\n' + boxen(
+        chalk.red('✖ Share link not found\n\n') +
+        chalk.gray('The link may have expired or been deleted.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'red' }
+      ) + '\n');
+      return;
+    }
+
+    const shareLink = links[0];
+
+    // Check expiry
+    if (new Date(shareLink.expires_at) < new Date()) {
+      spinner.stop();
+      console.log('\n' + boxen(
+        chalk.red('✖ Share link expired\n\n') +
+        chalk.gray(`This link expired on ${new Date(shareLink.expires_at).toLocaleString()}`),
+        { padding: 1, borderStyle: 'round', borderColor: 'red' }
+      ) + '\n');
+      return;
+    }
+
+    // Check use count
+    if (shareLink.use_count >= shareLink.max_uses) {
+      spinner.stop();
+      console.log('\n' + boxen(
+        chalk.red('✖ Share link exhausted\n\n') +
+        chalk.gray(`This link has been used ${shareLink.use_count}/${shareLink.max_uses} times.`),
+        { padding: 1, borderStyle: 'round', borderColor: 'red' }
+      ) + '\n');
+      return;
+    }
+
+    // Show share info
+    spinner.stop();
+    const tools = shareLink.tools || [];
+    if (tools.length > 0) {
+      console.log(chalk.cyan('\n  Shared tools: ') + chalk.white(tools.join(', ')));
+    }
+    console.log(chalk.gray(`  Uses: ${shareLink.use_count + 1}/${shareLink.max_uses}`) +
+      chalk.gray(` | Expires: ${new Date(shareLink.expires_at).toLocaleString()}`));
+    console.log();
+
+    // Download the backup
+    spinner.start(chalk.gray('Downloading share bundle...'));
+
+    // Try authenticated first, fall back to anon key
+    const session = await getSession();
+    const authHeaders = session
+      ? { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY }
+      : { 'apikey': SUPABASE_ANON_KEY };
+
+    const dlRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${shareLink.backup_id}`, {
+      headers: authHeaders,
+    });
+
+    if (!dlRes.ok) {
+      throw new Error(`Download failed: ${await dlRes.text()}`);
+    }
+
+    const gzipped = Buffer.from(await dlRes.arrayBuffer());
+    await unbundleToDir(gzipped, stagingDir);
+
+    // Decrypt — backup is always encrypted for shares
+    const manifestPath = path.join(stagingDir, 'manifest.enc');
+    if (!await fs.pathExists(manifestPath)) {
+      throw new Error('Share bundle is missing encryption manifest');
+    }
+
+    spinner.stop();
+    console.log(chalk.cyan('  🔒 This share is encrypted'));
+
+    // Verify passphrase
+    const verifyPath = path.join(stagingDir, 'verify.enc');
+    let passphrase;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { pass } = await inquirer.prompt([{
+        type: 'password',
+        name: 'pass',
+        message: 'Decryption passphrase:',
+        mask: '*',
+      }]);
+      passphrase = pass;
+
+      if (await fs.pathExists(verifyPath)) {
+        const token = await fs.readFile(verifyPath);
+        if (!(await verifyPassphrase(token, passphrase))) {
+          console.log(chalk.red('  Wrong passphrase. Try again.'));
+          passphrase = null;
+          continue;
+        }
+      }
+      break;
+    }
+
+    if (!passphrase) {
+      console.log(chalk.red('\n  Too many failed attempts.'));
+      return;
+    }
+
+    spinner.start(chalk.gray('Decrypting...'));
+    const decryptedDir = path.join(os.tmpdir(), `memoir-share-decrypted-${Date.now()}`);
+    let restored = false;
+
+    try {
+      const count = await decryptDirectory(stagingDir, decryptedDir, passphrase, spinner);
+      spinner.succeed(chalk.green(`Decrypted ${count} files`));
+
+      // Restore from decrypted dir
+      spinner.start(chalk.gray('Restoring...'));
+      const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
+      const autoYes = !options.interactive;
+      const { restoreMemories } = await import('../adapters/restore.js');
+      restored = await restoreMemories(decryptedDir, spinner, onlyFilter, autoYes);
+    } catch (err) {
+      spinner.fail(chalk.red('Decryption failed: ') + err.message);
+      return;
+    } finally {
+      await fs.remove(decryptedDir);
+    }
+
+    // Increment use_count
+    try {
+      const patchHeaders = { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
+      if (session) patchHeaders['Authorization'] = `Bearer ${session.access_token}`;
+
+      await fetch(`${SUPABASE_URL}/rest/v1/shared_links?token=eq.${shareToken}`, {
+        method: 'PATCH',
+        headers: patchHeaders,
+        body: JSON.stringify({ use_count: shareLink.use_count + 1 }),
+      });
+    } catch {
+      // Best-effort — don't fail restore if count update fails
+    }
+
+    spinner.stop();
+
+    if (restored) {
+      console.log('\n' + boxen(
+        gradient.pastel('  Done!  ') + '\n\n' +
+        chalk.white('Shared memories restored successfully.') + '\n' +
+        chalk.gray('Restart your AI tools to pick up the changes.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
+      ) + '\n');
+    } else {
+      console.log('\n' + boxen(
+        chalk.yellow('Nothing was restored.\n\n') +
+        chalk.gray('You may have skipped all the restore prompts.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
+      ) + '\n');
+    }
+
+  } catch (error) {
+    spinner.fail(chalk.red('Restore from share failed: ') + error.message);
   } finally {
     await fs.remove(stagingDir);
   }

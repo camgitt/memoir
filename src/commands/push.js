@@ -188,7 +188,7 @@ export async function pushCommand(options = {}) {
       spinner.start();
 
       // Save verify token so restore can check passphrase before decrypting
-      const token = createVerifyToken(passphrase);
+      const token = await createVerifyToken(passphrase);
       await fs.writeFile(path.join(encryptedDir, 'verify.enc'), token);
 
       uploadDir = encryptedDir;

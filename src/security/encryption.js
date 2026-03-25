@@ -1,6 +1,9 @@
 import crypto from 'crypto';
+import { promisify } from 'util';
 import fs from 'fs-extra';
 import path from 'path';
+
+const scryptAsync = promisify(crypto.scrypt);
 
 // --- Constants ---
 const ALGORITHM = 'aes-256-gcm';
@@ -14,11 +17,11 @@ const MAGIC = Buffer.from('MEMOIR01');  // 8-byte header for format versioning
 // --- Key Derivation ---
 
 /**
- * Derive a 256-bit key from a passphrase using scrypt.
+ * Derive a 256-bit key from a passphrase using scrypt (async, non-blocking).
  */
-export function deriveKey(passphrase, salt = null) {
+export async function deriveKey(passphrase, salt = null) {
   if (!salt) salt = crypto.randomBytes(SALT_LENGTH);
-  const key = crypto.scryptSync(passphrase, salt, KEY_LENGTH, {
+  const key = await scryptAsync(passphrase, salt, KEY_LENGTH, {
     N: SCRYPT_COST,
     r: 8,
     p: 1,
@@ -32,8 +35,8 @@ export function deriveKey(passphrase, salt = null) {
  * Encrypt a buffer with AES-256-GCM.
  * Output format: MEMOIR01 | salt (32) | iv (12) | authTag (16) | ciphertext
  */
-export function encryptBuffer(plaintext, passphrase) {
-  const { key, salt } = deriveKey(passphrase);
+export async function encryptBuffer(plaintext, passphrase) {
+  const { key, salt } = await deriveKey(passphrase);
   const iv = crypto.randomBytes(IV_LENGTH);
 
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
@@ -46,7 +49,7 @@ export function encryptBuffer(plaintext, passphrase) {
 /**
  * Decrypt a buffer. Throws on wrong passphrase or tampered data.
  */
-export function decryptBuffer(data, passphrase) {
+export async function decryptBuffer(data, passphrase) {
   const magic = data.subarray(0, 8);
   if (!magic.equals(MAGIC)) {
     throw new Error('Not a memoir-encrypted file (bad header)');
@@ -58,7 +61,7 @@ export function decryptBuffer(data, passphrase) {
   const tag = data.subarray(offset, offset + TAG_LENGTH);         offset += TAG_LENGTH;
   const ciphertext = data.subarray(offset);
 
-  const { key } = deriveKey(passphrase, salt);
+  const { key } = await deriveKey(passphrase, salt);
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
   decipher.setAuthTag(tag);
@@ -77,7 +80,7 @@ export async function encryptDirectory(srcDir, destDir, passphrase, spinner = nu
 
   // Phase 1: Derive encryption key
   if (spinner) spinner.text = 'Deriving encryption key (scrypt)...';
-  const { key, salt } = deriveKey(passphrase);
+  const { key, salt } = await deriveKey(passphrase);
 
   const dataDir = path.join(destDir, 'data');
   await fs.ensureDir(dataDir);
@@ -141,7 +144,7 @@ export async function encryptDirectory(srcDir, destDir, passphrase, spinner = nu
   // Phase 4: Encrypt manifest
   if (spinner) spinner.text = 'Encrypting file manifest...';
   const manifestJson = Buffer.from(JSON.stringify(manifest));
-  const manifestEncrypted = encryptBuffer(manifestJson, passphrase);
+  const manifestEncrypted = await encryptBuffer(manifestJson, passphrase);
   await fs.writeFile(path.join(destDir, 'manifest.enc'), manifestEncrypted);
 
   // Salt is not secret — store it so decrypt can re-derive the same key
@@ -168,13 +171,13 @@ export async function decryptDirectory(encDir, destDir, passphrase, spinner = nu
   // Phase 1: Decrypt manifest
   if (spinner) spinner.text = 'Decrypting file manifest...';
   const manifestData = await fs.readFile(path.join(encDir, 'manifest.enc'));
-  const manifestJson = decryptBuffer(manifestData, passphrase);
+  const manifestJson = await decryptBuffer(manifestData, passphrase);
   const manifest = JSON.parse(manifestJson.toString('utf8'));
 
   // Phase 2: Derive key
   if (spinner) spinner.text = 'Deriving decryption key (scrypt)...';
   const salt = await fs.readFile(path.join(encDir, 'salt'));
-  const { key } = deriveKey(passphrase, salt);
+  const { key } = await deriveKey(passphrase, salt);
 
   const dataDir = path.join(encDir, 'data');
   const totalFiles = Object.keys(manifest).length;
@@ -217,13 +220,13 @@ export async function decryptDirectory(encDir, destDir, passphrase, spinner = nu
  * Quick passphrase verification token — encrypt a known string,
  * try to decrypt it to check if passphrase is correct before decrypting everything.
  */
-export function createVerifyToken(passphrase) {
+export async function createVerifyToken(passphrase) {
   return encryptBuffer(Buffer.from('memoir-ok'), passphrase);
 }
 
-export function verifyPassphrase(token, passphrase) {
+export async function verifyPassphrase(token, passphrase) {
   try {
-    const result = decryptBuffer(token, passphrase);
+    const result = await decryptBuffer(token, passphrase);
     return result.toString('utf8') === 'memoir-ok';
   } catch {
     return false;

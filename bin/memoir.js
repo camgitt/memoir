@@ -16,8 +16,10 @@ import { resumeCommand } from '../src/commands/resume.js';
 import { profileListCommand, profileCreateCommand, profileSwitchCommand, profileDeleteCommand } from '../src/commands/profile.js';
 import { loginCommand, logoutCommand } from '../src/commands/login.js';
 import { cloudPushCommand, cloudRestoreCommand } from '../src/commands/cloud.js';
+import { shareCommand } from '../src/commands/share.js';
 import { historyCommand } from '../src/commands/history.js';
 import { projectsListCommand, projectsTodoCommand } from '../src/commands/projects.js';
+import { upgradeCommand } from '../src/commands/upgrade.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -65,11 +67,13 @@ if (process.argv.length <= 2) {
     chalk.cyan('  memoir profile   ') + chalk.gray('— manage profiles (personal/work)') + '\n' +
     chalk.cyan('  memoir projects   ') + chalk.gray('— see all your projects at a glance') + '\n' +
     chalk.cyan('  memoir encrypt   ') + chalk.gray('— toggle E2E encryption') + '\n' +
-    chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n\n' +
+    chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n' +
+    chalk.cyan('  memoir upgrade   ') + chalk.gray('— view plans & upgrade') + '\n\n' +
     chalk.white.bold('Cloud (Pro):') + '\n' +
     chalk.cyan('  memoir login         ') + chalk.gray('— sign in to memoir cloud') + '\n' +
     chalk.cyan('  memoir cloud push    ') + chalk.gray('— back up to the cloud') + '\n' +
     chalk.cyan('  memoir cloud restore ') + chalk.gray('— restore from cloud') + '\n' +
+    chalk.cyan('  memoir share         ') + chalk.gray('— share memory via secure link') + '\n' +
     chalk.cyan('  memoir history       ') + chalk.gray('— view backup versions') + '\n\n' +
     chalk.gray('  Tip: use --profile work to sync a specific profile') + '\n\n' +
     chalk.gray(`v${VERSION}`),
@@ -124,11 +128,27 @@ program
   .option('--only <tools>', 'Only restore specific tools (comma-separated)')
   .option('-i, --interactive', 'Confirm each tool before restoring')
   .option('-p, --profile <name>', 'Use a specific profile')
+  .option('--from <token>', 'Restore from a share link token')
   .action(async (options) => {
     try {
       await restoreCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error during restore:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('share')
+  .description('Share your AI memory via a secure link')
+  .option('--only <tools>', 'Only share specific tools (comma-separated)')
+  .option('--expires <hours>', 'Link expiry in hours (default: 24)')
+  .option('--uses <number>', 'Max number of uses (default: 5)')
+  .action(async (options) => {
+    try {
+      await shareCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error during share:'), err.message);
       process.exit(1);
     }
   });
@@ -221,7 +241,6 @@ program
 
 program
   .command('update')
-  .alias('upgrade')
   .description('Update memoir to the latest version')
   .action(async () => {
     try {
@@ -255,6 +274,19 @@ program
     } catch (err) {
       console.error(chalk.red('\n✖ Update failed:'), err.message);
       console.log(chalk.gray('Try manually: ') + chalk.cyan('npm install -g memoir-cli'));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('upgrade')
+  .alias('pro')
+  .description('View plans and upgrade your memoir subscription')
+  .action(async () => {
+    try {
+      await upgradeCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
   });
