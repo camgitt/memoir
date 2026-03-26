@@ -2,18 +2,20 @@
 
 # memoir
 
-**Your AI remembers everything. On every machine.**
+**AI tools forget you. memoir doesn't.**
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 
-Close your laptop. Open another one. **Your AI picks up exactly where you left off.**
+Sync memory across 11 AI tools. Search it all from your editor via MCP. One CLI, every device.
 
 [Website](https://memoir.sh) &bull; [npm](https://npmjs.org/package/memoir-cli) &bull; [Blog](https://memoir.sh/blog)
 
 <br />
+
+<img src="demo.svg" alt="memoir demo — push, restore, and sync AI memory" width="700" />
 
 </div>
 
@@ -111,6 +113,35 @@ memoir push
 memoir restore
 ```
 
+## MCP Server (NEW in v3.2)
+
+memoir ships an MCP server so your AI tools can search, read, and save memories without leaving the conversation.
+
+```bash
+# Start the server
+memoir mcp
+```
+
+**Claude Code** — add to `~/.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "memoir": { "command": "memoir-mcp" }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "memoir": { "command": "memoir-mcp" }
+  }
+}
+```
+
+Your editor gets 6 tools: `memoir_recall` (search all memories), `memoir_remember` (save context), `memoir_list`, `memoir_read`, `memoir_status`, and `memoir_profiles`. Zero cost — runs locally.
+
 ## Key Features
 
 ### Workspace sync
@@ -195,6 +226,7 @@ Claude's memory paths are automatically remapped between platforms. Projects are
 | `memoir cloud restore` | Restore from memoir cloud |
 | `memoir history` | View cloud backup versions |
 | `memoir login` | Sign in to memoir cloud |
+| `memoir mcp` | Start MCP server for editor integration |
 | `memoir update` | Self-update to latest version |
 
 ## How memoir compares
@@ -211,6 +243,7 @@ Claude's memory paths are automatically remapped between platforms. Projects are
 | Uncommitted work patches | **Yes** | No | No | No |
 | Cloud backup | **Yes** | No | No | Yes ($15/mo) |
 | Profiles | **Yes** | No | No | No |
+| MCP server | **Yes** | No | No | No |
 | Free & open source | **Yes** | Yes | Yes | No |
 
 ## Common Workflows

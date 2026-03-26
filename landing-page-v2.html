@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>memoir — Sync your AI memory across every device and tool</title>
+<meta name="description" content="Back up and restore your AI coding context across 11 tools and every machine. Claude, Cursor, Gemini, Copilot, and more. One CLI, E2E encrypted.">
+<meta property="og:title" content="memoir — AI tools forget you. memoir doesn't.">
+<meta property="og:description" content="Sync your AI coding memory across 11 tools and every device. One command to save. One command to restore.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://memoir.sh">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="memoir — AI tools forget you. memoir doesn't.">
+<meta name="twitter:description" content="Sync your AI coding memory across 11 tools and every device.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0a0a0f;
+    --bg-card: #111118;
+    --bg-card-hover: #16161f;
+    --purple: #7c6ef0;
+    --purple-light: #9d92f8;
+    --purple-glow: rgba(124, 110, 240, 0.15);
+    --green: #4ade80;
+    --text: #e4e4e7;
+    --text-muted: #71717a;
+    --text-dim: #52525b;
+    --border: #27272a;
+    --border-light: #3f3f46;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* Nav */
+  nav {
+    position: fixed; top: 0; width: 100%; z-index: 100;
+    background: rgba(10, 10, 15, 0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; justify-content: space-between; align-items: center;
+    height: 60px;
+  }
+  .nav-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 1.2rem; color: var(--purple);
+    text-decoration: none;
+  }
+  .nav-links { display: flex; gap: 2rem; align-items: center; }
+  .nav-links a {
+    color: var(--text-muted); text-decoration: none; font-size: 0.9rem;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    background: var(--purple) !important; color: #fff !important;
+    padding: 0.5rem 1.2rem; border-radius: 6px;
+    font-weight: 600; font-size: 0.85rem !important;
+    transition: opacity 0.2s;
+  }
+  .nav-cta:hover { opacity: 0.9; }
+
+  /* Hero */
+  .hero {
+    padding: 10rem 2rem 6rem;
+    text-align: center;
+    position: relative;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, var(--purple-glow) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    color: var(--purple-light);
+    margin-bottom: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 .gradient {
+    background: linear-gradient(135deg, var(--purple) 0%, #a78bfa 50%, var(--purple-light) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero p {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    max-width: 600px;
+    margin: 0 auto 2.5rem;
+  }
+  .hero-install {
+    display: inline-flex; align-items: center; gap: 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+  .hero-install:hover { border-color: var(--purple); }
+  .hero-install .dollar { color: var(--text-dim); }
+  .hero-install .cmd { color: var(--green); }
+  .hero-install .copy-btn {
+    color: var(--text-muted); background: none; border: none;
+    cursor: pointer; font-size: 0.85rem; padding: 0.2rem;
+    transition: color 0.2s;
+  }
+  .hero-install .copy-btn:hover { color: var(--text); }
+  .hero-stats {
+    display: flex; justify-content: center; gap: 3rem;
+    margin-top: 3rem; color: var(--text-muted); font-size: 0.9rem;
+  }
+  .hero-stats strong { color: var(--text); font-weight: 600; }
+
+  /* Section base */
+  section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+  .section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem; color: var(--purple); text-transform: uppercase;
+    letter-spacing: 0.1em; margin-bottom: 0.75rem;
+  }
+  .section-title {
+    font-size: 2rem; font-weight: 700; margin-bottom: 1rem;
+    letter-spacing: -0.01em;
+  }
+  .section-desc {
+    color: var(--text-muted); font-size: 1.05rem;
+    max-width: 550px; margin-bottom: 3rem;
+  }
+
+  /* Terminal demo */
+  .terminal {
+    background: #0d0d14;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 700px;
+    margin: 3rem auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .terminal-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    background: #111118;
+    border-bottom: 1px solid var(--border);
+  }
+  .terminal-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+  }
+  .terminal-dot.red { background: #ef4444; }
+  .terminal-dot.yellow { background: #eab308; }
+  .terminal-dot.green { background: #22c55e; }
+  .terminal-body {
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+  }
+  .terminal-body .line { margin-bottom: 0.25rem; }
+  .terminal-body .prompt { color: var(--purple); }
+  .terminal-body .command { color: #e4e4e7; }
+  .terminal-body .output { color: var(--text-muted); }
+  .terminal-body .success { color: var(--green); }
+  .terminal-body .dim { color: var(--text-dim); }
+
+  /* Tool grid */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+  .tool-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem;
+    text-align: center;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .tool-card:hover { border-color: var(--purple); transform: translateY(-2px); }
+  .tool-name { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.3rem; }
+  .tool-detail { font-size: 0.75rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+  /* Features */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+  .feature-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: border-color 0.2s;
+  }
+  .feature-card:hover { border-color: var(--border-light); }
+  .feature-icon {
+    font-size: 1.5rem; margin-bottom: 1rem;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--purple-glow);
+    border-radius: 10px;
+  }
+  .feature-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+  .feature-card p { color: var(--text-muted); font-size: 0.9rem; }
+  .feature-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    color: var(--green);
+  }
+
+  /* Comparison */
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  .comparison-table th, .comparison-table td {
+    padding: 0.9rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .comparison-table th {
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .comparison-table td:first-child { font-weight: 500; }
+  .comparison-table .check { color: var(--green); font-weight: 700; }
+  .comparison-table .no { color: var(--text-dim); }
+  .comparison-table .memoir-col { color: var(--purple-light); font-weight: 600; }
+
+  /* Pricing */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+  .price-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    position: relative;
+  }
+  .price-card.popular {
+    border-color: var(--purple);
+    box-shadow: 0 0 40px var(--purple-glow);
+  }
+  .price-card.popular::before {
+    content: 'Most popular';
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+    background: var(--purple); color: #fff;
+    font-size: 0.7rem; font-weight: 600;
+    padding: 0.25rem 0.75rem; border-radius: 100px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .price-tier {
+    font-size: 0.85rem; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+  }
+  .price-amount {
+    font-size: 2.5rem; font-weight: 800; margin-bottom: 0.25rem;
+  }
+  .price-amount span { font-size: 1rem; font-weight: 400; color: var(--text-muted); }
+  .price-desc {
+    color: var(--text-muted); font-size: 0.85rem;
+    margin-bottom: 1.5rem; padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .price-features { list-style: none; margin-bottom: 2rem; }
+  .price-features li {
+    padding: 0.4rem 0;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  .price-features li::before {
+    content: '✓';
+    color: var(--green);
+    font-weight: 700;
+    margin-right: 0.5rem;
+  }
+  .price-btn {
+    display: block; width: 100%;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .price-btn:hover { border-color: var(--purple); color: var(--purple-light); }
+  .price-btn.primary {
+    background: var(--purple); border-color: var(--purple); color: #fff;
+  }
+  .price-btn.primary:hover { opacity: 0.9; }
+
+  /* Email capture */
+  .email-section {
+    text-align: center;
+    padding: 5rem 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .email-section h2 {
+    font-size: 1.8rem; font-weight: 700; margin-bottom: 0.75rem;
+  }
+  .email-section p {
+    color: var(--text-muted); margin-bottom: 2rem;
+  }
+  .email-form {
+    display: flex; gap: 0.75rem;
+    max-width: 450px; margin: 0 auto;
+  }
+  .email-form input {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .email-form input:focus { border-color: var(--purple); }
+  .email-form input::placeholder { color: var(--text-dim); }
+  .email-form button {
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    background: var(--purple);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+  }
+  .email-form button:hover { opacity: 0.9; }
+  .email-note {
+    font-size: 0.75rem; color: var(--text-dim); margin-top: 0.75rem;
+  }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+  }
+  footer a { color: var(--text-muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+  .footer-links { display: flex; justify-content: center; gap: 2rem; margin-bottom: 1rem; }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    .nav-links { gap: 1rem; }
+    .hero { padding: 8rem 1.5rem 4rem; }
+    .hero-stats { gap: 1.5rem; flex-wrap: wrap; }
+    .email-form { flex-direction: column; }
+    .features-grid { grid-template-columns: 1fr; }
+    .pricing-grid { grid-template-columns: 1fr; max-width: 350px; margin-left: auto; margin-right: auto; }
+    .comparison-table { font-size: 0.8rem; }
+    .comparison-table th, .comparison-table td { padding: 0.6rem 0.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">memoir</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="https://github.com/camgitt/memoir" target="_blank">GitHub</a>
+      <a href="/blog">Blog</a>
+      <a href="#install" class="nav-cta">Install</a>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="install">
+  <div class="hero-badge">v3.2 — now with MCP server</div>
+  <h1>AI tools forget you.<br><span class="gradient">memoir doesn't.</span></h1>
+  <p>Sync your AI memory across 11 tools and every device. One command to save. One command to restore. Your AI picks up mid-conversation.</p>
+
+  <div class="hero-install" onclick="navigator.clipboard.writeText('npm install -g memoir-cli');this.querySelector('.copy-btn').textContent='Copied!'">
+    <span class="dollar">$</span>
+    <span class="cmd">npm install -g memoir-cli</span>
+    <button class="copy-btn" title="Copy">Copy</button>
+  </div>
+
+  <div class="hero-stats">
+    <div><strong>11</strong> AI tools supported</div>
+    <div><strong>E2E</strong> encrypted</div>
+    <div><strong>MIT</strong> licensed</div>
+  </div>
+</section>
+
+<!-- Terminal Demo -->
+<section>
+  <div class="terminal">
+    <div class="terminal-header">
+      <div class="terminal-dot red"></div>
+      <div class="terminal-dot yellow"></div>
+      <div class="terminal-dot green"></div>
+    </div>
+    <div class="terminal-body">
+      <div class="line"><span class="prompt">~</span> <span class="command">memoir push</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">AI memory backed up (11 tools detected)</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">Session context captured</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">Workspace: 44 projects (17 git, 23 bundled)</span></div>
+      <div class="line"><span class="dim">🔒 E2E encrypted &middot; pushed in 3.2s</span></div>
+      <div class="line">&nbsp;</div>
+      <div class="line"><span class="dim">--- switch to another machine ---</span></div>
+      <div class="line">&nbsp;</div>
+      <div class="line"><span class="prompt">~</span> <span class="command">memoir restore -y</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">AI memory restored (Claude, Gemini, Cursor, 8 more)</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">44 projects cloned &amp; unpacked</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">Uncommitted changes applied</span></div>
+      <div class="line"><span class="success">✔</span> <span class="output">Session context injected — AI picks up mid-conversation</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Supported Tools -->
+<section>
+  <div class="section-label">Supported tools</div>
+  <div class="section-title">11 AI tools. One sync.</div>
+  <div class="section-desc">memoir detects and syncs every AI tool on your machine — configs, instructions, and project knowledge.</div>
+  <div class="tools-grid">
+    <div class="tool-card"><div class="tool-name">Claude Code</div><div class="tool-detail">CLAUDE.md</div></div>
+    <div class="tool-card"><div class="tool-name">Gemini CLI</div><div class="tool-detail">GEMINI.md</div></div>
+    <div class="tool-card"><div class="tool-name">ChatGPT</div><div class="tool-detail">CHATGPT.md</div></div>
+    <div class="tool-card"><div class="tool-name">Codex</div><div class="tool-detail">AGENTS.md</div></div>
+    <div class="tool-card"><div class="tool-name">Cursor</div><div class="tool-detail">.cursorrules</div></div>
+    <div class="tool-card"><div class="tool-name">Copilot</div><div class="tool-detail">copilot-instructions</div></div>
+    <div class="tool-card"><div class="tool-name">Windsurf</div><div class="tool-detail">.windsurfrules</div></div>
+    <div class="tool-card"><div class="tool-name">Zed</div><div class="tool-detail">settings.json</div></div>
+    <div class="tool-card"><div class="tool-name">Cline</div><div class="tool-detail">.clinerules</div></div>
+    <div class="tool-card"><div class="tool-name">Continue</div><div class="tool-detail">.continuerules</div></div>
+    <div class="tool-card"><div class="tool-name">Aider</div><div class="tool-detail">.aider.conf.yml</div></div>
+  </div>
+</section>
+
+<!-- Features -->
+<section id="features">
+  <div class="section-label">Features</div>
+  <div class="section-title">Three layers no other tool connects</div>
+  <div class="section-desc">memoir syncs AI memory, session state, and your workspace — not just dotfiles.</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <h3>AI Memory Sync</h3>
+      <p>Configs, instructions, and project knowledge across all 11 tools. Detected automatically.</p>
+      <div class="feature-code">memoir push && memoir restore</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔄</div>
+      <h3>Session Handoff</h3>
+      <p>Captures what you were doing — files changed, errors hit, decisions made. Your AI picks up mid-conversation.</p>
+      <div class="feature-code">memoir snapshot && memoir resume</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <h3>Workspace Sync</h3>
+      <p>Git repos auto-clone, non-git projects bundle, uncommitted changes save as patches and reapply.</p>
+      <div class="feature-code">memoir push  # 44 projects saved</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔀</div>
+      <h3>AI Translation</h3>
+      <p>Translate your instructions between tools using AI — not just file copy. Rewrites conventions properly.</p>
+      <div class="feature-code">memoir migrate --from claude --to cursor</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <h3>MCP Server</h3>
+      <p>6 tools for your editor to search, read, and save memories without leaving the conversation.</p>
+      <div class="feature-code">memoir mcp  # start the server</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <h3>E2E Encrypted</h3>
+      <p>AES-256-GCM encryption. Secret scanning auto-redacts API keys and tokens. Zero-knowledge.</p>
+      <div class="feature-code">memoir encrypt && memoir doctor</div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison -->
+<section>
+  <div class="section-label">Comparison</div>
+  <div class="section-title">How memoir compares</div>
+  <div style="overflow-x: auto; margin-top: 2rem;">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th class="memoir-col">memoir</th>
+          <th>Dotfile managers</th>
+          <th>ai-rulez</th>
+          <th>memories.sh</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>AI memory sync</td><td class="check memoir-col">11 tools</td><td class="no">No</td><td>18 tools</td><td>3 tools</td></tr>
+        <tr><td>Workspace sync</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>Session handoff</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>AI-powered translation</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>E2E encryption</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>Secret scanning</td><td class="check memoir-col">Yes</td><td>Some</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>MCP server</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td class="no">No</td></tr>
+        <tr><td>Cloud backup</td><td class="check memoir-col">Yes</td><td class="no">No</td><td class="no">No</td><td>$15/mo</td></tr>
+        <tr><td>Free &amp; open source</td><td class="check memoir-col">Yes</td><td class="check">Yes</td><td class="check">Yes</td><td class="no">No</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Pricing -->
+<section id="pricing">
+  <div style="text-align: center;">
+    <div class="section-label">Pricing</div>
+    <div class="section-title">Start free. Scale when you need to.</div>
+  </div>
+  <div class="pricing-grid">
+    <div class="price-card">
+      <div class="price-tier">Free</div>
+      <div class="price-amount">$0 <span>/ forever</span></div>
+      <div class="price-desc">For solo devs trying it out</div>
+      <ul class="price-features">
+        <li>Local backup &amp; restore</li>
+        <li>3 cloud backups</li>
+        <li>All 11 AI tools</li>
+        <li>AI-powered migration</li>
+        <li>MCP server</li>
+        <li>E2E encryption</li>
+      </ul>
+      <a href="#install" class="price-btn">Install free</a>
+    </div>
+    <div class="price-card popular">
+      <div class="price-tier">Pro</div>
+      <div class="price-amount">$15 <span>/ month</span></div>
+      <div class="price-desc">For power users on multiple machines</div>
+      <ul class="price-features">
+        <li>Everything in Free</li>
+        <li>50 cloud backups</li>
+        <li>Unlimited machines</li>
+        <li>Version history</li>
+        <li>Priority support</li>
+      </ul>
+      <a href="#" class="price-btn primary" onclick="alert('Pro coming soon — join the waitlist below!')">Upgrade to Pro</a>
+    </div>
+    <div class="price-card">
+      <div class="price-tier">Teams</div>
+      <div class="price-amount">$29 <span>/ seat / mo</span></div>
+      <div class="price-desc">For dev teams that share context</div>
+      <ul class="price-features">
+        <li>Everything in Pro</li>
+        <li>Shared team context</li>
+        <li>Team dashboard</li>
+        <li>Audit log</li>
+        <li>200 backups per team</li>
+      </ul>
+      <a href="#waitlist" class="price-btn">Join waitlist</a>
+    </div>
+  </div>
+</section>
+
+<!-- Email Capture / Waitlist -->
+<section class="email-section" id="waitlist">
+  <h2>Get notified when Teams launches</h2>
+  <p>We're building shared context for dev teams — onboard new hires with one command. Drop your email to get early access.</p>
+  <form class="email-form" onsubmit="event.preventDefault(); handleEmailSubmit(this);">
+    <input type="email" placeholder="you@company.com" required>
+    <button type="submit">Join waitlist</button>
+  </form>
+  <div class="email-note">No spam. Just launch updates.</div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-links">
+    <a href="https://github.com/camgitt/memoir">GitHub</a>
+    <a href="https://npmjs.org/package/memoir-cli">npm</a>
+    <a href="/blog">Blog</a>
+    <a href="https://github.com/camgitt/memoir/issues">Issues</a>
+  </div>
+  <div>MIT Licensed &middot; Built by <a href="https://github.com/camgitt">camgitt</a></div>
+</footer>
+
+<script>
+  async function handleEmailSubmit(form) {
+    const input = form.querySelector('input');
+    const email = input.value;
+    const button = form.querySelector('button');
+    const originalText = button.textContent;
+
+    button.textContent = 'Joining...';
+    button.disabled = true;
+
+    try {
+      const res = await fetch('https://oqrkxytbahfwjhcbyzrx.supabase.co/rest/v1/waitlist', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xcmt4eXRiYWhmd2poY2J5enJ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMTQ4MzMsImV4cCI6MjA4ODc5MDgzM30.jOKOi73OJgIgi1zj0VOIQkGp0xqS3ee4gfCjpdqCnvM',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ email, source: 'landing-page' })
+      });
+
+      if (res.ok) {
+        button.textContent = 'You\'re in!';
+        button.style.background = '#22c55e';
+        input.value = '';
+      } else if (res.status === 409) {
+        button.textContent = 'Already joined!';
+        button.style.background = '#22c55e';
+        input.value = '';
+      } else {
+        throw new Error('Failed');
+      }
+    } catch (err) {
+      button.textContent = 'Error — try again';
+      button.style.background = '#ef4444';
+    }
+
+    button.disabled = false;
+    setTimeout(() => {
+      button.textContent = originalText;
+      button.style.background = '';
+    }, 3000);
+  }
+</script>
+
+</body>
+</html>
