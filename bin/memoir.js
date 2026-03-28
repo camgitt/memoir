@@ -499,6 +499,14 @@ projects
     }
   });
 
+program
+  .command('mcp')
+  .description('Start the MCP server (for Claude Code, Cursor, VS Code integration)')
+  .action(async () => {
+    // Import and run the MCP server directly
+    await import('../src/mcp.js');
+  });
+
 program.hook('postAction', async () => {
   await checkForUpdate();
 });
