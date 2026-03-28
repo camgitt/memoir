@@ -2,14 +2,16 @@
 
 # memoir
 
-**AI tools forget you. memoir doesn't.**
+**Persistent memory for AI coding tools.**
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 
-Sync memory across 11 AI tools. Search it all from your editor via MCP. One CLI, every device.
+Your AI forgets everything between sessions. memoir gives it long-term memory via MCP.
+
+Works with Claude Code, Cursor, Windsurf, Gemini, and 7 more tools.
 
 [Website](https://memoir.sh) &bull; [npm](https://npmjs.org/package/memoir-cli) &bull; [Blog](https://memoir.sh/blog)
 
@@ -21,35 +23,74 @@ Sync memory across 11 AI tools. Search it all from your editor via MCP. One CLI,
 
 ## The Problem
 
-You spend weeks teaching Claude how you code. Your projects are dialed in. Your AI knows your stack, your decisions, your preferences.
+You told Claude your project uses Zustand, not Redux. You explained your auth middleware to Cursor. You spent weeks building up context across your AI tools.
 
-Then you switch machines. **Everything is gone.** Your AI has amnesia. Your projects aren't there. You start from zero.
+Next session? **Gone.** New machine? **Gone.** Switch tools? **Gone.**
 
-## The Fix
+## How memoir fixes it
 
-```bash
-# On your main machine
-memoir push
+memoir is a **persistent memory layer** that runs via [MCP](https://modelcontextprotocol.io) inside your AI tools. Your AI can search, read, and save memories automatically — across sessions, tools, and machines.
 
-# On any other machine
-npm install -g memoir-cli
-memoir restore -y
+```
+you: how does auth work in this project?
 
-# Done. Everything's back:
-# ✔ AI memory restored (Claude, Gemini, Cursor, 11 tools)
-# ✔ 44 projects cloned & unpacked
-# ✔ Uncommitted changes applied
-# ✔ Session context injected — AI picks up mid-conversation
+  memoir_recall("auth setup architecture")
+  Found 3 memories matching "auth"
+
+claude: Based on your previous sessions: this project uses JWT auth
+  with refresh tokens, the middleware is in src/middleware/auth.ts,
+  and you chose Zustand over Redux for auth state (decided March 12).
 ```
 
-One command to save. One command to restore. That's it.
+No re-explaining. memoir remembered.
+
+## Quick Start
+
+```bash
+# Install
+npm install -g memoir-cli
+
+# Setup
+memoir init
+```
+
+### Add MCP to your AI tools
+
+**Claude Code** — add to `~/.mcp.json`:
+```json
+{
+  "mcpServers": {
+    "memoir": { "command": "memoir-mcp" }
+  }
+}
+```
+
+**Cursor** — add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "memoir": { "command": "memoir-mcp" }
+  }
+}
+```
+
+That's it. Your AI tools now have 6 memory abilities:
+
+| MCP Tool | What it does |
+|----------|-------------|
+| `memoir_recall` | Search across all your AI memories |
+| `memoir_remember` | Save context for future sessions |
+| `memoir_list` | Browse all memory files by tool |
+| `memoir_read` | Read a specific memory in full |
+| `memoir_status` | See which AI tools are detected |
+| `memoir_profiles` | Switch between work/personal |
 
 ## What Gets Synced
 
 memoir syncs three layers that no other tool connects:
 
-### Layer 1: AI Memory
-Your AI tool configs, preferences, and project knowledge across 11 tools.
+### Layer 1: AI Memory (via MCP + CLI)
+Configs, instructions, and project knowledge across 11 tools — searchable and writable from inside any AI conversation.
 
 | Tool | What gets synced |
 |------|-----------------|
@@ -73,7 +114,7 @@ What you were **doing** — not just what your AI knows, but the active context.
 - Injected into your AI on restore so it picks up mid-conversation
 - Secrets auto-redacted (API keys, tokens, passwords stripped before sync)
 
-### Layer 3: Workspace (NEW in v3.1)
+### Layer 3: Workspace
 Your actual projects — code, files, everything.
 
 - **Git projects:** Remote URLs saved, auto-cloned on restore
@@ -81,76 +122,10 @@ Your actual projects — code, files, everything.
 - **Uncommitted work:** Saved as patches, applied after clone
 - **Zero git commands needed** — memoir handles it all
 
-```
-memoir push on Mac:
-  ✔ AI memory backed up
-  ✔ Session context captured
-  ✔ Workspace: 44 projects (17 git, 23 bundled)
-  🔒 E2E encrypted
-
-memoir restore on Windows:
-  ✔ AI memory restored
-  ✔ stock-market-book → C:\Users\You\stock-market-book (cloned)
-  ✔ socialslink → C:\Users\You\socialslink (cloned)
-  ✔ btc-trader → C:\Users\You\btc-trader (unpacked)
-  ✔ 41 more projects restored
-  📋 Session context injected — Claude picks up where you left off
-```
-
-## Quick Start
-
-```bash
-# Install
-npm install -g memoir-cli
-
-# First-time setup
-memoir init
-
-# Back up everything
-memoir push
-
-# Restore on any machine
-memoir restore
-```
-
-## MCP Server (NEW in v3.2)
-
-memoir ships an MCP server so your AI tools can search, read, and save memories without leaving the conversation.
-
-```bash
-# Start the server
-memoir mcp
-```
-
-**Claude Code** — add to `~/.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "memoir": { "command": "memoir-mcp" }
-  }
-}
-```
-
-**Cursor** — add to `.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "memoir": { "command": "memoir-mcp" }
-  }
-}
-```
-
-Your editor gets 6 tools: `memoir_recall` (search all memories), `memoir_remember` (save context), `memoir_list`, `memoir_read`, `memoir_status`, and `memoir_profiles`. Zero cost — runs locally.
-
 ## Key Features
 
-### Workspace sync
-```bash
-memoir push     # scans all projects, saves git URLs + bundles non-git projects
-memoir restore  # auto-clones repos, unpacks bundles, applies uncommitted patches
-```
-
-No manual git commands. memoir detects your projects, tracks their remotes, and restores them anywhere.
+### Cross-tool memory
+Tell Claude something once. Cursor knows it too. memoir is the shared memory layer between all your AI tools.
 
 ### Translate between AI tools
 ```bash
@@ -161,13 +136,17 @@ memoir migrate --from chatgpt --to all
 # Translate to every tool at once
 ```
 
-### Session handoff
+### Cross-machine sync
 ```bash
-# Capture your session (automatic on push, or manual)
-memoir snapshot
+# On your main machine
+memoir push
 
-# Pick up on another machine
-memoir resume --inject --to claude
+# On any other machine
+memoir restore -y
+# ✔ AI memory restored (Claude, Gemini, Cursor, 11 tools)
+# ✔ 44 projects cloned & unpacked
+# ✔ Uncommitted changes applied
+# ✔ Session context injected — AI picks up mid-conversation
 ```
 
 ### E2E Encryption
@@ -176,7 +155,7 @@ memoir encrypt    # toggle encryption on/off
 memoir push       # prompted for passphrase, AES-256-GCM encrypted
 ```
 
-Your backup is encrypted before it leaves your machine. Even if your storage is compromised, your data is safe. Secret scanning auto-redacts API keys, tokens, and passwords.
+Your backup is encrypted before it leaves your machine. Secret scanning auto-redacts API keys, tokens, and passwords.
 
 ### Profiles (personal / work)
 ```bash
@@ -185,26 +164,15 @@ memoir push --profile work
 memoir profile switch personal
 ```
 
-Each profile has its own repo and tool filters. Work configs never mix with personal.
-
-### Cloud sync (Pro)
+### Cloud sync
 ```bash
 memoir login
 memoir cloud push      # encrypted cloud backup
 memoir cloud restore   # restore from any version
-memoir history         # view all backup versions
 ```
 
 ### Cross-platform (Mac / Windows / Linux)
-```bash
-# Push from Mac
-memoir push
-
-# Restore on Windows — paths remap automatically
-memoir restore
-```
-
-Claude's memory paths are automatically remapped between platforms. Projects are cloned to the right locations. It just works.
+Paths remap automatically between platforms. Push from Mac, restore on Windows. It just works.
 
 ## All Commands
 
@@ -213,6 +181,7 @@ Claude's memory paths are automatically remapped between platforms. Projects are
 | `memoir init` | Setup wizard — GitHub or local storage |
 | `memoir push` | Back up AI memory + workspace + session |
 | `memoir restore` | Restore everything on a new machine |
+| `memoir mcp` | Start MCP server for editor integration |
 | `memoir status` | Show detected AI tools |
 | `memoir doctor` | Diagnose issues, scan for secrets |
 | `memoir view` | Preview what's in your backup |
@@ -226,41 +195,44 @@ Claude's memory paths are automatically remapped between platforms. Projects are
 | `memoir cloud restore` | Restore from memoir cloud |
 | `memoir history` | View cloud backup versions |
 | `memoir login` | Sign in to memoir cloud |
-| `memoir mcp` | Start MCP server for editor integration |
+| `memoir share` | Create encrypted shareable link |
+| `memoir upgrade` | View plans and upgrade |
 | `memoir update` | Self-update to latest version |
 
 ## How memoir compares
 
 | Feature | memoir | dotfiles managers | ai-rulez | memories.sh |
 |---------|--------|-------------------|----------|-------------|
+| MCP memory layer | **6 tools** | No | No | No |
 | AI memory sync | **11 tools** | No | 18 tools | 3 tools |
+| Cross-tool recall | **Yes** | No | No | No |
 | Workspace sync | **Yes** | No | No | No |
 | Session handoff | **Yes** | No | No | No |
-| AI-powered translation | **Yes** | No | No | No |
+| AI-powered migration | **Yes** | No | No | No |
 | E2E encryption | **Yes** | No | No | No |
 | Secret scanning | **Yes** | Some | No | No |
 | Cross-platform remap | **Yes** | Some | No | No |
-| Uncommitted work patches | **Yes** | No | No | No |
 | Cloud backup | **Yes** | No | No | Yes ($15/mo) |
 | Profiles | **Yes** | No | No | No |
-| MCP server | **Yes** | No | No | No |
 | Free & open source | **Yes** | Yes | Yes | No |
 
 ## Common Workflows
 
-### New machine setup
-```bash
-# Old machine
-memoir push
+### Your AI remembers across sessions
+```
+# Monday — you explain your auth setup to Claude
+# ...Claude calls memoir_remember to save the decision
 
-# New machine — one command, everything's back
-npm install -g memoir-cli && memoir init && memoir restore -y
+# Thursday — new conversation
+you: "add a protected route"
+# Claude calls memoir_recall, finds your auth architecture
+# No re-explaining needed
 ```
 
-### Daily sync between machines
+### New machine setup
 ```bash
-memoir push      # end of day on laptop
-memoir restore   # next morning on desktop — AI knows what you were doing
+npm install -g memoir-cli && memoir init && memoir restore -y
+# Done. Everything's back.
 ```
 
 ### Switching AI tools
@@ -286,6 +258,7 @@ memoir restore --profile team
 - **Auto-redaction** — secrets stripped from session handoffs before sync
 - **No credentials synced** — .env files, auth tokens, and API keys are never included
 - **Passphrase verified** — wrong passphrase caught before decrypt attempt
+- **Local MCP server** — runs on your machine, no data sent to external services
 
 ## Requirements
 
@@ -295,7 +268,7 @@ memoir restore --profile team
 
 ## Contributing
 
-Contributions welcome — especially new tool adapters and migration improvements.
+Contributions welcome — especially new tool adapters and MCP improvements.
 
 1. Fork the repo
 2. Create your branch (`git checkout -b feature/my-feature`)

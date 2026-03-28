@@ -1,17 +1,18 @@
 {
   "name": "memoir-cli",
-  "version": "3.1.2",
-  "description": "Sync AI memory across devices. Back up and restore Claude, Gemini, Codex, Cursor, Copilot, Windsurf configs. Snapshot coding sessions and resume on another machine. Migrate instructions between AI assistants.",
+  "version": "3.2.0",
+  "description": "Persistent memory for AI coding tools via MCP. Your AI remembers across sessions, tools, and machines. Works with Claude, Cursor, Gemini, Windsurf, and 7 more tools.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
-    "memoir": "bin/memoir.js"
+    "memoir": "bin/memoir.js",
+    "memoir-mcp": "src/mcp.js"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/camgitt/memoir.git"
   },
-  "homepage": "https://github.com/camgitt/memoir#readme",
+  "homepage": "https://memoir.sh",
   "bugs": {
     "url": "https://github.com/camgitt/memoir/issues"
   },
@@ -20,49 +21,52 @@
     "test": "bash test-local.sh"
   },
   "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-memory",
+    "persistent-memory",
     "ai",
     "cli",
-    "sync",
-    "memory",
-    "backup",
-    "restore",
-    "migrate",
-    "translate",
     "claude",
-    "gemini",
-    "codex",
+    "claude-code",
     "cursor",
-    "copilot",
     "windsurf",
+    "gemini",
+    "gemini-cli",
+    "codex",
+    "copilot",
+    "chatgpt",
+    "openai",
     "aider",
     "zed",
     "cline",
     "continue-dev",
-    "profiles",
-    "ai-memory",
     "ai-tools",
-    "dotfiles",
-    "developer-tools",
-    "claude-code",
-    "gemini-cli",
-    "openai",
-    "chatgpt",
     "ai-assistant",
     "coding-assistant",
+    "developer-tools",
     "context-sync",
+    "memory-layer",
+    "cross-tool",
+    "sync",
+    "backup",
+    "restore",
+    "migrate",
     "session-handoff",
-    "snapshot",
-    "resume"
+    "dotfiles",
+    "profiles"
   ],
   "author": "camgitt",
   "license": "MIT",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "boxen": "^7.1.1",
     "chalk": "^5.3.0",
     "commander": "^12.0.0",
     "fs-extra": "^11.2.0",
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.15",
-"ora": "^7.0.1"
+    "ora": "^7.0.1"
   }
 }
