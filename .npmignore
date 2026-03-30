@@ -11,3 +11,16 @@ demo.gif
 *.windowsterminal.json
 .DS_Store
 .env
+.smithery/
+.mcpregistry_github_token
+.mcpregistry_registry_token
+mcp-publisher
+social-preview.html
+social-preview.png
+landing-page-v2.html
+LAUNCH-KIT.md
+LAUNCH_POSTS.md
+POSTS-READY-TO-GO.md
+MARKETING.md
+GAMEPLAN.md
+VISION.md
