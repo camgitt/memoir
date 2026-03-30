@@ -14,7 +14,7 @@ import { migrateCommand } from '../src/commands/migrate.js';
 import { snapshotCommand } from '../src/commands/snapshot.js';
 import { resumeCommand } from '../src/commands/resume.js';
 import { profileListCommand, profileCreateCommand, profileSwitchCommand, profileDeleteCommand } from '../src/commands/profile.js';
-import { loginCommand, logoutCommand } from '../src/commands/login.js';
+import { loginCommand, logoutCommand, forgotPasswordCommand } from '../src/commands/login.js';
 import { cloudPushCommand, cloudRestoreCommand } from '../src/commands/cloud.js';
 import { shareCommand } from '../src/commands/share.js';
 import { historyCommand } from '../src/commands/history.js';
@@ -366,6 +366,20 @@ program
   .action(async () => {
     try {
       await logoutCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('forgot-password')
+  .alias('reset-password')
+  .description('Send a password reset email')
+  .option('--email <email>', 'Email address (skip interactive prompt)')
+  .action(async (options) => {
+    try {
+      await forgotPasswordCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);

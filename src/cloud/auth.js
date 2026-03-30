@@ -25,7 +25,13 @@ async function supaFetch(endpoint, options = {}) {
 export async function signUp(email, password) {
   const res = await supaFetch('/auth/v1/signup', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      password,
+      options: {
+        emailRedirectTo: 'https://memoir.sh/confirmed',
+      },
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign up failed');
@@ -107,6 +113,22 @@ export async function getSubscription(session) {
   const data = await res.json();
   if (!res.ok || !data.length) return { status: 'free' };
   return data[0];
+}
+
+export async function resetPassword(email) {
+  const res = await supaFetch('/auth/v1/recover', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      options: {
+        redirectTo: 'https://memoir.sh/reset-password',
+      },
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error_description || data.msg || 'Password reset failed');
+  }
 }
 
 export { AUTH_FILE, supaFetch };

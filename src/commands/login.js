@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
 import inquirer from 'inquirer';
-import { signIn, signUp, saveSession, getSession, logout, getSubscription } from '../cloud/auth.js';
+import { signIn, signUp, saveSession, getSession, logout, getSubscription, resetPassword } from '../cloud/auth.js';
 
 export async function loginCommand(options = {}) {
   // Check if already logged in
@@ -88,6 +88,34 @@ export async function loginCommand(options = {}) {
       { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
     ) + '\n');
 
+  } catch (error) {
+    console.log('\n' + boxen(
+      chalk.red('✖ ' + error.message),
+      { padding: 1, borderStyle: 'round', borderColor: 'red' }
+    ) + '\n');
+  }
+}
+
+export async function forgotPasswordCommand(options = {}) {
+  let email = options.email;
+
+  if (!email) {
+    const emailAnswer = await inquirer.prompt([{
+      type: 'input',
+      name: 'email',
+      message: 'Email:',
+      validate: v => v.includes('@') ? true : 'Enter a valid email',
+    }]);
+    email = emailAnswer.email;
+  }
+
+  try {
+    await resetPassword(email);
+    console.log('\n' + boxen(
+      chalk.green('✔ Password reset email sent!') + '\n\n' +
+      chalk.white('Check ') + chalk.cyan(email) + chalk.white(' for a reset link.'),
+      { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
+    ) + '\n');
   } catch (error) {
     console.log('\n' + boxen(
       chalk.red('✖ ' + error.message),

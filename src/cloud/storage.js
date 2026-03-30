@@ -5,6 +5,7 @@ import { createGzip, createGunzip } from 'zlib';
 import { pipeline } from 'stream/promises';
 import { Readable, Writable } from 'stream';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET, MAX_BACKUPS_FREE, MAX_BACKUPS_PRO } from './constants.js';
+import { encryptBuffer, decryptBuffer } from '../security/encryption.js';
 
 // Bundle a directory into a JSON manifest + gzip
 async function bundleDir(dir) {
@@ -64,9 +65,18 @@ async function unbundleToDir(gzipped, destDir) {
   return files.length;
 }
 
+// Derive a stable encryption passphrase from the user's identity
+// Uses only user_id (immutable) — NOT email, which can change
+function cloudPassphrase(session) {
+  return `memoir-cloud:${session.user.id}`;
+}
+
 // Upload backup to Supabase Storage + insert metadata
 export async function uploadBackup(stagingDir, session, toolResults) {
   const gzipped = await bundleDir(stagingDir);
+
+  // Encrypt before upload (AES-256-GCM, keyed to user identity)
+  const encrypted = await encryptBuffer(gzipped, cloudPassphrase(session));
 
   const backupId = crypto.randomUUID();
   const storagePath = `${session.user.id}/${backupId}.gz`;
@@ -79,7 +89,7 @@ export async function uploadBackup(stagingDir, session, toolResults) {
       'apikey': SUPABASE_ANON_KEY,
       'Content-Type': 'application/octet-stream',
     },
-    body: gzipped,
+    body: encrypted,
   });
 
   if (!uploadRes.ok) {
@@ -125,7 +135,7 @@ export async function uploadBackup(stagingDir, session, toolResults) {
       user_id: session.user.id,
       tool_count: tools.length,
       file_count: fileCount,
-      size_bytes: gzipped.length,
+      size_bytes: encrypted.length,
       tools,
       storage_path: storagePath,
       machine_name: os.hostname(),
@@ -139,7 +149,7 @@ export async function uploadBackup(stagingDir, session, toolResults) {
   }
 
   const backup = (await metaRes.json())[0];
-  return { ...backup, sizeBytes: gzipped.length };
+  return { ...backup, sizeBytes: encrypted.length };
 }
 
 // Download a specific backup
@@ -153,7 +163,17 @@ export async function downloadBackup(backup, destDir, session) {
 
   if (!res.ok) throw new Error(`Download failed: ${await res.text()}`);
 
-  const gzipped = Buffer.from(await res.arrayBuffer());
+  const raw = Buffer.from(await res.arrayBuffer());
+
+  // Decrypt if encrypted (check for MEMOIR01 magic header)
+  let gzipped;
+  if (raw.length >= 8 && raw.subarray(0, 8).toString() === 'MEMOIR01') {
+    gzipped = await decryptBuffer(raw, cloudPassphrase(session));
+  } else {
+    // Legacy unencrypted backup
+    gzipped = raw;
+  }
+
   const fileCount = await unbundleToDir(gzipped, destDir);
   return fileCount;
 }
