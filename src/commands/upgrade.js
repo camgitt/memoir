@@ -1,7 +1,30 @@
 import chalk from 'chalk';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
-import { getSession, getSubscription } from '../cloud/auth.js';
+import ora from 'ora';
+import { getSession, getSubscription, supaFetch } from '../cloud/auth.js';
+import { SUPABASE_URL } from '../cloud/constants.js';
+
+async function createCheckoutSession(session) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-checkout`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to create checkout session');
+  return data.url;
+}
+
+function openUrl(url) {
+  const { exec } = require('child_process');
+  const platform = process.platform;
+  if (platform === 'darwin') exec(`open "${url}"`);
+  else if (platform === 'win32') exec(`start "" "${url}"`);
+  else exec(`xdg-open "${url}"`);
+}
 
 export async function upgradeCommand() {
   const session = await getSession();
@@ -23,7 +46,6 @@ export async function upgradeCommand() {
   const col2 = 22;
 
   const pad = (str, width) => {
-    // Strip ANSI for length calculation
     const stripped = str.replace(/\u001b\[[0-9;]*m/g, '');
     const diff = width - stripped.length;
     return diff > 0 ? str + ' '.repeat(diff) : str;
@@ -75,32 +97,32 @@ export async function upgradeCommand() {
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
   ));
 
-  // If free and logged in, open pricing page
+  // If free and logged in, open Stripe checkout
   if (session && currentPlan === 'free') {
-    console.log('\n' + chalk.cyan('  Opening pricing page...') + '\n');
+    const spinner = ora(chalk.cyan('  Creating checkout session...')).start();
 
-    const { exec } = await import('child_process');
-    const url = 'https://memoir.sh/pricing';
+    try {
+      const url = await createCheckoutSession(session);
+      spinner.succeed(chalk.green('  Opening Stripe checkout...'));
 
-    const platform = process.platform;
-    let cmd;
-    if (platform === 'darwin') {
-      cmd = `open "${url}"`;
-    } else if (platform === 'win32') {
-      cmd = `start "${url}"`;
-    } else {
-      cmd = `xdg-open "${url}"`;
+      const { exec } = await import('child_process');
+      const platform = process.platform;
+      if (platform === 'darwin') exec(`open "${url}"`);
+      else if (platform === 'win32') exec(`start "" "${url}"`);
+      else exec(`xdg-open "${url}"`);
+
+      console.log(
+        '\n' + chalk.gray('  Complete payment in your browser.') + '\n' +
+        chalk.gray('  Your plan updates automatically — run ') +
+        chalk.cyan('memoir upgrade') +
+        chalk.gray(' again to verify.') + '\n'
+      );
+    } catch (err) {
+      spinner.fail(chalk.red('  ' + err.message));
+      console.log(chalk.gray('\n  Fallback: visit ') + chalk.cyan('https://memoir.sh/pricing') + '\n');
     }
-
-    exec(cmd, () => {});
-
-    console.log(
-      chalk.gray('  Once you\'ve completed payment, run ') +
-      chalk.cyan('memoir login') +
-      chalk.gray(' to refresh your plan.') + '\n'
-    );
   } else if (!session) {
-    console.log('\n' + chalk.gray('  Sign up at ') + chalk.cyan('memoir.sh/pricing') + chalk.gray(' or run ') + chalk.cyan('memoir login') + chalk.gray(' to get started.') + '\n');
+    console.log('\n' + chalk.gray('  Run ') + chalk.cyan('memoir login') + chalk.gray(' to create an account, then ') + chalk.cyan('memoir upgrade') + chalk.gray(' to subscribe.') + '\n');
   } else {
     console.log();
   }

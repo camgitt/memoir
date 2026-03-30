@@ -6,14 +6,17 @@
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/camgitt/memoir?style=flat-square&color=7c6ef0)](https://github.com/camgitt/memoir/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat-square)](https://nodejs.org)
 
 Your AI forgets everything between sessions. memoir gives it long-term memory via MCP.
 
-Works with Claude Code, Cursor, Windsurf, Gemini, and 7 more tools.
+**11 tools supported** &bull; **E2E encrypted** &bull; **Cross-platform** &bull; **Open source**
 
-[Website](https://memoir.sh) &bull; [npm](https://npmjs.org/package/memoir-cli) &bull; [Blog](https://memoir.sh/blog)
+Works with Claude Code, Cursor, Windsurf, Gemini, Copilot, Codex, ChatGPT, Aider, Zed, Cline, and Continue.dev.
+
+[Website](https://memoir.sh) &bull; [npm](https://npmjs.org/package/memoir-cli) &bull; [Blog](https://memoir.sh/blog) &bull; [Contributing](CONTRIBUTING.md)
 
 <br />
 
@@ -43,6 +46,27 @@ claude: Based on your previous sessions: this project uses JWT auth
 ```
 
 No re-explaining. memoir remembered.
+
+## Architecture
+
+```mermaid
+graph LR
+    A[Claude Code] --> M[memoir MCP]
+    B[Cursor] --> M
+    C[Gemini CLI] --> M
+    D[Windsurf] --> M
+    E[+ 7 more] --> M
+
+    M --> R[recall / remember / list / read]
+    R --> S[(Local Memory Store)]
+
+    S --> P[memoir push]
+    P --> G[GitHub / Cloud]
+    G --> Q[memoir restore]
+    Q --> S2[(New Machine)]
+```
+
+memoir runs as a local MCP server inside your AI tools. Your AI can search, save, and recall memories automatically. Push to sync across machines.
 
 ## Quick Start
 

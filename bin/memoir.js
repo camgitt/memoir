@@ -348,9 +348,12 @@ program
 program
   .command('login')
   .description('Sign in to memoir cloud')
-  .action(async () => {
+  .option('--email <email>', 'Email address (skip interactive prompt)')
+  .option('--password <password>', 'Password (skip interactive prompt)')
+  .option('--signup', 'Create a new account instead of signing in')
+  .action(async (options) => {
     try {
-      await loginCommand();
+      await loginCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);

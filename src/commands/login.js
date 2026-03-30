@@ -4,7 +4,7 @@ import gradient from 'gradient-string';
 import inquirer from 'inquirer';
 import { signIn, signUp, saveSession, getSession, logout, getSubscription } from '../cloud/auth.js';
 
-export async function loginCommand() {
+export async function loginCommand(options = {}) {
   // Check if already logged in
   const existing = await getSession();
   if (existing) {
@@ -18,32 +18,44 @@ export async function loginCommand() {
     return;
   }
 
-  console.log();
+  let action, email, password;
 
-  const { action } = await inquirer.prompt([{
-    type: 'list',
-    name: 'action',
-    message: 'Sign in or create account?',
-    choices: [
-      { name: 'Sign in (existing account)', value: 'signin' },
-      { name: 'Create account', value: 'signup' },
-    ],
-  }]);
+  // Support non-interactive login via flags
+  if (options.email && options.password) {
+    action = options.signup ? 'signup' : 'signin';
+    email = options.email;
+    password = options.password;
+  } else {
+    console.log();
 
-  const { email } = await inquirer.prompt([{
-    type: 'input',
-    name: 'email',
-    message: 'Email:',
-    validate: v => v.includes('@') ? true : 'Enter a valid email',
-  }]);
+    const actionAnswer = await inquirer.prompt([{
+      type: 'list',
+      name: 'action',
+      message: 'Sign in or create account?',
+      choices: [
+        { name: 'Sign in (existing account)', value: 'signin' },
+        { name: 'Create account', value: 'signup' },
+      ],
+    }]);
+    action = actionAnswer.action;
 
-  const { password } = await inquirer.prompt([{
-    type: 'password',
-    name: 'password',
-    message: 'Password:',
-    mask: '*',
-    validate: v => v.length >= 6 ? true : 'Password must be at least 6 characters',
-  }]);
+    const emailAnswer = await inquirer.prompt([{
+      type: 'input',
+      name: 'email',
+      message: 'Email:',
+      validate: v => v.includes('@') ? true : 'Enter a valid email',
+    }]);
+    email = emailAnswer.email;
+
+    const passwordAnswer = await inquirer.prompt([{
+      type: 'password',
+      name: 'password',
+      message: 'Password:',
+      mask: '*',
+      validate: v => v.length >= 6 ? true : 'Password must be at least 6 characters',
+    }]);
+    password = passwordAnswer.password;
+  }
 
   try {
     let session;
