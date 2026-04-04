@@ -14,6 +14,10 @@ import os from 'os';
 import { z } from 'zod';
 import { getConfig, listProfiles, getActiveProfileName } from './config.js';
 import { adapters } from './adapters/index.js';
+import { loadIdentity } from './commands/identity.js';
+import { rateSignal, logFailure, logSuccess, getLearnings } from './commands/signal.js';
+import { runCouncil } from './commands/council.js';
+import { listSkills, getSkill, runSkill, createSkill } from './commands/skill.js';
 
 const home = os.homedir();
 
@@ -150,7 +154,7 @@ async function getDetectedTools() {
 
 const server = new McpServer({
   name: 'memoir',
-  version: '3.2.0',
+  version: '4.0.0',
 }, {
   capabilities: {
     tools: {},
@@ -399,6 +403,207 @@ server.tool(
         text: `Memoir Profiles:\n\n${list}\n\nSwitch with: memoir profile switch <name>`
       }]
     };
+  }
+);
+
+// ── Identity Tool ───────────────────────────────────────────────────────────
+
+server.tool(
+  'memoir_identity',
+  'Load user\'s identity, goals, projects, and preferences. This tells you who the user is, what they\'re building, their tech stack, current priorities, and how they work. Call this at the start of any session to personalize your assistance.',
+  {
+    section: z.enum(['mission', 'goals', 'projects', 'preferences', 'challenges', 'ideas', 'all'])
+      .optional()
+      .default('all')
+      .describe('Which identity section to load. Use "all" for complete context.'),
+  },
+  async ({ section }) => {
+    const identity = await loadIdentity(section || 'all');
+
+    if (identity.error) {
+      return { content: [{ type: 'text', text: identity.error }] };
+    }
+
+    if (section && section !== 'all') {
+      return {
+        content: [{
+          type: 'text',
+          text: `── Identity: ${section} ──\n\n${JSON.stringify(identity, null, 2)}`
+        }]
+      };
+    }
+
+    // Format all sections
+    const parts = ['── Your Identity ──\n'];
+    for (const [key, value] of Object.entries(identity)) {
+      if (!value) continue;
+      parts.push(`## ${key.charAt(0).toUpperCase() + key.slice(1)}\n${JSON.stringify(value, null, 2)}\n`);
+    }
+
+    return {
+      content: [{ type: 'text', text: parts.join('\n') }]
+    };
+  }
+);
+
+// ── Council Tool ────────────────────────────────────────────────────────────
+
+server.tool(
+  'memoir_council',
+  'Run a multi-perspective debate on a decision or question. Returns structured agent perspectives (bull/bear/pragmatist, advocate/critic/auditor, or first-principles) for you to analyze from each viewpoint and synthesize into a recommendation.',
+  {
+    question: z.string().describe('The question or decision to debate'),
+    mode: z.enum(['debate', 'red_team', 'first_principles', 'product'])
+      .optional()
+      .default('debate')
+      .describe('Type of analysis: debate (bull/bear/pragmatist), red_team (advocate/critic/auditor), first_principles (physicist/economist/builder), product (user/builder/investor)'),
+    agents: z.array(z.string())
+      .optional()
+      .describe('Optional: specific agent perspectives to use (e.g., ["bull", "bear", "risk"])'),
+  },
+  async ({ question, mode, agents }) => {
+    const debate = await runCouncil(question, { mode, agents });
+
+    const parts = [
+      `── Council ${mode || 'debate'} ──`,
+      `Question: ${question}\n`,
+    ];
+
+    for (const agent of debate.agents) {
+      parts.push(`### ${agent.icon} ${agent.name}`);
+      parts.push(`System: ${agent.prompt}\n`);
+    }
+
+    parts.push(`## Instructions\n${debate.instructions}`);
+    parts.push(`\nAnalyze the question from each agent perspective above. Provide 2-3 paragraphs per agent, then synthesize into a clear recommendation.`);
+
+    return {
+      content: [{ type: 'text', text: parts.join('\n') }]
+    };
+  }
+);
+
+// ── Skills Tool ─────────────────────────────────────────────────────────────
+
+server.tool(
+  'memoir_skills',
+  'Manage and execute reusable workflows (skills). List available skills, run a named skill, or create a new one from a workflow pattern.',
+  {
+    action: z.enum(['list', 'run', 'create']).describe('What to do: list available skills, run a skill, or create a new one'),
+    name: z.string().optional().describe('Skill name (required for run/create)'),
+    input: z.string().optional().describe('Input data for running a skill'),
+    description: z.string().optional().describe('Description when creating a skill'),
+    steps: z.string().optional().describe('Semicolon-separated steps when creating a skill'),
+    triggers: z.string().optional().describe('Comma-separated trigger phrases when creating a skill'),
+  },
+  async ({ action, name, input, description, steps, triggers }) => {
+    if (action === 'list') {
+      const skills = await listSkills();
+      if (skills.length === 0) {
+        return { content: [{ type: 'text', text: 'No skills created yet. Use action="create" to create one.' }] };
+      }
+      const output = skills.map(s => {
+        const parts = [`● ${s.name}`];
+        if (s.description) parts[0] += ` — ${s.description}`;
+        if (s.triggers?.length) parts.push(`  Triggers: ${s.triggers.join(', ')}`);
+        if (s.steps?.length) parts.push(`  Steps: ${s.steps.length}`);
+        return parts.join('\n');
+      }).join('\n\n');
+      return { content: [{ type: 'text', text: `── Skills (${skills.length}) ──\n\n${output}` }] };
+    }
+
+    if (action === 'run') {
+      if (!name) return { content: [{ type: 'text', text: 'Error: "name" is required to run a skill.' }] };
+      const result = await runSkill(name, input || '');
+      if (result.error) return { content: [{ type: 'text', text: result.error }] };
+
+      const parts = [`── Running Skill: ${result.skill.name} ──\n`];
+      if (result.skill.description) parts.push(result.skill.description);
+      if (result.input) parts.push(`Input: ${result.input}`);
+      if (result.skill.workflow) {
+        parts.push('\n## Workflow\n' + result.skill.workflow);
+      } else if (result.skill.steps?.length) {
+        parts.push('\n## Steps');
+        result.skill.steps.forEach((s, i) => parts.push(`${i + 1}. ${s}`));
+      }
+      parts.push(`\n${result.instructions}`);
+      return { content: [{ type: 'text', text: parts.join('\n') }] };
+    }
+
+    if (action === 'create') {
+      if (!name) return { content: [{ type: 'text', text: 'Error: "name" is required to create a skill.' }] };
+      const skill = await createSkill(name, { description, steps, triggers });
+      return { content: [{ type: 'text', text: `Skill "${skill.name}" created successfully.\n\n${JSON.stringify(skill, null, 2)}` }] };
+    }
+  }
+);
+
+// ── Signal Tool ─────────────────────────────────────────────────────────────
+
+server.tool(
+  'memoir_signal',
+  'Rate AI outputs and capture learnings for self-improvement. Rate responses (1-5), log failures or successes, and surface patterns from past signals.',
+  {
+    action: z.enum(['rate', 'log_failure', 'log_success', 'get_learnings']).describe('What to do'),
+    rating: z.number().min(1).max(5).optional().describe('Rating from 1-5 (required for "rate" action)'),
+    context: z.string().optional().describe('Context about what was rated or what happened'),
+    tags: z.array(z.string()).optional().describe('Tags for categorization (e.g., ["code-review", "security"])'),
+  },
+  async ({ action, rating, context, tags }) => {
+    if (action === 'rate') {
+      if (rating == null) return { content: [{ type: 'text', text: 'Error: "rating" (1-5) is required for rate action.' }] };
+      const entry = await rateSignal(rating, context || '', tags || []);
+      const stars = '★'.repeat(entry.rating) + '☆'.repeat(5 - entry.rating);
+      return { content: [{ type: 'text', text: `Rated: ${stars}${context ? `\nContext: ${context}` : ''}` }] };
+    }
+
+    if (action === 'log_failure') {
+      if (!context) return { content: [{ type: 'text', text: 'Error: "context" is required for log_failure.' }] };
+      await logFailure(context, tags || []);
+      return { content: [{ type: 'text', text: `Failure logged: ${context}` }] };
+    }
+
+    if (action === 'log_success') {
+      if (!context) return { content: [{ type: 'text', text: 'Error: "context" is required for log_success.' }] };
+      await logSuccess(context, tags || []);
+      return { content: [{ type: 'text', text: `Success logged: ${context}` }] };
+    }
+
+    if (action === 'get_learnings') {
+      const learnings = await getLearnings();
+      if (learnings.totalSignals === 0) {
+        return { content: [{ type: 'text', text: 'No signals recorded yet. Use rate/log_failure/log_success to start capturing feedback.' }] };
+      }
+
+      const parts = [
+        `── Signal Learnings ──`,
+        `Total signals: ${learnings.totalSignals}`,
+        `Average rating: ${learnings.averageRating}/5`,
+      ];
+
+      if (learnings.patterns.length > 0) {
+        parts.push('\nPatterns by tag:');
+        for (const p of learnings.patterns) {
+          parts.push(`  ${p.avgRating} avg (${p.count}x) — ${p.tag}`);
+        }
+      }
+
+      if (learnings.recentFailures.length > 0) {
+        parts.push('\nRecent failures:');
+        for (const f of learnings.recentFailures) {
+          parts.push(`  ✖ ${f.context}`);
+        }
+      }
+
+      if (learnings.recentSuccesses.length > 0) {
+        parts.push('\nRecent successes:');
+        for (const s of learnings.recentSuccesses) {
+          parts.push(`  ✔ ${s.context}`);
+        }
+      }
+
+      return { content: [{ type: 'text', text: parts.join('\n') }] };
+    }
   }
 );
 

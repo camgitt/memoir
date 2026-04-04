@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "3.2.2",
+  "version": "4.0.0",
   "mcpName": "io.github.camgitt/memoir",
   "description": "Persistent memory for AI coding tools via MCP. Your AI remembers across sessions, tools, and machines. Works with Claude, Cursor, Gemini, Windsurf, and 7 more tools.",
   "main": "src/index.js",
