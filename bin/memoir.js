@@ -20,6 +20,10 @@ import { shareCommand } from '../src/commands/share.js';
 import { historyCommand } from '../src/commands/history.js';
 import { projectsListCommand, projectsTodoCommand } from '../src/commands/projects.js';
 import { upgradeCommand } from '../src/commands/upgrade.js';
+import { identitySetCommand, identityAddCommand, identityShowCommand, identitySyncCommand } from '../src/commands/identity.js';
+import { signalRateCommand, signalFailureCommand, signalSuccessCommand, signalLearningsCommand } from '../src/commands/signal.js';
+import { councilCommand } from '../src/commands/council.js';
+import { skillListCommand, skillCreateCommand, skillRunCommand, skillSyncCommand } from '../src/commands/skill.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -69,6 +73,11 @@ if (process.argv.length <= 2) {
     chalk.cyan('  memoir encrypt   ') + chalk.gray('— toggle E2E encryption') + '\n' +
     chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n' +
     chalk.cyan('  memoir upgrade   ') + chalk.gray('— view plans & upgrade') + '\n\n' +
+    chalk.white.bold('Personal AI:') + '\n' +
+    chalk.cyan('  memoir identity  ') + chalk.gray('— manage your identity, goals, stack') + '\n' +
+    chalk.cyan('  memoir council   ') + chalk.gray('— multi-perspective debate on decisions') + '\n' +
+    chalk.cyan('  memoir skill     ') + chalk.gray('— reusable AI workflows') + '\n' +
+    chalk.cyan('  memoir signal    ') + chalk.gray('— rate outputs & track learnings') + '\n\n' +
     chalk.white.bold('Cloud (Pro):') + '\n' +
     chalk.cyan('  memoir login         ') + chalk.gray('— sign in to memoir cloud') + '\n' +
     chalk.cyan('  memoir cloud push    ') + chalk.gray('— back up to the cloud') + '\n' +
@@ -510,6 +519,196 @@ projects
   .action(async (project, text, options) => {
     try {
       await projectsTodoCommand(project, text, options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Identity management
+const identity = program.command('identity').alias('id').description('Manage your identity (mission, goals, projects, preferences)');
+
+identity
+  .command('set <section> <value>')
+  .description('Set a value (mission, preference)')
+  .action(async (section, value) => {
+    try {
+      await identitySetCommand(section, value);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+identity
+  .command('add <section> <value>')
+  .description('Add an item (goal, project, challenge, idea)')
+  .option('--priority <number>', 'Priority level (for goals)')
+  .option('--deadline <date>', 'Deadline (for goals)')
+  .option('--status <status>', 'Status: active, paused, done')
+  .option('--stack <stack>', 'Tech stack (for projects)')
+  .option('--description <desc>', 'Description (for projects)')
+  .option('--tags <tags>', 'Comma-separated tags (for ideas)')
+  .action(async (section, value, options) => {
+    try {
+      await identityAddCommand(section, value, options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+identity
+  .command('show [section]')
+  .alias('ls')
+  .description('Show identity (all sections or a specific one)')
+  .action(async (section) => {
+    try {
+      await identityShowCommand(section);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+identity
+  .command('sync')
+  .description('Prepare identity for sync')
+  .action(async () => {
+    try {
+      await identitySyncCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Council debates
+program
+  .command('council <question>')
+  .description('Run a multi-perspective debate on a decision')
+  .option('--mode <mode>', 'Analysis mode: debate, red_team, first_principles, product', 'debate')
+  .option('--agents <agents>', 'Comma-separated agent list (e.g., bull,bear,risk)')
+  .action(async (question, options) => {
+    try {
+      const agents = options.agents ? options.agents.split(',').map(a => a.trim()) : undefined;
+      await councilCommand(question, { mode: options.mode, agents });
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Skills management
+const skill = program.command('skill').description('Manage reusable AI workflows');
+
+skill
+  .command('list', { isDefault: true })
+  .alias('ls')
+  .description('List all skills')
+  .action(async () => {
+    try {
+      await skillListCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+skill
+  .command('create <name>')
+  .description('Create a new skill')
+  .option('--description <desc>', 'Skill description')
+  .option('--triggers <triggers>', 'Comma-separated trigger phrases')
+  .option('--steps <steps>', 'Semicolon-separated workflow steps')
+  .option('--council-mode <mode>', 'Associated council mode')
+  .option('--council-agents <agents>', 'Comma-separated council agents')
+  .action(async (name, options) => {
+    try {
+      await skillCreateCommand(name, options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+skill
+  .command('run <name>')
+  .description('Run a named skill')
+  .option('--input <input>', 'Input data for the skill')
+  .action(async (name, options) => {
+    try {
+      await skillRunCommand(name, options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+skill
+  .command('sync')
+  .description('Prepare skills for sync')
+  .action(async () => {
+    try {
+      await skillSyncCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Signal system
+const signal = program.command('signal').description('Rate AI outputs and capture learnings');
+
+signal
+  .command('rate <rating>')
+  .description('Rate an AI output (1-5)')
+  .option('--context <context>', 'What was rated')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (rating, options) => {
+    try {
+      await signalRateCommand(rating, options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+signal
+  .command('failure')
+  .description('Log a failure')
+  .option('--context <context>', 'What went wrong')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (options) => {
+    try {
+      await signalFailureCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+signal
+  .command('success')
+  .description('Log a success')
+  .option('--context <context>', 'What worked')
+  .option('--tags <tags>', 'Comma-separated tags')
+  .action(async (options) => {
+    try {
+      await signalSuccessCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+signal
+  .command('learnings')
+  .description('Surface patterns from past signals')
+  .option('--last <period>', 'Time window: 7d, 24h, 30d, etc.')
+  .action(async (options) => {
+    try {
+      await signalLearningsCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
