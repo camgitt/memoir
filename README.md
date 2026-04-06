@@ -2,7 +2,7 @@
 
 # memoir
 
-**Portable memory for every AI coding tool.**
+**Sync AI memory across every coding tool. Zero config.**
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
@@ -12,17 +12,16 @@
 </div>
 
 ```bash
-npm install -g memoir-cli
-memoir activate
+npx memoir-cli
 ```
 
-Your AI now remembers across sessions, tools, and machines. Works with Claude Code, Cursor, Windsurf, Gemini, Copilot, and 6 more tools.
+One command. No install, no config, no API keys. Your AI now has persistent memory across sessions, tools, and machines. Works with Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, and 8 more tools.
 
 ---
 
 ## What it does
 
-memoir is an [MCP server](https://modelcontextprotocol.io) that gives your AI tools persistent memory. Your AI can search, save, and recall context automatically.
+memoir is an [MCP memory server](https://modelcontextprotocol.io) that gives your AI tools persistent memory. Your AI can search, save, and recall context automatically — like a Claude Code backup that works everywhere.
 
 ```
 you: how does auth work in this project?
@@ -37,41 +36,15 @@ claude: Based on your previous sessions: this project uses JWT auth
 
 No re-explaining. memoir remembered.
 
-## Setup
-
-### 1. Install
+## Quick start
 
 ```bash
-npm install -g memoir-cli
+npx memoir-cli
 ```
 
-### 2. Add MCP to your AI tool
+That's it. memoir detects your AI tools, configures MCP, and activates memory. No global install needed.
 
-**Claude Code** — add to `~/.mcp.json`:
-```json
-{
-  "mcpServers": {
-    "memoir": { "command": "memoir-mcp" }
-  }
-}
-```
-
-**Cursor** — add to `.cursor/mcp.json`:
-```json
-{
-  "mcpServers": {
-    "memoir": { "command": "memoir-mcp" }
-  }
-}
-```
-
-### 3. Activate in your project
-
-```bash
-memoir activate
-```
-
-That's it. Your AI now has 6 memory tools:
+Your AI gets 6 memory tools:
 
 | MCP Tool | What it does |
 |----------|-------------|
@@ -86,21 +59,18 @@ That's it. Your AI now has 6 memory tools:
 
 Your AI forgets everything between sessions. You re-explain your codebase, your conventions, your decisions — every time.
 
-memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too.
+memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too. Sync AI memory between tools, back it up to the cloud, restore it on any machine.
 
-**11 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev
+**13 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev, Augment, Trae.
 
 ## Sync across machines
 
 ```bash
-# Back up
-memoir push
-
-# Restore on any machine
-memoir restore -y
+memoir push       # back up AI memory + workspace + session
+memoir restore -y # restore on any machine
 ```
 
-Push syncs AI memory, session context, workspace (git repos + uncommitted work), and project configs. E2E encrypted with AES-256-GCM.
+Push syncs AI memory, cursorrules, session context, workspace (git repos + uncommitted work), and project configs. E2E encrypted with AES-256-GCM.
 
 ## Translate between AI tools
 
