@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './constants.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from './constants.js';
 
 const isWin = process.platform === 'win32';
 const configDir = isWin
@@ -129,6 +129,63 @@ export async function resetPassword(email) {
     const data = await res.json();
     throw new Error(data.error_description || data.msg || 'Password reset failed');
   }
+}
+
+export async function deleteAccount(session) {
+  // 1. Delete all backups (storage files + metadata rows)
+  const backupsRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/backups?select=*&user_id=eq.${session.user.id}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_ANON_KEY,
+      },
+    }
+  );
+
+  if (backupsRes.ok) {
+    const backups = await backupsRes.json();
+    for (const backup of backups) {
+      // Delete storage object
+      await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${backup.storage_path}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+      });
+
+      // Delete metadata row
+      await fetch(`${SUPABASE_URL}/rest/v1/backups?id=eq.${backup.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': SUPABASE_ANON_KEY,
+        },
+      });
+    }
+  }
+
+  // 2. Delete shared links
+  await fetch(`${SUPABASE_URL}/rest/v1/shared_links?user_id=eq.${session.user.id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': SUPABASE_ANON_KEY,
+    },
+  });
+
+  // 3. Delete subscription
+  await fetch(`${SUPABASE_URL}/rest/v1/subscriptions?user_id=eq.${session.user.id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': SUPABASE_ANON_KEY,
+    },
+  });
+
+  // 4. Sign out locally
+  await logout();
 }
 
 export { AUTH_FILE, supaFetch };

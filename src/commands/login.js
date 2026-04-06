@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
 import inquirer from 'inquirer';
-import { signIn, signUp, saveSession, getSession, logout, getSubscription, resetPassword } from '../cloud/auth.js';
+import { signIn, signUp, saveSession, getSession, logout, getSubscription, resetPassword, deleteAccount } from '../cloud/auth.js';
 
 export async function loginCommand(options = {}) {
   // Check if already logged in
@@ -130,4 +130,44 @@ export async function logoutCommand() {
     chalk.green('✔ Logged out'),
     { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
   ) + '\n');
+}
+
+export async function deleteAccountCommand(options = {}) {
+  const session = await getSession();
+  if (!session) {
+    console.log('\n' + boxen(
+      chalk.red('✖ Not logged in. Run ') + chalk.cyan('memoir login') + chalk.red(' first.'),
+      { padding: 1, borderStyle: 'round', borderColor: 'red' }
+    ) + '\n');
+    return;
+  }
+
+  if (!options.confirm) {
+    const answer = await inquirer.prompt([{
+      type: 'input',
+      name: 'confirmation',
+      message: 'Type DELETE to confirm account deletion:',
+    }]);
+
+    if (answer.confirmation !== 'DELETE') {
+      console.log('\n' + chalk.gray('  Account deletion cancelled.') + '\n');
+      return;
+    }
+  }
+
+  try {
+    await deleteAccount(session);
+
+    console.log('\n' + boxen(
+      gradient.pastel('  memoir cloud  ') + '\n\n' +
+      chalk.green('✔ Account deleted.') + '\n' +
+      chalk.gray('All backups, shared links, and data have been removed.'),
+      { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
+    ) + '\n');
+  } catch (error) {
+    console.log('\n' + boxen(
+      chalk.red('✖ ' + error.message),
+      { padding: 1, borderStyle: 'round', borderColor: 'red' }
+    ) + '\n');
+  }
 }

@@ -4,3 +4,5 @@ node_modules/
 *.terminal
 *.itermcolors
 *.windowsterminal.json
+.mcpregistry_github_token
+.mcpregistry_registry_token

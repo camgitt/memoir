@@ -14,12 +14,13 @@ import { migrateCommand } from '../src/commands/migrate.js';
 import { snapshotCommand } from '../src/commands/snapshot.js';
 import { resumeCommand } from '../src/commands/resume.js';
 import { profileListCommand, profileCreateCommand, profileSwitchCommand, profileDeleteCommand } from '../src/commands/profile.js';
-import { loginCommand, logoutCommand, forgotPasswordCommand } from '../src/commands/login.js';
+import { loginCommand, logoutCommand, forgotPasswordCommand, deleteAccountCommand } from '../src/commands/login.js';
 import { cloudPushCommand, cloudRestoreCommand } from '../src/commands/cloud.js';
 import { shareCommand } from '../src/commands/share.js';
 import { historyCommand } from '../src/commands/history.js';
 import { projectsListCommand, projectsTodoCommand } from '../src/commands/projects.js';
 import { upgradeCommand } from '../src/commands/upgrade.js';
+import { activateCommand, deactivateCommand } from '../src/commands/activate.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -52,40 +53,18 @@ async function checkForUpdate() {
   } catch {}
 }
 
-// Show quick start when run with no args
+// When run with no args: auto-push (zero-config)
 if (process.argv.length <= 2) {
-  console.log('\n' + boxen(
-    gradient.pastel.multiline('  memoir  ') + '\n' +
-    chalk.gray('  Your AI remembers everything.') + '\n\n' +
-    chalk.white.bold('Quick Start:') + '\n' +
-    chalk.cyan('  memoir init      ') + chalk.gray('— first-time setup') + '\n' +
-    chalk.cyan('  memoir push      ') + chalk.gray('— back up your AI memory') + '\n' +
-    chalk.cyan('  memoir restore   ') + chalk.gray('— restore on a new machine') + '\n' +
-    chalk.cyan('  memoir snapshot  ') + chalk.gray('— capture your current session') + '\n' +
-    chalk.cyan('  memoir resume    ') + chalk.gray('— pick up where you left off') + '\n' +
-    chalk.cyan('  memoir status    ') + chalk.gray('— see detected AI tools') + '\n' +
-    chalk.cyan('  memoir profile   ') + chalk.gray('— manage profiles (personal/work)') + '\n' +
-    chalk.cyan('  memoir projects   ') + chalk.gray('— see all your projects at a glance') + '\n' +
-    chalk.cyan('  memoir encrypt   ') + chalk.gray('— toggle E2E encryption') + '\n' +
-    chalk.cyan('  memoir update    ') + chalk.gray('— update to latest version') + '\n' +
-    chalk.cyan('  memoir upgrade   ') + chalk.gray('— view plans & upgrade') + '\n\n' +
-    chalk.white.bold('Cloud (Pro):') + '\n' +
-    chalk.cyan('  memoir login         ') + chalk.gray('— sign in to memoir cloud') + '\n' +
-    chalk.cyan('  memoir cloud push    ') + chalk.gray('— back up to the cloud') + '\n' +
-    chalk.cyan('  memoir cloud restore ') + chalk.gray('— restore from cloud') + '\n' +
-    chalk.cyan('  memoir share         ') + chalk.gray('— share memory via secure link') + '\n' +
-    chalk.cyan('  memoir history       ') + chalk.gray('— view backup versions') + '\n\n' +
-    chalk.gray('  Tip: use --profile work to sync a specific profile') + '\n\n' +
-    chalk.gray(`v${VERSION}`),
-    { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
-  ) + '\n');
-  process.exit(0);
+  // Pass 'push' as the command so Commander routes to pushCommand
+  process.argv.push('push');
 }
 
 // Custom help banner
 program.addHelpText('beforeAll', '\n' + boxen(
   gradient.pastel.multiline('  memoir  ') + '\n' +
-  chalk.gray('  Your AI remembers everything.'),
+  chalk.gray('  Your AI remembers everything.') + '\n\n' +
+  chalk.white.bold('Zero-config:') + ' just run ' + chalk.cyan('memoir') + ' or ' + chalk.cyan('npx memoir-cli') + '\n' +
+  chalk.gray('Auto-detects your GitHub, creates a private repo, and backs up.'),
   { padding: { top: 0, bottom: 0, left: 1, right: 1 }, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
 ) + '\n');
 
@@ -97,9 +76,16 @@ program
 program
   .command('init')
   .description('Set up memoir with your storage provider')
-  .action(async () => {
+  .option('--direction <direction>', 'Upload or download (upload, download)')
+  .option('--provider <provider>', 'Storage provider (git, local)')
+  .option('--local-path <path>', 'Local folder path (for local provider)')
+  .option('--username <name>', 'GitHub username (for git provider)')
+  .option('--repo <name>', 'GitHub repo name (for git provider)')
+  .option('--encrypt', 'Enable E2E encryption')
+  .option('--no-encrypt', 'Disable E2E encryption')
+  .action(async (options) => {
     try {
-      await initCommand();
+      await initCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error during initialization:'), err.message);
       process.exit(1);
@@ -292,9 +278,35 @@ program
   });
 
 program
+  .command('activate')
+  .description('Add memoir instructions to this project so your AI uses it automatically')
+  .action(async () => {
+    try {
+      await activateCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('deactivate')
+  .description('Remove memoir instructions from this project')
+  .action(async () => {
+    try {
+      await deactivateCommand();
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('encrypt')
   .description('Toggle E2E encryption for your backups')
-  .action(async () => {
+  .option('--on', 'Enable encryption without prompting')
+  .option('--off', 'Disable encryption without prompting')
+  .action(async (options) => {
     try {
       const { getConfig, getRawConfig, saveConfig, migrateConfigToV2 } = await import('../src/config.js');
       const config = await getConfig();
@@ -304,24 +316,34 @@ program
       }
       const current = config.encrypt || false;
       console.log(chalk.white(`\n  Encryption is currently: ${current ? chalk.green('ON') : chalk.red('OFF')}`));
-      const inquirer = (await import('inquirer')).default;
-      const { toggle } = await inquirer.prompt([{
-        type: 'confirm',
-        name: 'toggle',
-        message: current ? 'Disable encryption?' : 'Enable encryption?',
-        default: !current
-      }]);
-      if (toggle !== current) {
+
+      let newValue;
+      if (options.on) {
+        newValue = true;
+      } else if (options.off) {
+        newValue = false;
+      } else {
+        const inquirer = (await import('inquirer')).default;
+        const { toggle } = await inquirer.prompt([{
+          type: 'confirm',
+          name: 'toggle',
+          message: current ? 'Disable encryption?' : 'Enable encryption?',
+          default: !current
+        }]);
+        newValue = toggle ? !current : current;
+      }
+
+      if (newValue !== current) {
         let raw = await getRawConfig();
         if (!raw.version || raw.version < 2) raw = migrateConfigToV2(raw);
         const profileName = raw.activeProfile || 'default';
         if (raw.profiles?.[profileName]) {
-          raw.profiles[profileName].encrypt = !current;
+          raw.profiles[profileName].encrypt = newValue;
         } else {
-          raw.encrypt = !current;
+          raw.encrypt = newValue;
         }
         await saveConfig(raw);
-        console.log(chalk.green(`\n  ✔ Encryption ${!current ? 'enabled' : 'disabled'}. Next push will ${!current ? 'encrypt' : 'skip encryption'}.\n`));
+        console.log(chalk.green(`\n  ✔ Encryption ${newValue ? 'enabled' : 'disabled'}. Next push will ${newValue ? 'encrypt' : 'skip encryption'}.\n`));
       }
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
@@ -380,6 +402,22 @@ program
   .action(async (options) => {
     try {
       await forgotPasswordCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+// Account management
+const account = program.command('account').description('Manage your memoir account');
+
+account
+  .command('delete')
+  .description('Permanently delete your account and all cloud data')
+  .option('--confirm', 'Skip interactive prompt (Node 25 workaround)')
+  .action(async (options) => {
+    try {
+      await deleteAccountCommand(options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);

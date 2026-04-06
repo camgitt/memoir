@@ -3,21 +3,23 @@
 
 ---
 
-## Current State
+## Current State (Updated April 2026)
 
 | Metric | Value |
 |--------|-------|
-| Version | 3.1.2 (npm) |
+| Version | 3.3.1 (npm) |
 | Revenue | $0 |
 | Users | ~50 npm downloads |
 | AI Tools Supported | 11 (Claude, Gemini, Cursor, Copilot, Windsurf, Zed, Cline, Continue, Aider, Codex, ChatGPT) |
 | Cloud Backend | Supabase (auth + storage + PostgreSQL) |
-| Landing Page | memoir.sh (Vercel, 13 blog posts, no email capture) |
+| Landing Page | memoir.sh (Vercel, 13 blog posts, pricing page, email waitlist) |
 | Blog Posts | 13 SEO-targeted articles |
 | Analytics | None (CLI or website) |
-| Payment Processing | None |
+| Payment Processing | None (Stripe not yet integrated) |
 | Team Features | None |
 | Shareable Links | None |
+| Encryption | AES-256-GCM, zero-knowledge, client-side |
+| GitHub | LICENSE, CONTRIBUTING, issue templates, architecture diagram |
 
 ---
 
@@ -224,11 +226,16 @@ memoir analytics        # Show your usage stats (local)
 
 - [ ] Stripe account setup + integration in CLI
 - [ ] `memoir upgrade` command
-- [ ] Pricing page on memoir.sh
-- [ ] Email capture for Teams waitlist on memoir.sh
+- [x] Pricing page on memoir.sh
+- [x] Email capture for Teams waitlist on memoir.sh
 - [ ] PostHog analytics on CLI (anonymous, opt-out available)
 - [ ] PostHog analytics on memoir.sh
 - [ ] Post in 3 subreddits about memoir
+- [x] E2E encryption (AES-256-GCM, async scrypt)
+- [x] Forgot password flow
+- [x] Non-interactive login
+- [x] GitHub SEO (LICENSE, CONTRIBUTING, issue templates)
+- [x] npm package size fix (22MB → 72KB)
 
 ---
 

@@ -6,7 +6,7 @@ import ora from 'ora';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
 import inquirer from 'inquirer';
-import { getConfig } from '../config.js';
+import { getConfig, autoSetup } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
 import { detectLocalHomeKey } from '../adapters/restore.js';
@@ -23,15 +23,21 @@ export async function restoreCommand(options = {}) {
     return restoreFromShare(options);
   }
 
-  const config = await getConfig(options.profile);
+  let config = await getConfig(options.profile);
 
   if (!config) {
-    console.log('\n' + boxen(
-      chalk.red('✖ Not configured yet\n\n') +
-      chalk.white('Run ') + chalk.cyan.bold('memoir init') + chalk.white(' to get started.'),
-      { padding: 1, borderStyle: 'round', borderColor: 'red' }
-    ) + '\n');
-    return;
+    const setupSpinner = ora({ text: chalk.gray('Setting up memoir automatically...'), spinner: 'dots' }).start();
+    config = await autoSetup();
+    if (config) {
+      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo}`));
+    } else {
+      setupSpinner.fail(chalk.red('Could not detect GitHub username'));
+      console.log('\n' + boxen(
+        chalk.white('Run ') + chalk.cyan.bold('memoir init') + chalk.white(' to set up manually.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
+      ) + '\n');
+      return;
+    }
   }
 
   console.log();

@@ -5,7 +5,7 @@ import os from 'os';
 import ora from 'ora';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
-import { getConfig } from '../config.js';
+import { getConfig, autoSetup } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import inquirer from 'inquirer';
@@ -14,17 +14,25 @@ import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
 import { scanWorkspace } from '../workspace/tracker.js';
+import { promptActivate } from './activate.js';
 
 export async function pushCommand(options = {}) {
-  const config = await getConfig(options.profile);
+  let config = await getConfig(options.profile);
 
   if (!config) {
-    console.log('\n' + boxen(
-      chalk.red('✖ Not configured yet\n\n') +
-      chalk.white('Run ') + chalk.cyan.bold('memoir init') + chalk.white(' to get started.'),
-      { padding: 1, borderStyle: 'round', borderColor: 'red' }
-    ) + '\n');
-    return;
+    // Zero-config: auto-detect GitHub user, create repo, save config
+    const setupSpinner = ora({ text: chalk.gray('Setting up memoir automatically...'), spinner: 'dots' }).start();
+    config = await autoSetup();
+    if (config) {
+      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo}`));
+    } else {
+      setupSpinner.fail(chalk.red('Could not detect GitHub username'));
+      console.log('\n' + boxen(
+        chalk.white('Run ') + chalk.cyan.bold('memoir init') + chalk.white(' to set up manually.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
+      ) + '\n');
+      return;
+    }
   }
 
   console.log();
@@ -262,6 +270,13 @@ export async function pushCommand(options = {}) {
       chalk.gray('Restore on another machine with: ') + chalk.cyan('memoir restore'),
       { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
     ) + '\n');
+
+    // Prompt to activate memoir in this project (first push only)
+    try {
+      await promptActivate();
+    } catch {
+      // Activation prompt is best-effort
+    }
   } catch (error) {
     spinner.fail(chalk.red('Sync failed: ') + error.message);
   } finally {

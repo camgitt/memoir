@@ -63,7 +63,7 @@ export async function upgradeCommand() {
   const sep = chalk.gray('─'.repeat(col1 + col2 + 18));
 
   const rows = [
-    [chalk.gray('3 cloud backups'),   chalk.white('50 cloud backups'),   chalk.white('Unlimited backups')],
+    [chalk.gray('100 cloud backups'),  chalk.white('Unlimited backups'),  chalk.white('Unlimited backups')],
     [chalk.gray('Local only'),        chalk.white('Unlimited machines'), chalk.white('Shared team context')],
     [chalk.gray('Manual snapshots'),  chalk.white('Auto snapshots'),     chalk.white('Team dashboard')],
     [chalk.gray('Community support'), chalk.white('Priority support'),   chalk.white('Audit log')],

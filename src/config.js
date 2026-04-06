@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { execFileSync } from 'child_process';
 
 const CONFIG_DIR = process.platform === 'win32'
   ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'memoir')
@@ -112,6 +113,50 @@ export async function deleteProfile(name) {
   if (Object.keys(raw.profiles).length <= 1) throw new Error('Cannot delete the last profile.');
   delete raw.profiles[name];
   await saveConfig(raw);
+}
+
+// Zero-config auto-setup: detect GitHub user, create repo, save config, return it
+export async function autoSetup() {
+  // Try gh CLI first, then git config
+  let username = '';
+  try {
+    username = execFileSync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf8', timeout: 5000 }).trim();
+  } catch {
+    try {
+      username = execFileSync('git', ['config', '--global', 'user.name'], { encoding: 'utf8' }).trim();
+    } catch {}
+  }
+
+  if (!username) return null; // Can't auto-setup without a username
+
+  const repo = 'ai-memory';
+  const gitRepo = `https://github.com/${username}/${repo}.git`;
+
+  // Try to create the repo if it doesn't exist (best-effort)
+  try {
+    execFileSync('gh', ['repo', 'view', `${username}/${repo}`], { stdio: 'ignore', timeout: 5000 });
+  } catch {
+    try {
+      execFileSync('gh', ['repo', 'create', `${username}/${repo}`, '--private', '--description', 'AI memory backup (memoir-cli)'], { stdio: 'ignore', timeout: 10000 });
+    } catch {
+      // If gh isn't available, user will need to create repo manually — that's fine, syncToGit will handle it
+    }
+  }
+
+  const config = {
+    version: 2,
+    activeProfile: 'default',
+    profiles: {
+      default: {
+        provider: 'git',
+        gitRepo,
+        encrypt: false // Skip encryption for zero-config — user can enable later with `memoir encrypt`
+      }
+    }
+  };
+
+  await saveConfig(config);
+  return config.profiles.default;
 }
 
 export async function getGeminiApiKey() {

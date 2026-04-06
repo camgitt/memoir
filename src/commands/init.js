@@ -23,7 +23,7 @@ function getGitHubUsername() {
   }
 }
 
-export async function initCommand() {
+export async function initCommand(options = {}) {
   console.log('');
   console.log(boxen(
     gradient.pastel('memoir') + '\n' +
@@ -34,57 +34,80 @@ export async function initCommand() {
 
   const detectedUser = getGitHubUsername();
 
-  const { direction, provider } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'direction',
-      message: 'Upload or download?',
-      choices: [
-        { name: 'Upload — back up this machine', value: 'upload' },
-        { name: 'Download — restore from backup', value: 'download' }
-      ]
-    },
-    {
-      type: 'list',
-      name: 'provider',
-      message: (answers) => answers.direction === 'upload' ? 'Back up to?' : 'Restore from?',
-      choices: [
-        { name: 'GitHub', value: 'git' },
-        { name: 'Local folder', value: 'local' }
-      ]
-    }
-  ]);
+  let direction, provider;
+
+  if (options.provider) {
+    // Non-interactive: use flags directly
+    provider = options.provider;
+    direction = options.direction || 'upload';
+  } else {
+    // Interactive: prompt the user
+    const answers = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'direction',
+        message: 'Upload or download?',
+        choices: [
+          { name: 'Upload — back up this machine', value: 'upload' },
+          { name: 'Download — restore from backup', value: 'download' }
+        ]
+      },
+      {
+        type: 'list',
+        name: 'provider',
+        message: (a) => a.direction === 'upload' ? 'Back up to?' : 'Restore from?',
+        choices: [
+          { name: 'GitHub', value: 'git' },
+          { name: 'Local folder', value: 'local' }
+        ]
+      }
+    ]);
+    direction = answers.direction;
+    provider = answers.provider;
+  }
 
   let config = { provider };
 
   if (provider === 'local') {
-    const msg = direction === 'upload' ? 'Save to:' : 'Backup folder:';
-    const { localPath } = await inquirer.prompt([{
-      type: 'input',
-      name: 'localPath',
-      message: msg,
-      validate: (input) => input.trim() ? true : 'Required'
-    }]);
+    let localPath;
+    if (options.localPath) {
+      localPath = options.localPath;
+    } else {
+      const msg = direction === 'upload' ? 'Save to:' : 'Backup folder:';
+      const answers = await inquirer.prompt([{
+        type: 'input',
+        name: 'localPath',
+        message: msg,
+        validate: (input) => input.trim() ? true : 'Required'
+      }]);
+      localPath = answers.localPath;
+    }
     config.localPath = localPath;
   } else {
-    const answers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'username',
-        message: 'GitHub username:',
-        default: detectedUser || undefined,
-        validate: (input) => input.trim() ? true : 'Required'
-      },
-      {
-        type: 'input',
-        name: 'repo',
-        message: 'Repo name:',
-        default: 'ai-memory',
-        validate: (input) => input.trim() ? true : 'Required'
-      }
-    ]);
-    const username = answers.username.trim();
-    const repo = answers.repo.trim();
+    let username, repo;
+    if (options.username) {
+      username = options.username.trim();
+      repo = (options.repo || 'ai-memory').trim();
+    } else {
+      const answers = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'username',
+          message: 'GitHub username:',
+          default: detectedUser || undefined,
+          validate: (input) => input.trim() ? true : 'Required'
+        },
+        {
+          type: 'input',
+          name: 'repo',
+          message: 'Repo name:',
+          default: 'ai-memory',
+          validate: (input) => input.trim() ? true : 'Required'
+        }
+      ]);
+      username = answers.username.trim();
+      repo = answers.repo.trim();
+    }
 
     config.gitRepo = `https://github.com/${username}/${repo}.git`;
     console.log(chalk.gray(`  → ${config.gitRepo}`));
@@ -109,12 +132,18 @@ export async function initCommand() {
   }
 
   // Ask about encryption
-  const { encrypt } = await inquirer.prompt([{
-    type: 'confirm',
-    name: 'encrypt',
-    message: 'Enable E2E encryption? (protects your data even if backup is compromised)',
-    default: true
-  }]);
+  let encrypt;
+  if (options.encrypt !== undefined) {
+    encrypt = options.encrypt;
+  } else {
+    const answers = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'encrypt',
+      message: 'Enable E2E encryption? (protects your data even if backup is compromised)',
+      default: true
+    }]);
+    encrypt = answers.encrypt;
+  }
   config.encrypt = encrypt;
 
   if (encrypt) {
