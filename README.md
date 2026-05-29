@@ -15,7 +15,7 @@
 npx memoir-cli
 ```
 
-One command. No install, no config, no API keys. Your AI now has persistent memory across sessions, tools, and machines. Works with Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, and 8 more tools.
+One command. No install, no config, no API keys. Your AI now has persistent memory across sessions, tools, and machines. Works with Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, and 6 more tools.
 
 ---
 
@@ -44,7 +44,7 @@ npx memoir-cli
 
 That's it. memoir detects your AI tools, configures MCP, and activates memory. No global install needed.
 
-Your AI gets 7 memory tools:
+Your AI gets 14 memory tools:
 
 | MCP Tool | What it does |
 |----------|-------------|
@@ -55,6 +55,13 @@ Your AI gets 7 memory tools:
 | `memoir_consolidate` | Analyze memories for duplicates, staleness, and bloat |
 | `memoir_status` | See which AI tools are detected |
 | `memoir_profiles` | Switch between work/personal |
+| `memoir_set_goal` | Set the current session goal (pinned into CLAUDE.md) |
+| `memoir_add_next` | Add a next action to the current session |
+| `memoir_complete_next` | Mark a next action as done |
+| `memoir_note` | Record a decision with its rationale |
+| `memoir_ask` | Capture an open question for later |
+| `memoir_session` | Show goals, next actions, decisions, and recent sessions |
+| `memoir_why` | Look up why a past decision was made |
 
 ## Why memoir
 
@@ -62,7 +69,7 @@ Your AI forgets everything between sessions. You re-explain your codebase, your 
 
 memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too. Sync AI memory between tools, back it up to the cloud, restore it on any machine. And when your memories pile up, `memoir consolidate` cleans house — finds duplicates, flags stale context, and optionally uses AI to merge and prune.
 
-**13 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev, Augment, Trae.
+**11 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev.
 
 ## Sync across machines
 

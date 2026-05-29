@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/camgitt/memoir.git"
+    "url": "git+https://github.com/camgitt/memoir.git"
   },
   "homepage": "https://memoir.sh",
   "bugs": {
