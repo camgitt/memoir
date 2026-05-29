@@ -14,8 +14,18 @@ export function detectLocalHomeKey(adapterSource) {
   if (!fs.existsSync(localProjectsDir)) return null;
 
   const entries = fs.readdirSync(localProjectsDir)
+    .filter(e => !e.startsWith('.'))
     .filter(e => fs.statSync(path.join(localProjectsDir, e)).isDirectory());
   if (entries.length === 0) return null;
+
+  // Prefer the key that matches this machine's homedir encoding.
+  // Stale foreign dirs (from older memoir versions) can have newer mtimes,
+  // so mtime alone is unreliable — the encoded homedir is the ground truth.
+  const home = os.homedir();
+  const expectedKey = process.platform === 'win32'
+    ? home.replace(/\\/g, '-').replace(/:/g, '-')
+    : '-' + home.replace(/^\//, '').replace(/\//g, '-');
+  if (entries.includes(expectedKey)) return expectedKey;
 
   // Find dirs with a memory/ subfolder that aren't sub-projects of another dir
   const candidates = entries.filter(entry => {
@@ -141,6 +151,57 @@ function remapProjectPaths(backupDir, adapterSource) {
   }
 
   return remaps;
+}
+
+// Scan local ~/.claude/projects/ for foreign home-key dirs left behind by older
+// memoir versions (when remap was unreliable). Merge their memory/ into the local
+// home key and move the stale dir into .memoir-archived-{ts}/ so nothing is lost.
+export async function cleanupLocalForeignKeys(adapterSource) {
+  const projectsDir = path.join(adapterSource, 'projects');
+  if (!await fs.pathExists(projectsDir)) return { archived: [], merged: 0 };
+
+  const localHomeKey = detectLocalHomeKey(adapterSource);
+  if (!localHomeKey) return { archived: [], merged: 0 };
+
+  const home = os.homedir();
+  const localUsername = path.basename(home).toLowerCase();
+
+  const entries = (await fs.readdir(projectsDir, { withFileTypes: true }))
+    .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+    .map(e => e.name);
+
+  const foreignKeys = [];
+  for (const entry of entries) {
+    if (entry === localHomeKey) continue;
+    if (entry.startsWith(localHomeKey + '-')) continue;
+    // Leave alt encodings of THIS machine alone (contain local username)
+    if (entry.toLowerCase().includes(localUsername)) continue;
+    // Must have memory/ — dirs without it are project dirs that Claude won't read anyway
+    if (!await fs.pathExists(path.join(projectsDir, entry, 'memory'))) continue;
+    foreignKeys.push(entry);
+  }
+
+  if (foreignKeys.length === 0) return { archived: [], merged: 0 };
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const archiveDir = path.join(projectsDir, `.memoir-archived-${ts}`);
+  await fs.ensureDir(archiveDir);
+
+  const localMemDir = path.join(projectsDir, localHomeKey, 'memory');
+  await fs.ensureDir(localMemDir);
+
+  let merged = 0;
+  for (const key of foreignKeys) {
+    const foreignMemDir = path.join(projectsDir, key, 'memory');
+    if (await fs.pathExists(foreignMemDir)) {
+      const before = (await fs.readdir(localMemDir)).length;
+      await mergeMemoryDirs(foreignMemDir, localMemDir);
+      merged += (await fs.readdir(localMemDir)).length - before;
+    }
+    await fs.move(path.join(projectsDir, key), path.join(archiveDir, key));
+  }
+
+  return { archived: foreignKeys, merged };
 }
 
 // Merge memory dirs from a foreign machine — copies files that don't exist locally,
@@ -290,6 +351,21 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
 
       if (confirm) {
         const changes = { added: [], updated: [], skipped: [] };
+
+        // Clean up stale foreign home-key dirs left on this machine by older
+        // memoir versions. Must run before remap so detectLocalHomeKey sees a
+        // clean local state.
+        if (adapter.name === 'Claude CLI') {
+          try {
+            const { archived, merged } = await cleanupLocalForeignKeys(adapter.source);
+            if (archived.length > 0) {
+              spinner.stop();
+              console.log(chalk.gray(`  Cleaned up ${archived.length} stale foreign dir(s) on this machine${merged > 0 ? ` (merged ${merged} new file(s))` : ''}`));
+              for (const k of archived) console.log(chalk.gray(`    archived: ${k}`));
+              spinner.start();
+            }
+          } catch {}
+        }
 
         // Remap Claude project paths from source machine to this machine
         if (adapter.name === 'Claude CLI') {

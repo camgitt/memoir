@@ -44,7 +44,7 @@ npx memoir-cli
 
 That's it. memoir detects your AI tools, configures MCP, and activates memory. No global install needed.
 
-Your AI gets 6 memory tools:
+Your AI gets 7 memory tools:
 
 | MCP Tool | What it does |
 |----------|-------------|
@@ -52,6 +52,7 @@ Your AI gets 6 memory tools:
 | `memoir_remember` | Save context for future sessions |
 | `memoir_list` | Browse all memory files by tool |
 | `memoir_read` | Read a specific memory in full |
+| `memoir_consolidate` | Analyze memories for duplicates, staleness, and bloat |
 | `memoir_status` | See which AI tools are detected |
 | `memoir_profiles` | Switch between work/personal |
 
@@ -59,7 +60,7 @@ Your AI gets 6 memory tools:
 
 Your AI forgets everything between sessions. You re-explain your codebase, your conventions, your decisions — every time.
 
-memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too. Sync AI memory between tools, back it up to the cloud, restore it on any machine.
+memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too. Sync AI memory between tools, back it up to the cloud, restore it on any machine. And when your memories pile up, `memoir consolidate` cleans house — finds duplicates, flags stale context, and optionally uses AI to merge and prune.
 
 **13 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev, Augment, Trae.
 
@@ -81,6 +82,16 @@ memoir migrate --from chatgpt --to claude
 memoir migrate --from chatgpt --to all
 # Translate to every tool at once
 ```
+
+## Consolidate memories
+
+```bash
+memoir consolidate          # scan for duplicates, stale files, bloat
+memoir consolidate --smart  # AI-powered analysis (finds contradictions + merge candidates)
+memoir consolidate --apply  # interactively clean up
+```
+
+Over time, memories pile up across tools. Consolidate finds exact and near-duplicates, flags files untouched for 60+ days, and catches contradictions where you told Claude one thing and Cursor another. With `--smart`, Gemini Flash does a semantic pass and suggests intelligent merges.
 
 ## Cloud sync
 
@@ -109,6 +120,7 @@ memoir share           # create encrypted shareable link
 | `memoir cloud push` | Back up to memoir cloud |
 | `memoir cloud restore` | Restore from memoir cloud |
 | `memoir share` | Create encrypted shareable link |
+| `memoir consolidate` | Find duplicates, stale memories, and bloat |
 | `memoir doctor` | Diagnose issues |
 | `memoir diff` | Show changes since last backup |
 | `memoir view` | Preview what's in your backup |

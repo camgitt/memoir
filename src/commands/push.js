@@ -15,6 +15,9 @@ import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
 import { scanWorkspace } from '../workspace/tracker.js';
 import { promptActivate } from './activate.js';
+import { paths as sessionPaths, readSession, addNote, recordSessionEnd } from '../session/state.js';
+import { renderSession } from '../session/render.js';
+import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
 export async function pushCommand(options = {}) {
   let config = await getConfig(options.profile);
@@ -93,6 +96,54 @@ export async function pushCommand(options = {}) {
             } catch {}
           }
 
+          // Also feed structured decisions into session.json so they appear in
+          // the pinned block and sync cross-machine. Dedupe against anything
+          // the AI already captured via MCP tools or the user via `memoir note`.
+          try {
+            const current = await readSession();
+            const existingTexts = new Set(
+              current.current.decisions.map(d => (d.text || '').trim().toLowerCase())
+            );
+            // Quality filter: auto-extracted decisions come from regex patterns
+            // that sometimes catch table cells or prose fragments. Keep only
+            // substantive-looking entries.
+            const isQuality = (text) => {
+              if (!text) return false;
+              if (text.length < 15) return false;                // too short to be a real decision
+              if (text.length > 200) return false;               // probably a snippet, not a decision
+              if (/\|/.test(text)) return false;                 // markdown table fragment
+              if (/[_*`]{3,}/.test(text)) return false;          // markdown formatting leaked in
+              if (!/[a-zA-Z]/.test(text)) return false;          // no actual words
+              const words = text.split(/\s+/).length;
+              if (words < 3) return false;                       // less than 3 words isn't a decision
+              return true;
+            };
+            for (const d of parsed.decisions.slice(0, 10)) {
+              const text = String(d.value || '').trim();
+              if (!isQuality(text)) continue;
+              if (existingTexts.has(text.toLowerCase())) continue;
+              await addNote(text, { why: d.context ? `auto-captured: ${d.context.slice(0, 80)}` : undefined });
+            }
+            // Record a session summary in history for "recent sessions" section
+            const filesList = Array.from(parsed.filesWritten || []).slice(0, 10);
+            const durationMin = (parsed.firstTimestamp && parsed.lastTimestamp)
+              ? Math.floor((new Date(parsed.lastTimestamp) - new Date(parsed.firstTimestamp)) / 60000)
+              : null;
+            const summary = parsed.slug ? `Worked on ${parsed.slug}` : `${filesList.length} file(s) touched`;
+            await recordSessionEnd({ summary, filesTouched: filesList, durationMin });
+            // Re-render into every detected tool so the pinned block reflects
+            // what was just auto-captured from the .jsonl
+            try {
+              const state = await readSession();
+              const rendered = renderSession(state);
+              for (const target of Object.values(detectAvailableTargets())) {
+                try { await injectInto(target, rendered); } catch {}
+              }
+            } catch {}
+          } catch {
+            // Session.json capture is best-effort
+          }
+
           contextCaptured = true;
           sessionInfo = {
             slug: parsed.slug,
@@ -126,6 +177,17 @@ export async function pushCommand(options = {}) {
       workspaceManifest = await scanWorkspace(stagingDir, spinner);
     } catch {
       // Workspace scan is best-effort
+    }
+
+    // Include session.json (continuity state) so it syncs across machines
+    let sessionIncluded = false;
+    try {
+      if (await fs.pathExists(sessionPaths.session)) {
+        await fs.copy(sessionPaths.session, path.join(stagingDir, 'session.json'));
+        sessionIncluded = true;
+      }
+    } catch {
+      // Best-effort — don't fail the push over this
     }
 
     // Count what was found

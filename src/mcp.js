@@ -14,6 +14,19 @@ import os from 'os';
 import { z } from 'zod';
 import { getConfig, listProfiles, getActiveProfileName } from './config.js';
 import { adapters } from './adapters/index.js';
+import {
+  readSession,
+  writeSession,
+  addGoal,
+  addNext,
+  completeNext,
+  addNote,
+  addQuestion,
+  getMachineId,
+} from './session/state.js';
+import { renderSession } from './session/render.js';
+import { injectInto, detectAvailableTargets } from './session/inject.js';
+import { findDecisions } from './commands/why.js';
 
 const home = os.homedir();
 
@@ -399,6 +412,284 @@ server.tool(
         text: `Memoir Profiles:\n\n${list}\n\nSwitch with: memoir profile switch <name>`
       }]
     };
+  }
+);
+
+server.tool(
+  'memoir_consolidate',
+  'Analyze all AI tool memories for duplicates, stale files, contradictions, and bloat. Returns a consolidation report with actionable suggestions. Use this to help users keep their AI memory clean.',
+  {
+    smart: z.boolean().optional().describe('Use AI (Gemini Flash) for deeper analysis — finds semantic duplicates, contradictions, and merge candidates. Requires GEMINI_API_KEY.'),
+  },
+  async ({ smart }) => {
+    // Collect all memory files
+    const allFiles = [];
+    for (const adapter of adapters) {
+      const files = [];
+      if (adapter.customExtract) {
+        for (const file of adapter.files) {
+          const filePath = path.join(adapter.source, file);
+          if (await fs.pathExists(filePath)) {
+            try {
+              const content = await fs.readFile(filePath, 'utf8');
+              const stat = await fs.stat(filePath);
+              files.push({ path: file, fullPath: filePath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
+            } catch {}
+          }
+        }
+      } else if (await fs.pathExists(adapter.source)) {
+        const walk = async (dir, prefix = '') => {
+          let entries;
+          try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
+            if (entry.isDirectory()) {
+              if (adapter.filter(fullPath)) await walk(fullPath, relPath);
+            } else if (/\.(md|json|yml|yaml)$/.test(entry.name)) {
+              if (adapter.filter(fullPath)) {
+                try {
+                  const content = await fs.readFile(fullPath, 'utf8');
+                  const stat = await fs.stat(fullPath);
+                  files.push({ path: relPath, fullPath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
+                } catch {}
+              }
+            }
+          }
+        };
+        await walk(adapter.source);
+      }
+      allFiles.push(...files);
+    }
+
+    if (allFiles.length === 0) {
+      return { content: [{ type: 'text', text: 'No memory files found across any AI tools.' }] };
+    }
+
+    // Heuristic analysis
+    const daysAgo = (ms) => Math.floor((Date.now() - ms) / (1000 * 60 * 60 * 24));
+    const fingerprint = (c) => c.toLowerCase().replace(/\s+/g, ' ').trim();
+    const wordSim = (a, b) => {
+      const wA = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+      const wB = new Set(b.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+      if (!wA.size || !wB.size) return 0;
+      let n = 0; for (const w of wA) { if (wB.has(w)) n++; }
+      return n / (wA.size + wB.size - n);
+    };
+
+    const duplicates = [];
+    const stale = [];
+    const bloated = [];
+    const empty = [];
+    const fps = new Map();
+
+    for (const f of allFiles) {
+      const fp = fingerprint(f.content);
+      if (fp.length < 10) { empty.push(f); continue; }
+      if (!fps.has(fp)) fps.set(fp, []);
+      fps.get(fp).push(f);
+    }
+    for (const [, group] of fps) {
+      if (group.length > 1) duplicates.push(group.map(f => `${f.tool}/${f.path}`));
+    }
+    for (const f of allFiles) {
+      if (daysAgo(f.mtime) > 60) stale.push({ file: `${f.tool}/${f.path}`, age: daysAgo(f.mtime) });
+      if (f.size > 10240) bloated.push({ file: `${f.tool}/${f.path}`, size: f.size });
+    }
+
+    let report = `Memoir Consolidation Report\n${'─'.repeat(30)}\nScanned: ${allFiles.length} files\n\n`;
+
+    if (duplicates.length) {
+      report += `Duplicates (${duplicates.length}):\n`;
+      for (const group of duplicates) report += `  ${group.join(' = ')}\n`;
+      report += '\n';
+    }
+    if (stale.length) {
+      report += `Stale — 60+ days (${stale.length}):\n`;
+      for (const s of stale.sort((a, b) => b.age - a.age).slice(0, 15)) report += `  ${s.file} (${s.age}d)\n`;
+      if (stale.length > 15) report += `  ...and ${stale.length - 15} more\n`;
+      report += '\n';
+    }
+    if (bloated.length) {
+      report += `Bloated — over 10KB (${bloated.length}):\n`;
+      for (const b of bloated) report += `  ${b.file} (${(b.size / 1024).toFixed(1)}KB)\n`;
+      report += '\n';
+    }
+    if (empty.length) {
+      report += `Empty / near-empty (${empty.length}):\n`;
+      for (const e of empty) report += `  ${e.tool}/${e.path}\n`;
+      report += '\n';
+    }
+    if (!duplicates.length && !stale.length && !bloated.length && !empty.length) {
+      report += 'No issues found. Your memories look clean!\n';
+    }
+
+    report += '\nRun `memoir consolidate --apply` in terminal to interactively clean up.';
+    if (!smart) report += '\nRun `memoir consolidate --smart` for AI-powered semantic analysis.';
+
+    return { content: [{ type: 'text', text: report }] };
+  }
+);
+
+// ── Session continuity tools ─────────────────────────────────────────────────
+// These let the AI record its own goals, decisions, and next-actions into
+// session.json — which is auto-rendered into ~/.claude/CLAUDE.md (and other
+// tools in the future) so the next session picks up where this one ended.
+
+async function refreshPinnedBlock() {
+  try {
+    const state = await readSession();
+    const rendered = renderSession(state);
+    for (const target of Object.values(detectAvailableTargets())) {
+      try { await injectInto(target, rendered); } catch {}
+    }
+  } catch {
+    // Best-effort; don't fail the MCP call
+  }
+}
+
+server.tool(
+  'memoir_set_goal',
+  'Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Pinned into CLAUDE.md so future sessions see it.',
+  { text: z.string().describe('The goal, one short sentence') },
+  async ({ text }) => {
+    await addGoal(text);
+    await refreshPinnedBlock();
+    return { content: [{ type: 'text', text: `Goal set: ${text}` }] };
+  }
+);
+
+server.tool(
+  'memoir_add_next',
+  'Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear.',
+  { text: z.string().describe('The action, one short imperative sentence') },
+  async ({ text }) => {
+    await addNext(text);
+    await refreshPinnedBlock();
+    return { content: [{ type: 'text', text: `Next: ${text}` }] };
+  }
+);
+
+server.tool(
+  'memoir_complete_next',
+  'Mark a next action as complete (removes it from the pinned list). Match by substring — pass the relevant keywords, not the whole text.',
+  { match: z.string().describe('Substring to match against existing next actions') },
+  async ({ match }) => {
+    const before = await readSession();
+    const beforeCount = before.current.next_actions.length;
+    await completeNext(match);
+    const after = await readSession();
+    const removed = beforeCount - after.current.next_actions.length;
+    await refreshPinnedBlock();
+    return {
+      content: [{
+        type: 'text',
+        text: removed > 0 ? `Completed ${removed} action(s) matching "${match}"` : `No action matched "${match}"`,
+      }],
+    };
+  }
+);
+
+server.tool(
+  'memoir_note',
+  'Record a decision with optional rationale and rejected alternative. Use when a non-obvious technical or product choice is made — the kind of thing a future session would want to know "why did we do this."',
+  {
+    text: z.string().describe('The decision, one short sentence (what was decided)'),
+    why: z.string().optional().describe('Rationale — why this choice over others'),
+    rejected: z.string().optional().describe('The alternative that was considered and rejected'),
+  },
+  async ({ text, why, rejected }) => {
+    await addNote(text, { why, rejected });
+    await refreshPinnedBlock();
+    const extras = [];
+    if (why) extras.push(`why: ${why}`);
+    if (rejected) extras.push(`rejected: ${rejected}`);
+    return {
+      content: [{ type: 'text', text: `Decision recorded: ${text}${extras.length ? ` (${extras.join('; ')})` : ''}` }],
+    };
+  }
+);
+
+server.tool(
+  'memoir_ask',
+  'Capture an open question for later. Use when the user poses a question you cannot fully answer now, or when an ambiguity surfaces that needs resolution in a future session.',
+  { text: z.string().describe('The open question') },
+  async ({ text }) => {
+    await addQuestion(text);
+    await refreshPinnedBlock();
+    return { content: [{ type: 'text', text: `Question captured: ${text}` }] };
+  }
+);
+
+server.tool(
+  'memoir_session',
+  'Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided.',
+  {},
+  async () => {
+    const state = await readSession();
+    const machine = await getMachineId();
+    const goals = state.current.goals.map(g => `- ${g.text}`).join('\n') || '(none)';
+    const nexts = state.current.next_actions.map(n => `- [ ] ${n.text}`).join('\n') || '(none)';
+    const questions = state.current.open_questions.map(q => `- ${q.text}`).join('\n') || '(none)';
+    const decisions = state.current.decisions.slice(0, 5).map(d => {
+      let line = `- ${d.text}`;
+      if (d.why) line += ` — *${d.why}*`;
+      return line;
+    }).join('\n') || '(none)';
+    const history = state.history.slice(0, 5).map(h => {
+      const date = (h.date || '').slice(0, 10);
+      const label = state.machines?.[h.machine_id]?.label || '?';
+      return `- ${date} ${label}: ${h.summary || '—'}`;
+    }).join('\n') || '(none)';
+    const machineList = Object.entries(state.machines || {})
+      .map(([id, m]) => `- ${m.label} (last seen: ${(m.last_seen || '').slice(0, 10)})`)
+      .join('\n') || '(just this one)';
+
+    const text = [
+      `# Memoir session`,
+      `This machine: ${machine.label}`,
+      '',
+      '## Current goal',
+      goals,
+      '',
+      '## Next',
+      nexts,
+      '',
+      '## Open questions',
+      questions,
+      '',
+      '## Recent decisions',
+      decisions,
+      '',
+      '## Recent sessions',
+      history,
+      '',
+      '## Machines syncing this session',
+      machineList,
+    ].join('\n');
+
+    return { content: [{ type: 'text', text }] };
+  }
+);
+
+server.tool(
+  'memoir_why',
+  'Look up past decisions by keyword. Returns the decision text, why it was made, and what alternative was rejected. Use when the user asks "why did we do X" or when you need to avoid re-opening a settled question.',
+  { query: z.string().describe('Keyword or phrase to search in decision text, rationale, or rejected alternative') },
+  async ({ query }) => {
+    const state = await readSession();
+    const matches = findDecisions(state, query);
+    if (matches.length === 0) {
+      return { content: [{ type: 'text', text: `No decisions match "${query}".` }] };
+    }
+    const out = matches.map(d => {
+      const parts = [`● ${d.text}`];
+      if (d.why) parts.push(`  why: ${d.why}`);
+      if (d.rejected) parts.push(`  rejected: ${d.rejected}`);
+      if (d.date) parts.push(`  (${d.date.slice(0, 10)})`);
+      return parts.join('\n');
+    }).join('\n\n');
+    return { content: [{ type: 'text', text: `${matches.length} decision(s) matching "${query}":\n\n${out}` }] };
   }
 );
 

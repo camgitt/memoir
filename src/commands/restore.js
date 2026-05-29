@@ -14,6 +14,9 @@ import { restoreWorkspace } from '../workspace/tracker.js';
 import { getSession } from '../cloud/auth.js';
 import { unbundleToDir } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
+import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
+import { renderSession } from '../session/render.js';
+import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
 const home = os.homedir();
 
@@ -118,6 +121,39 @@ export async function restoreCommand(options = {}) {
     }
 
     spinner.stop();
+
+    // Merge session.json (continuity state) from backup into local
+    let sessionMerged = false;
+    let sessionNewMachine = false;
+    try {
+      const remoteSessionPath = path.join(stagingDir, 'session.json');
+      if (await fs.pathExists(remoteSessionPath)) {
+        const remote = JSON.parse(await fs.readFile(remoteSessionPath, 'utf8'));
+        const local = await readSession();
+        const beforeMachines = Object.keys(local.machines || {}).length;
+        const merged = mergeSessions(local, remote);
+        await writeSession(merged);
+        // Re-render + inject into every detected tool so the pinned block
+        // reflects the merged state right away across Claude/Cursor/Windsurf/Gemini
+        try {
+          const rendered = renderSession(merged);
+          for (const target of Object.values(detectAvailableTargets())) {
+            try { await injectInto(target, rendered); } catch {}
+          }
+        } catch {}
+        sessionMerged = true;
+        sessionNewMachine = Object.keys(merged.machines || {}).length > beforeMachines;
+      }
+    } catch {
+      // Best-effort — don't fail the restore over this
+    }
+
+    if (sessionMerged) {
+      const msg = sessionNewMachine
+        ? chalk.cyan('  🔄 Session state merged from another machine')
+        : chalk.gray('  ✔ Session state up to date');
+      console.log(msg);
+    }
 
     // Auto-inject session handoff if available
     let handoffInjected = false;

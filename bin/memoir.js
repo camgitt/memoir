@@ -21,6 +21,20 @@ import { historyCommand } from '../src/commands/history.js';
 import { projectsListCommand, projectsTodoCommand } from '../src/commands/projects.js';
 import { upgradeCommand } from '../src/commands/upgrade.js';
 import { activateCommand, deactivateCommand } from '../src/commands/activate.js';
+import { consolidateCommand } from '../src/commands/consolidate.js';
+import {
+  goalCommand,
+  nextCommand,
+  doneCommand,
+  noteCommand,
+  askCommand,
+  sessionShowCommand,
+  sessionClearCommand,
+} from '../src/commands/session.js';
+import { autopushCommand } from '../src/commands/autopush.js';
+import { whyCommand } from '../src/commands/why.js';
+import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
+import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -150,6 +164,106 @@ program
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
+  });
+
+// ── Session continuity ──────────────────────────────────────────
+program
+  .command('goal <text...>')
+  .description('Set your current goal (pinned into CLAUDE.md, syncs across machines)')
+  .action(async (text) => {
+    try { await goalCommand(text.join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('next <text...>')
+  .description('Add a next action')
+  .action(async (text) => {
+    try { await nextCommand(text.join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('done <text...>')
+  .description('Mark a next action complete (substring match)')
+  .action(async (text) => {
+    try { await doneCommand(text.join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('note <text...>')
+  .description('Record a decision with rationale (--why) and rejected alternative (--rejected)')
+  .option('--why <rationale>', 'Why this decision was made')
+  .option('--rejected <alternative>', 'The alternative you considered and rejected')
+  .action(async (text, options) => {
+    try { await noteCommand(text.join(' '), options); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('ask <text...>')
+  .description('Capture an open question for later')
+  .action(async (text) => {
+    try { await askCommand(text.join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('why [query...]')
+  .description('Look up decisions by keyword — returns what was decided + why + what was rejected')
+  .action(async (query) => {
+    try { await whyCommand((query || []).join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('session')
+  .description('Show the current session state')
+  .action(async () => {
+    try { await sessionShowCommand(); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('session-clear')
+  .description('Clear the current session (history retained)')
+  .action(async () => {
+    try { await sessionClearCommand(); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+// ── Hooks + auto-sync (called by Claude Code hooks or the user) ─────
+program
+  .command('autopush')
+  .description('Debounced auto-push — called by the Claude Code Stop hook')
+  .option('--debounce <seconds>', 'Minimum seconds between auto-pushes', '30')
+  .option('-v, --verbose', 'Print debounce state')
+  .action(async (options) => {
+    try { await autopushCommand(options); }
+    catch (err) { if (options.verbose) console.error(chalk.red(err.message)); /* silent by default */ }
+  });
+
+program
+  .command('auto-refresh')
+  .description('Re-render the pinned session block — called by the SessionStart hook')
+  .option('-v, --verbose', 'Print what changed')
+  .action(async (options) => {
+    try { await autoRefreshCommand(options); }
+    catch (err) { if (options.verbose) console.error(chalk.red(err.message)); }
+  });
+
+program
+  .command('hooks')
+  .description('Manage Claude Code hooks (install | uninstall | status)')
+  .argument('[subcommand]', 'install, uninstall, or status', 'status')
+  .option('-y, --yes', 'Skip confirmation prompts')
+  .action(async (subcommand, options) => {
+    try {
+      if (subcommand === 'install') await hooksInstallCommand(options);
+      else if (subcommand === 'uninstall') await hooksUninstallCommand(options);
+      else await hooksStatusCommand();
+    } catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
   });
 
 program
@@ -550,6 +664,21 @@ projects
       await projectsTodoCommand(project, text, options);
     } catch (err) {
       console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('consolidate')
+  .alias('tidy')
+  .description('Analyze and clean up your AI memories — find duplicates, stale files, and contradictions')
+  .option('--smart', 'Use AI to analyze memories and suggest merges (requires Gemini API key)')
+  .option('--apply', 'Interactively apply suggested changes (delete, merge, prune)')
+  .action(async (options) => {
+    try {
+      await consolidateCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error during consolidation:'), err.message);
       process.exit(1);
     }
   });

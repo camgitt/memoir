@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "3.5.0",
+  "version": "3.6.1",
   "mcpName": "io.github.camgitt/memoir",
   "description": "MCP server that gives Claude, Cursor, and Gemini long-term memory across sessions. Your AI remembers your codebase, decisions, and preferences — across tools and machines.",
   "main": "src/index.js",
@@ -19,7 +19,8 @@
   },
   "scripts": {
     "start": "node bin/memoir.js",
-    "test": "bash test-local.sh",
+    "test": "node test-cross-machine.mjs && node test-session.mjs && bash test-cross-machine-e2e.sh && bash test-session-sync.sh",
+    "test:legacy": "bash test-local.sh",
     "postinstall": "node -e \"try{const c='\\x1b[36m',r='\\x1b[0m',g='\\x1b[90m';console.log('\\n  '+c+'memoir'+r+' installed.\\n  Run '+c+'memoir activate'+r+' in any project to give your AI long-term memory.\\n  '+g+'https://memoir.sh'+r+'\\n')}catch{}\""
   },
   "keywords": [

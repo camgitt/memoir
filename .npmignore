@@ -3,6 +3,12 @@ TODO.md
 SHOW_HN.md
 .claude/
 test-local.sh
+test-cross-machine.mjs
+test-cross-machine-e2e.sh
+test-session.mjs
+test-session-sync.sh
+cross-machine-sync-bug.md
+memory-md-truncation-bug.md
 demo.sh
 demo.cast
 demo.gif
