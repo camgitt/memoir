@@ -26,7 +26,8 @@ for (const s of suites) {
     continue;
   }
   console.log(`\n═══ ${s.name} ═══`);
-  const r = spawnSync(s.cmd, s.args, { stdio: 'inherit' });
+  // DO_NOT_TRACK so the suite (incl. e2e `memoir push` runs) never emits telemetry.
+  const r = spawnSync(s.cmd, s.args, { stdio: 'inherit', env: { ...process.env, DO_NOT_TRACK: '1' } });
   results.push({ name: s.name, status: r.status === 0 ? 'pass' : 'fail', code: r.status });
 }
 

@@ -20,7 +20,7 @@ const VERSION = (() => {
 // PostHog PROJECT API key (phc_…). This is a PUBLIC client key — safe to ship in
 // the package, same model as posthog-js in a web app. Set MEMOIR_POSTHOG_KEY or
 // paste the project key here. Empty → telemetry is a silent no-op.
-const POSTHOG_KEY = process.env.MEMOIR_POSTHOG_KEY || '';
+const POSTHOG_KEY = process.env.MEMOIR_POSTHOG_KEY || 'phc_vS7ZKfmZAcGnaCE7Zt4hvwFioJBs6jr8gutyapDpqFXW';
 const POSTHOG_HOST = process.env.MEMOIR_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 const CONFIG_DIR = process.platform === 'win32'
