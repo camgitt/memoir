@@ -1,4 +1,4 @@
-Title: Show HN: Memoir – Persistent memory for AI coding tools via MCP
+Title: Show HN: Memoir – Sync your AI coding memory across tools and machines, zero config
 
 URL: https://github.com/camgitt/memoir
 
@@ -6,7 +6,13 @@ Text:
 
 I got tired of re-explaining my codebase to Claude every session. "We use Zustand, not Redux." "The auth middleware is in src/middleware." "We decided on Prisma last week." Every conversation starts from zero.
 
-So I built memoir — an MCP server that gives AI coding tools long-term memory. You add it to Claude Code, Cursor, or Windsurf, and your AI can search, read, and save memories across sessions automatically.
+So I built memoir — an MCP server + CLI that gives AI coding tools long-term memory. One command, zero config:
+
+    npx memoir-cli
+
+Auto-detects your GitHub, creates a private repo, backs up everything. No wizard, no account creation.
+
+It works as an MCP server with 6 tools your AI calls automatically:
 
     you: how does auth work in this project?
 
@@ -19,17 +25,12 @@ So I built memoir — an MCP server that gives AI coding tools long-term memory.
 
 No re-explaining. It just remembers.
 
-The MCP server exposes 6 tools: memoir_recall (search memories), memoir_remember (save context), memoir_list, memoir_read, memoir_status, memoir_profiles. Your AI calls these as part of the conversation — you don't do anything manually.
+It also syncs across machines and translates between tools:
 
-It also works as a CLI for cross-machine sync:
+    npx memoir-cli restore                     # restore on a new machine
+    memoir migrate --from cursor --to claude    # AI-powered translation
 
-    memoir push      # back up all AI tool configs
-    memoir restore   # restore on a new machine in 60 seconds
-    memoir migrate --from cursor --to claude   # AI-powered translation
-
-Supports 11 tools: Claude Code, Cursor, Windsurf, Gemini CLI, ChatGPT, Codex, Copilot, Zed, Cline, Continue.dev, Aider. E2E encrypted (AES-256-GCM), secret scanning built in, MIT licensed.
-
-    npm install -g memoir-cli
+Supports 13 tools: Claude Code, Cursor, Windsurf, Gemini CLI, ChatGPT, Codex, Copilot, Zed, Cline, Continue.dev, Aider, and more. E2E encryption available, secret scanning built in, MIT licensed.
 
 Website: https://memoir.sh
 

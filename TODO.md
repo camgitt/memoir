@@ -23,6 +23,17 @@ This list tracks planned features, identified bugs, and architectural improvemen
 - [ ] **Interactive Merge/Diff:** Replace "Overwrite/Append" in `migrate` with a side-by-side diff view.
 - [ ] **Silent Mode:** Add a `--silent` flag to suppress all output except errors.
 
+## 🟡 Medium Priority: Playbooks & Retrospectives (new memory types)
+*Driver: building onepage.bio re-derived stack choices, SEO scaffold, and feedback constraints across many sessions. The reusable "how" never got captured separately from project-specific facts, so the next SaaS won't benefit. Auto-memory's MEMORY.md is also already over 200 lines and being truncated — these need on-demand loading, not always-on.*
+
+- [ ] **`memoir playbook save <name>`** — extract a reusable recipe from current session/files into `memory/playbooks/<name>.md`. Frontmatter: `type: playbook`, `triggers: [...]` (when to surface). Examples: `saas_day1_scaffold`, `seo_longtail_pages`, `stripe_supabase_webhook`.
+- [ ] **`memoir playbook use <name>`** — load a playbook into the current AI session as context (prints to stdout for paste, or writes to a tool-specific location).
+- [ ] **`memoir playbook list`** — list available playbooks with their triggers/descriptions.
+- [ ] **`memoir retro <project>`** — interactive end-of-sprint command. Prompts: "what slowed you down?", "what would you do different?", "what feedback rule emerged?". Writes `memory/retro_<project>.md`. Surfaces in `memoir_recall`.
+- [ ] **MCP tool: `memoir_starter_prompt <project_type>`** — assembles a starter prompt by stitching: stack defaults + matching playbook + relevant feedback rules. Returns a markdown blob the user pastes into a fresh chat.
+- [ ] **On-demand loading discipline** — playbooks must NOT auto-load into MEMORY.md index (which is truncating at 200 lines). Stay in `memory/playbooks/` and only load when explicitly invoked or matched by `memoir_starter_prompt`.
+- [ ] **Cross-tool surfacing** — same playbook mechanism should work via existing tool adapters in `src/tools/` (cursor, gemini, codex, etc.), not just Claude.
+
 ## 🟢 Low Priority: Intelligence & Advanced Features
 - [ ] **Unified Memory Format (UMF):** Architect an internal JSON schema to represent "Coding Context" to simplify adding new tool adapters.
 - [ ] **Cross-Tool Search:** Implement `memoir search <query>` to find specific instructions across all tool backups.
