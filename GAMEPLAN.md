@@ -3,6 +3,52 @@
 
 ---
 
+## ⭐ PLAN OF RECORD (2026-05-28) — OSS Adoption push
+
+> This supersedes the original 4-phase / "First 100 Users" plan below. **Objective: maximize installs + activation (OSS adoption).** Revenue ($15/mo Pro) is deferred. **Channel constraint: SEO + automation ONLY — no manual community marketing** (no HN/Reddit posting, no cold DMs, no manual X/Slack outreach). Automatable/evergreen listings (MCP registries) are allowed.
+>
+> ⚠️ The original "First 100 Users Plan" (Reddit/HN posts, cold-DM 50 devs, "post demo video on X", "copy-paste to Slack") **violates this constraint and is struck from the plan of record.**
+
+### ★ North Star: WAW — Weekly Active Memory-using installs
+Distinct anonymous install IDs that fired a **real memory event** in the trailing 7 days — an MCP tool call (`memoir_recall/remember/note/why/session`) OR a successful `push`/`restore`. Not downloads (vanity: npx re-fetches, CI, mirrors). Not `activate` (only injects config).
+- **Activated** = within first 7 days, injected into ≥1 project AND the AI called ≥1 memory tool (memory actually read/written).
+- **Retained** = WAW in week N and N+1.
+- **90-day target:** baseline within 2 weeks → **150 WAW, ≥35% activation rate, ≥40% W1 retention.**
+
+### Phase 1 — Measure before driving traffic
+*(every later move needs a denominator)*
+- Lock North Star + definitions (this section).
+- Instrument the CLI via the `postAction` hook (bin/memoir.js:695) — **NOT** npm postinstall (CI blocks it + poisons the zero-knowledge brand). Anonymous install UUID, opt-out (`DO_NOT_TRACK`/`CI`/`memoir telemetry off`), first-run disclosure.
+- Emit the **activation event from inside the MCP tool handlers** (src/mcp.js) — the only place that proves memory was *used*.
+- Wire PostHog into memoir.sh; `install_cmd_copied` = the site conversion event.
+- Verify Google Search Console + Bing Webmaster Tools; fire IndexNow on deploy (the missing "did Google see it" loop).
+
+### Phase 2 — Fix the leaky funnel
+*(don't pour traffic into silent failures)*
+- Fix Windows path bug + add **Linux** path support (silent-zero-memory activation cliff).
+- Add OS-path checks to `memoir doctor` (it's ~213 lines, NOT a stub).
+- Fix landing-page version/price drift (hero 3.6.1, schema 3.5.0, npm 3.8.0; $9 vs $15) — auto-sync version from package.json.
+- `consolidate` auto-extract (MEMORY.md index hygiene).
+
+### Phase 3 — SEO engine + distribution (co-headline)
+- **Keyword-cannibalization dedupe pass FIRST**, then recover the blog posts that 404 in prod (stranded in `.next`; vercel.json serves only `public/`).
+- /blog index + auto-sitemap + fix canonical; templated related-posts + npx CTA per post.
+- Rewrite hero + README to lead with the **session-continuity wedge** (visualize/falsify/bespoke).
+- Republish `server.json`→3.8.0 to the official MCP registry + CI auto-publish on tag; list on Glama (+glama.json), Smithery, mcp.so, cursor.directory; awesome-list PR to **punkpeye (88k★)**.
+- Fix npm README first paragraph + keyword-rich description.
+
+### Phase 4 — Virality + close the loop
+- `/share/{token}` branded install landing (completes the half-built share loop).
+- Opt-out "Synced with memoir" footer in the rendered session block; ensure `activate` fires by default.
+- npm↔CLI attribution via copy-time correlation token + per-channel UTM.
+- The ONE weekly dashboard + an insight→action rulebook here in GAMEPLAN.md.
+- Scale per-competitor / problem-intent content clusters, **gated by GSC data**.
+
+### Key risks
+Cannibalization backfire (dedupe-first guards it) · zero-authority domain (~11★ — backlinks/indexation are first-class) · telemetry trust (no install-time phone-home, ever) · name-collision competitor `memoir-mcp` owning the registry slot (disambiguate with the wedge).
+
+---
+
 ## Current State (Updated April 2026)
 
 | Metric | Value |
@@ -130,7 +176,7 @@
 
 ---
 
-## First 100 Users Plan
+## ~~First 100 Users Plan~~ (SUPERSEDED — violates SEO+automation-only constraint; see Plan of Record)
 
 | Week | Action | Target |
 |------|--------|--------|
