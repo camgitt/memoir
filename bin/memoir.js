@@ -112,6 +112,7 @@ program
   .description('Back up your AI memory to the cloud')
   .option('--only <tools>', 'Only sync specific tools (comma-separated)')
   .option('-p, --profile <name>', 'Use a specific profile')
+  .option('--redact', 'Strip detected secrets from synced files before they are backed up')
   .action(async (options) => {
     try {
       await pushCommand(options);

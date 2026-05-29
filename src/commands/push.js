@@ -19,6 +19,52 @@ import { paths as sessionPaths, readSession, addNote, recordSessionEnd } from '.
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
+// Recursively scan every staged file (the REAL tool memory/config files about
+// to be uploaded — CLAUDE.md, .cursorrules, settings.json, project configs,
+// etc.) for secrets. When `redact` is true, rewrite each offending file in
+// place so the cleaned version is what gets uploaded (and encrypted, if on).
+// Returns { findings, scanned } where findings is a flat list of detections
+// keyed by file. Best-effort: unreadable/binary files are skipped.
+export async function scanStagedFiles(dir, { redact = false } = {}) {
+  const findings = [];
+  let scanned = 0;
+
+  const walk = async (d) => {
+    let entries;
+    try {
+      entries = await fs.readdir(d, { withFileTypes: true });
+    } catch { return; }
+    for (const entry of entries) {
+      const fullPath = path.join(d, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+        continue;
+      }
+      try {
+        const stat = await fs.stat(fullPath);
+        // Skip files larger than 1MB — same threshold as doctor's scan
+        if (stat.size > 1024 * 1024) continue;
+        const content = await fs.readFile(fullPath, 'utf-8');
+        scanned++;
+        const { found, clean } = scanForSecrets(content);
+        if (found.length > 0) {
+          for (const f of found) {
+            findings.push({ file: fullPath, label: f.label, redacted: f.redacted });
+          }
+          if (redact && clean !== content) {
+            await fs.writeFile(fullPath, clean);
+          }
+        }
+      } catch {
+        // Skip unreadable / non-text files
+      }
+    }
+  };
+
+  await walk(dir);
+  return { findings, scanned };
+}
+
 export async function pushCommand(options = {}) {
   let config = await getConfig(options.profile);
 
@@ -203,6 +249,47 @@ export async function pushCommand(options = {}) {
       } else if (await fs.pathExists(adapter.source)) {
         found.push(adapter.name);
       }
+    }
+
+    // Scan the REAL files being synced (the staged tool memory/config files,
+    // not just the handoff blob) for secrets before they leave the machine.
+    //   • --redact            → strip secrets in place, then upload (sanitized)
+    //   • otherwise           → WARN and continue
+    //   • background autopush → stay silent and continue
+    // We deliberately do NOT hard-block. This is a zero-knowledge encrypted
+    // backup of the user's OWN files; silently refusing to back up — which the
+    // detached `autopush` Stop-hook path (stdio:'ignore', MEMOIR_AUTOPUSH=1, no
+    // TTY) would hit on any false-positive match — is a worse failure than
+    // backing up. A future `--strict` flag could fail-closed for the
+    // encrypt-off / shared-destination case. Wrapped so a scanner error can
+    // never break the push.
+    const background = process.env.MEMOIR_AUTOPUSH === '1';
+    try {
+      const { findings } = await scanStagedFiles(stagingDir, { redact: options.redact === true });
+      if (findings.length > 0) {
+        if (options.redact === true) {
+          spinner.stop();
+          console.log(chalk.yellow(`\n  🔒 Redacted ${findings.length} secret(s) from synced files before upload:`));
+          for (const f of findings.slice(0, 5)) {
+            console.log(chalk.gray(`     ${path.basename(f.file)}: ${f.label} (${f.redacted})`));
+          }
+          if (findings.length > 5) console.log(chalk.gray(`     ...and ${findings.length - 5} more`));
+          spinner.start();
+        } else if (!background) {
+          // Warn (interactive or piped) but never block — the backup proceeds.
+          spinner.stop();
+          console.log(chalk.yellow(`\n  ⚠️  ${findings.length} potential secret(s) in synced files (backed up as-is):`));
+          for (const f of findings.slice(0, 5)) {
+            console.log(chalk.gray(`     ${path.basename(f.file)}: ${f.label} (${f.redacted})`));
+          }
+          if (findings.length > 5) console.log(chalk.gray(`     ...and ${findings.length - 5} more`));
+          console.log(chalk.gray('  Re-run with ') + chalk.cyan('--redact') + chalk.gray(' to strip them from the backup.'));
+          spinner.start();
+        }
+        // background autopush: silent, continue — never block the auto-backup
+      }
+    } catch {
+      // Secret scan is best-effort — never let it break the push.
     }
 
     // Encrypt if enabled (or ask on first push if not configured)

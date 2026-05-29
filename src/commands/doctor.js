@@ -8,15 +8,7 @@ import os from 'os';
 import { execSync } from 'child_process';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
-
-const SECRET_PATTERNS = [
-  { pattern: /sk-[a-zA-Z0-9]{20,}/, label: 'OpenAI/Stripe secret key' },
-  { pattern: /key-[a-zA-Z0-9]{20,}/, label: 'API key' },
-  { pattern: /ghp_[a-zA-Z0-9]{36,}/, label: 'GitHub personal access token' },
-  { pattern: /gho_[a-zA-Z0-9]{36,}/, label: 'GitHub OAuth token' },
-  { pattern: /AKIA[0-9A-Z]{16}/, label: 'AWS access key' },
-  { pattern: /Bearer\s+[a-zA-Z0-9._\-]{20,}/, label: 'Bearer token' },
-];
+import { scanForSecrets as scanTextForSecrets } from '../security/scanner.js';
 
 const SENSITIVE_FILENAMES = ['.env', 'credentials', 'token.json'];
 
@@ -61,11 +53,9 @@ async function scanForSecrets(files) {
       // Skip files larger than 1MB
       if (stat.size > 1024 * 1024) continue;
       const content = await fs.readFile(filePath, 'utf-8');
-      for (const { pattern, label } of SECRET_PATTERNS) {
-        if (pattern.test(content)) {
-          warnings.push({ file: filePath, reason: label });
-          break;
-        }
+      const { found } = scanTextForSecrets(content);
+      if (found.length > 0) {
+        warnings.push({ file: filePath, reason: found[0].label });
       }
     } catch {
       // Skip unreadable files
