@@ -6,3 +6,6 @@ node_modules/
 *.windowsterminal.json
 .mcpregistry_github_token
 .mcpregistry_registry_token
+
+# 18MB MCP-registry publisher binary — local tool, never tracked or shipped
+mcp-publisher
