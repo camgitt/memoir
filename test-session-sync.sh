@@ -38,7 +38,7 @@ echo -e "${BOLD}Machine A: record session + push${RESET}\n"
 HOME="$HOME_A" node "$MEMOIR_BIN" goal "Ship session sync" > /dev/null
 HOME="$HOME_A" node "$MEMOIR_BIN" note "Use atomic writes" --why "crash safety" > /dev/null
 HOME="$HOME_A" node "$MEMOIR_BIN" next "Test cross-machine merge" > /dev/null
-HOME="$HOME_A" node "$MEMOIR_BIN" push > /dev/null 2>&1 || true
+HOME="$HOME_A" node "$MEMOIR_BIN" push < /dev/null > /dev/null 2>&1 || true
 echo -e "  ${GREEN}Machine A pushed${RESET}"
 
 # Verify session.json landed in backup
@@ -54,7 +54,7 @@ fi
 echo -e "\n${BOLD}Machine B: record own session + restore${RESET}\n"
 HOME="$HOME_B" node "$MEMOIR_BIN" goal "Different local goal" > /dev/null
 HOME="$HOME_B" node "$MEMOIR_BIN" next "Local-only action" > /dev/null
-HOME="$HOME_B" node "$MEMOIR_BIN" restore 2>&1 | grep -E "merged|up to date|Done" || true
+HOME="$HOME_B" node "$MEMOIR_BIN" restore < /dev/null 2>&1 | grep -E "merged|up to date|Done" || true
 
 # ── Assertions ──
 echo -e "\n${BOLD}Verify merged state on Machine B${RESET}\n"

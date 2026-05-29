@@ -59,7 +59,7 @@ EOF
 mkdir -p "$BACKUP_DIR"
 
 # Push from the pusher side
-HOME="$PUSHER_HOME" node "$MEMOIR_BIN" push > /dev/null 2>&1 || true
+HOME="$PUSHER_HOME" node "$MEMOIR_BIN" push < /dev/null > /dev/null 2>&1 || true
 rm -rf "$PUSHER_HOME"
 
 echo -e "  ${GREEN}Backup created:${RESET}"
@@ -74,7 +74,7 @@ EOF
 
 # ── Step 4: Run restore ──
 echo -e "${BOLD}Step 4: memoir restore${RESET}\n"
-HOME="$FAKE_HOME" node "$MEMOIR_BIN" restore 2>&1 | tail -40
+HOME="$FAKE_HOME" node "$MEMOIR_BIN" restore < /dev/null 2>&1 | tail -40
 echo ""
 
 # ── Step 5: Assertions ──
