@@ -9,6 +9,15 @@
     "memoir": "bin/memoir.js",
     "memoir-mcp": "src/mcp.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/camgitt/memoir.git"
@@ -19,8 +28,9 @@
   },
   "scripts": {
     "start": "node bin/memoir.js",
-    "test": "node test-cross-machine.mjs && node test-session.mjs && bash test-cross-machine-e2e.sh && bash test-session-sync.sh",
+    "test": "node run-tests.mjs",
     "test:legacy": "bash test-local.sh",
+    "prepublishOnly": "npm test",
     "postinstall": "node -e \"try{const c='\\x1b[36m',r='\\x1b[0m',g='\\x1b[90m';console.log('\\n  '+c+'memoir'+r+' installed.\\n  Run '+c+'memoir activate'+r+' in any project to give your AI long-term memory.\\n  '+g+'https://memoir.sh'+r+'\\n')}catch{}\""
   },
   "keywords": [
