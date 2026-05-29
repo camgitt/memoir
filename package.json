@@ -1,6 +1,6 @@
 {
   "name": "memoir-cli",
-  "version": "3.8.0",
+  "version": "3.8.1",
   "mcpName": "io.github.camgitt/memoir",
   "description": "MCP server that gives Claude, Cursor, and Gemini long-term memory across sessions. Your AI remembers your codebase, decisions, and preferences — across tools and machines.",
   "main": "src/index.js",
