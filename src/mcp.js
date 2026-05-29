@@ -27,6 +27,7 @@ import {
 import { renderSession } from './session/render.js';
 import { injectInto, detectAvailableTargets } from './session/inject.js';
 import { findDecisions } from './commands/why.js';
+import { capture as track } from './telemetry.js';
 
 const home = os.homedir();
 
@@ -170,6 +171,24 @@ const server = new McpServer({
     resources: {},
   }
 });
+
+// ── Anonymous telemetry (activation signal) ───────────────────────────────────
+// Wrap server.tool ONCE so every registered handler emits an anonymous, no-PII
+// "mcp_tool_used" event on call — the only place that proves memory was actually
+// used (the North Star's activation event). Fire-and-forget; can't block or
+// break a tool response. No-op unless a telemetry key is configured.
+track('mcp_server_start');
+const _registerTool = server.tool.bind(server);
+server.tool = (name, ...rest) => {
+  const handler = rest[rest.length - 1];
+  if (typeof handler === 'function') {
+    rest[rest.length - 1] = (...args) => {
+      try { track('mcp_tool_used', { tool: name }); } catch {}
+      return handler(...args);
+    };
+  }
+  return _registerTool(name, ...rest);
+};
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 

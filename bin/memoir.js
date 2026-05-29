@@ -35,6 +35,7 @@ import { autopushCommand } from '../src/commands/autopush.js';
 import { whyCommand } from '../src/commands/why.js';
 import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
+import { capture as track, telemetryCommand } from '../src/telemetry.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -692,8 +693,23 @@ program
     await import('../src/mcp.js');
   });
 
-program.hook('postAction', async () => {
+program
+  .command('telemetry [action]')
+  .description('Anonymous usage telemetry: `on`, `off`, or `status` (default)')
+  .action(async (action) => {
+    try {
+      await telemetryCommand(action || 'status');
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program.hook('postAction', async (thisCommand, actionCommand) => {
   await checkForUpdate();
+  // Anonymous, opt-out usage event. postAction already awaits a network call
+  // (checkForUpdate), so this adds no perceived latency; no-op without a key.
+  try { await track('cli_command', { command: actionCommand?.name?.() || 'unknown' }); } catch {}
 });
 
 program.parse();
