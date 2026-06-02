@@ -8,11 +8,21 @@ import { readSession } from '../session/state.js';
 
 function searchDecisions(decisions, query) {
   if (!query) return decisions;
-  const q = String(query).toLowerCase();
-  return decisions.filter(d => {
-    const haystack = [d.text, d.why, d.rejected].filter(Boolean).join(' ').toLowerCase();
-    return haystack.includes(q);
-  });
+  // Tokenize the query and match decisions containing any term, ranked by how
+  // many terms hit (recency breaks ties). A single whole-phrase substring match
+  // silently missed multi-word queries like "memoir positioning" even when every
+  // word was present — which is exactly how the MCP memoir_why tool queries.
+  const terms = String(query).toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return decisions;
+  return decisions
+    .map(d => {
+      const haystack = [d.text, d.why, d.rejected].filter(Boolean).join(' ').toLowerCase();
+      const score = terms.reduce((s, t) => s + (haystack.includes(t) ? 1 : 0), 0);
+      return { d, score };
+    })
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || String(b.d.date || '').localeCompare(String(a.d.date || '')))
+    .map(x => x.d);
 }
 
 export async function whyCommand(query) {
