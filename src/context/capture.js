@@ -151,6 +151,16 @@ function parseLines(lines) {
   return result;
 }
 
+// Reject conversational fragments that loose regexes sometimes capture as
+// "decisions" — questions, and clauses starting with a pronoun/filler word
+// ("we pick this back up Monday", "it up at...", "some lenders may...").
+function looksLikeFragment(v) {
+  if (!v) return true;
+  if (/\?/.test(v)) return true;
+  if (/^(it|this|that|these|those|we|i|they|you|he|she|some|there|here|just|back|now|also)\b/i.test(v)) return true;
+  return false;
+}
+
 /**
  * Extract durable decisions from session conversation.
  * These are things like renames, tech choices, preferences — stuff that should persist.
@@ -168,16 +178,19 @@ function extractDecisions(userMessages, assistantTexts) {
     // Tech choices
     { regex: /(?:let'?s|we(?:'ll| will| should)?|going to|decided to)\s+use\s+([A-Z][a-zA-Z0-9_./-]+)\s+(?:for|instead|as|to)/gi, type: 'tech' },
     { regex: /(?:switch|migrate|move)\s+(?:from\s+\S+\s+)?to\s+([A-Z][a-zA-Z0-9_./-]+)/gi, type: 'tech' },
-    // Architecture / design
-    { regex: /(?:let'?s|we(?:'ll| will| should)?)\s+(?:go with|pick|choose)\s+(.{5,60}?)(?:\.|$|,|\n)/gi, type: 'design' },
-    // Stack choices
-    { regex: /(?:stack|framework|database|backend|frontend)\s+(?:is|will be|should be)\s+(.{5,60}?)(?:\.|$|,|\n)/gi, type: 'stack' },
+    // Architecture / design — require an explicit decision verb and a capitalized
+    // target. Bare "pick/choose" caught conversational fragments as decisions.
+    { regex: /(?:decided|settled|going|chose|chosen)\s+(?:to\s+(?:go\s+with|use)|with|on)\s+([A-Z][\w .\/+-]{3,50}?)(?:\.|$|,|\n)/g, type: 'design' },
+    // Stack choices — require a capitalized, tech-looking value, not a prose
+    // fragment ("backend is just throwing it away" used to leak through).
+    { regex: /(?:stack|framework|database|backend|frontend|hosting|infra)\s+(?:is|will be|should be)\s+([A-Z][\w .\/+-]{2,40}?)(?:\.|$|,|\n)/g, type: 'stack' },
   ];
 
   for (const { regex, type } of patterns) {
     let match;
     while ((match = regex.exec(allText)) !== null) {
       const value = match[1].trim().replace(/["']+$/, '');
+      if (looksLikeFragment(value)) continue;
       if (value.length > 2 && value.length < 80) {
         // Avoid duplicates
         const existing = decisions.find(d => d.value.toLowerCase() === value.toLowerCase());

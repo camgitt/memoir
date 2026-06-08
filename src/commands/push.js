@@ -160,6 +160,8 @@ export async function pushCommand(options = {}) {
               if (/\|/.test(text)) return false;                 // markdown table fragment
               if (/[_*`]{3,}/.test(text)) return false;          // markdown formatting leaked in
               if (!/[a-zA-Z]/.test(text)) return false;          // no actual words
+              if (/\?/.test(text)) return false;                 // questions aren't decisions
+              if (/^(it|this|that|these|those|we|i|they|you|some|there|here|just|back|now|also)\b/i.test(text)) return false; // fragment
               const words = text.split(/\s+/).length;
               if (words < 3) return false;                       // less than 3 words isn't a decision
               return true;
