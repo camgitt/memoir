@@ -4,67 +4,111 @@
 // into a dated archive file and replaced with one-line pointers.
 //
 // Guarantees: archive-not-delete (nothing lost), never touches the critical
-// behavior-rules section or the preamble, idempotent, dry-run capable.
+// behavior-rules section or the preamble, idempotent, dry-run capable,
+// code-fence aware, content-deduped, atomic writes, graceful on errors.
 
 import fs from 'fs-extra';
 import path from 'path';
 
 export const DEFAULT_BUDGET = 180; // Claude loads ~200 lines of MEMORY.md; leave headroom.
 
-// Split into ## sections, each keeping its own lines (header + body) verbatim.
+// Split into ## sections — but a "## " INSIDE a fenced code block (``` or ~~~)
+// is content, not a header, so we never split there (would orphan content +
+// leave an unclosed fence = invalid markdown + data loss).
 function splitSections(text) {
   const sections = [];
   let cur = { header: '(preamble)', lines: [] };
+  let fence = null; // active fence marker while inside a code block
   for (const line of text.split('\n')) {
-    if (/^##\s/.test(line)) { sections.push(cur); cur = { header: line.replace(/^##\s+/, '').trim(), lines: [line] }; }
-    else cur.lines.push(line);
+    const t = line.trimStart();
+    const m = t.match(/^(```|~~~)/);
+    if (m) {
+      if (!fence) fence = m[1];
+      else if (t.startsWith(fence)) fence = null;
+    }
+    if (!fence && /^##\s/.test(line)) {
+      sections.push(cur);
+      cur = { header: line.replace(/^##\s+/, '').trim(), lines: [line] };
+    } else {
+      cur.lines.push(line);
+    }
   }
   sections.push(cur);
   return sections;
 }
 
-// Count lines that are real inline detail — not blank, not a header, not a
-// one-line pointer (`- [Title](file.md) …`). High = a fat inline block.
+// A line is a lightweight pointer (not inline content to archive) if it's a
+// clean `- [text](file)` OR any link to one of our archive files.
+function isPointer(t) {
+  if (/^- \[[^\]]+\]\([^)]+\)/.test(t)) return true;
+  if (/\[[^\]]*\]\(memory_index_archive_[^)]*\)/.test(t)) return true;
+  return false;
+}
+
 function inlineWeight(section) {
   return section.lines.filter(l => {
     const t = l.trim();
     if (!t) return false;
     if (/^#{2,3}\s/.test(t)) return false;
-    if (/^- \[[^\]]+\]\([^)]+\)/.test(t)) return false; // clean pointer
+    if (isPointer(t)) return false;
     return true;
   }).length;
 }
 
 const PROTECTED = (header) => /critical behavior rules/i.test(header) || header === '(preamble)';
 
+async function atomicWrite(filePath, content) {
+  const tmp = `${filePath}.tmp-${process.pid}`;
+  await fs.writeFile(tmp, content);
+  await fs.move(tmp, filePath, { overwrite: true });
+}
+
 /**
  * Tidy MEMORY.md down under `budgetLines`.
- * @returns summary { overBudget, lineCount, newLineCount?, budgetLines, archived[], archiveFile?, dryRun? }
+ * @returns { overBudget, lineCount, newLineCount?, budgetLines, archived[], archiveFile?, dryRun? } | { ok:false, reason }
  */
 export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRun = false, stamp = 'archive' } = {}) {
   const mdPath = path.join(memoryDir, 'MEMORY.md');
-  if (!await fs.pathExists(mdPath)) return { ok: false, reason: 'no MEMORY.md' };
+  let text;
+  try {
+    if (!await fs.pathExists(mdPath)) return { ok: false, reason: 'no MEMORY.md' };
+    text = await fs.readFile(mdPath, 'utf8');
+  } catch (err) {
+    return { ok: false, reason: `read failed: ${err.code || err.message}` };
+  }
 
-  const text = await fs.readFile(mdPath, 'utf8');
   const lineCount = text.split('\n').length;
   if (lineCount <= budgetLines) return { overBudget: false, lineCount, budgetLines, archived: [] };
 
   const sections = splitSections(text);
   const archiveFile = `memory_index_archive_${stamp}.md`;
+  const archivePath = path.join(memoryDir, archiveFile);
 
-  // Fattest inline sections first, until we're under budget.
+  // Read the prior archive ONCE so we can content-dedup (no re-append bloat).
+  let priorArchive = '';
+  try { if (await fs.pathExists(archivePath)) priorArchive = await fs.readFile(archivePath, 'utf8'); } catch {}
+
+  // Fattest inline sections first; skip empty headers (would make `- []()`) and
+  // protected sections.
   const candidates = sections
     .map((s, i) => ({ i, s, weight: inlineWeight(s) }))
-    .filter(c => c.weight >= 6 && !PROTECTED(c.s.header))
+    .filter(c => c.weight >= 6 && c.s.header.trim().length > 0 && !PROTECTED(c.s.header))
     .sort((a, b) => b.weight - a.weight);
 
   const removeIdx = new Map();
   const archived = [];
-  let archiveBody = '';
+  let toAppend = '';
   let projected = lineCount;
   for (const c of candidates) {
     if (projected <= budgetLines) break;
-    archiveBody += c.s.lines.join('\n') + '\n\n';
+    const body = c.s.lines.join('\n');
+    const key = body.trim();
+    // Only append content not already archived — dedup prevents bloat; the
+    // section is still safely in the archive so removing it from MEMORY.md is
+    // never a loss.
+    if (key && !priorArchive.includes(key) && !toAppend.includes(key)) {
+      toAppend += body + '\n\n';
+    }
     removeIdx.set(c.i, `- [${c.s.header}](${archiveFile}) — moved out of the index ${stamp} (full detail in file)`);
     archived.push({ section: c.s.header, lines: c.s.lines.length });
     projected -= (c.s.lines.length - 1);
@@ -79,11 +123,10 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
     else out.push(...sections[i].lines);
   }
 
-  const archivePath = path.join(memoryDir, archiveFile);
   const fm = `---\nname: Memory index archive (${stamp})\ndescription: Fat inline sections moved out of MEMORY.md to keep the loaded index under ${budgetLines} lines. Nothing deleted; pointers remain in MEMORY.md.\nmetadata:\n  type: reference\n---\n`;
-  const prior = await fs.pathExists(archivePath) ? await fs.readFile(archivePath, 'utf8') : fm;
-  await fs.writeFile(archivePath, prior.trimEnd() + '\n\n' + archiveBody.trimEnd() + '\n');
-  await fs.writeFile(mdPath, out.join('\n'));
+  const base = priorArchive || fm;
+  if (toAppend) await atomicWrite(archivePath, base.trimEnd() + '\n\n' + toAppend.trimEnd() + '\n');
+  await atomicWrite(mdPath, out.join('\n'));
 
   return { overBudget: true, lineCount, newLineCount: out.length, budgetLines, archived, archiveFile };
 }

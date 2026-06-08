@@ -10,6 +10,8 @@ import { readSession } from '../session/state.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
 import { ensureRecallInstruction } from './activate.js';
+import { tidyIndex } from './tidy.js';
+import { resolveHomeMemoryDir } from '../context/capture.js';
 
 export async function autoRefreshCommand(options = {}) {
   const verbose = !!options.verbose;
@@ -32,6 +34,22 @@ export async function autoRefreshCommand(options = {}) {
       if (verbose && r.added) console.log(`memoir auto-refresh: enabled recall in ${r.added} global config(s)`);
     } catch (err) {
       if (verbose) console.error(`memoir auto-refresh: ensureRecallInstruction failed: ${err.message}`);
+    }
+    // Lean-memory: keep the loaded index under budget so the AI loads ALL of it
+    // and wastes no context on bloat. Over-budget-only, archive-not-delete,
+    // opt out with MEMOIR_NO_AUTO_TIDY.
+    if (!process.env.MEMOIR_NO_AUTO_TIDY) {
+      try {
+        const dir = resolveHomeMemoryDir();
+        if (dir) {
+          const t = await tidyIndex(dir, { stamp: 'auto' });
+          if (verbose && t.archived?.length) {
+            console.log(`memoir auto-refresh: tidied index → archived ${t.archived.length} section(s), now ${t.newLineCount} lines`);
+          }
+        }
+      } catch (err) {
+        if (verbose) console.error(`memoir auto-refresh: tidy failed: ${err.message}`);
+      }
     }
   } catch (err) {
     if (verbose) console.error(`memoir auto-refresh: ${err.message}`);

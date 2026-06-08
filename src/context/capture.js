@@ -214,37 +214,32 @@ function extractDecisions(userMessages, assistantTexts) {
 }
 
 /**
+ * Resolve the HOME-level memory dir (~/.claude/projects/<home-key>/memory) —
+ * the one that matches the user's home path encoding, not a sub-project.
+ * Returns null if none exists. Shared by persistDecisions + lean-memory tidy.
+ */
+export function resolveHomeMemoryDir(claudeSource) {
+  const claudeDir = claudeSource || path.join(home, '.claude');
+  const projectsDir = path.join(claudeDir, 'projects');
+  // Canonical home-key path ONLY. We deliberately do NOT fall back to "shortest
+  // dir that has a memory/ subfolder" — on a shared machine that could silently
+  // target a different project's (or teammate's) memory. Callers create the dir
+  // if needed; tidy safely no-ops when MEMORY.md is absent.
+  const homeKey = process.platform === 'win32'
+    ? home.replace(/\\/g, '-').replace(/:/g, '-')
+    : '-' + home.replace(/^\//, '').replace(/\//g, '-');
+  return path.join(projectsDir, homeKey, 'memory');
+}
+
+/**
  * Write extracted decisions to Claude's persistent memory.
  * This ensures decisions survive across sessions and machines.
  */
 export function persistDecisions(decisions, claudeSource) {
   if (!decisions || decisions.length === 0) return 0;
 
-  const claudeDir = claudeSource || path.join(home, '.claude');
-  const projectsDir = path.join(claudeDir, 'projects');
-  if (!fs.existsSync(projectsDir)) return 0;
-
-  // Find the HOME-level memory dir (not project-specific)
-  // This is the dir that matches the user's home path encoding
-  let homeKey;
-  if (process.platform === 'win32') {
-    homeKey = home.replace(/\\/g, '-').replace(/:/g, '-');
-  } else {
-    homeKey = '-' + home.replace(/^\//, '').replace(/\//g, '-');
-  }
-
-  // Try exact match first, then detect from existing dirs
-  let memDir = path.join(projectsDir, homeKey, 'memory');
-  if (!fs.existsSync(memDir)) {
-    // Fallback: find dirs with memory/ subfolder, pick shortest name (likely home-level)
-    const entries = fs.readdirSync(projectsDir, { withFileTypes: true })
-      .filter(e => e.isDirectory() && fs.existsSync(path.join(projectsDir, e.name, 'memory')));
-    if (entries.length === 0) return 0;
-    // Shortest dir name is most likely the home key (not a sub-project)
-    const homeEntry = entries.sort((a, b) => a.name.length - b.name.length)[0];
-    memDir = path.join(projectsDir, homeEntry.name, 'memory');
-  }
-
+  const memDir = resolveHomeMemoryDir(claudeSource);
+  if (!memDir) return 0;
   fs.mkdirSync(memDir, { recursive: true });
   const decisionsFile = path.join(memDir, 'session-decisions.md');
   const memoryMdPath = path.join(memDir, 'MEMORY.md');
