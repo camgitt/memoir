@@ -2,7 +2,7 @@
 
 # memoir
 
-**Sync AI memory across every coding tool. Zero config.**
+**Sync AI memory across every tool and every machine — end-to-end encrypted. Free.**
 
 [![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
 [![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
@@ -15,13 +15,15 @@
 npx memoir-cli
 ```
 
-One command. No install, no config, no API keys. Your AI now has persistent memory across sessions, tools, and machines. Works with Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, and 6 more tools.
+One command. No install, no config, no API keys. Claude Code on your Mac, Cursor on your laptop, Copilot at the office — **one memory follows you** across every tool and every machine, encrypted with a key only you hold. memoir's servers literally can't read it.
 
 ---
 
 ## What it does
 
-memoir is an [MCP memory server](https://modelcontextprotocol.io) that gives your AI tools persistent memory. Your AI can search, save, and recall context automatically — like a Claude Code backup that works everywhere.
+Your coding tools are starting to remember you — Claude Code, Cursor, and Copilot all ship built-in memory now. But that memory is **trapped: one tool, one machine, stored in plaintext.** Switch from Cursor to Claude Code, or open a different laptop, and your AI is a stranger again.
+
+memoir is the [MCP memory server](https://modelcontextprotocol.io) that breaks it out. **One memory, shared across every tool and synced to every machine — encrypted client-side, so even memoir's servers can't read it.** Your AI searches, saves, and recalls context automatically, everywhere you work.
 
 ```
 you: how does auth work in this project?
@@ -35,6 +37,20 @@ claude: Based on your previous sessions: this project uses JWT auth
 ```
 
 No re-explaining. memoir remembered.
+
+## How it's different
+
+Native memory and the other memory tools each give you *part* of this. memoir is the only one that gives you all of it:
+
+| | Cross-tool | Cross-machine sync | Zero-knowledge encrypted |
+|---|:---:|:---:|:---:|
+| **memoir** | ✅ | ✅ **free** | ✅ |
+| Claude Code / Cursor native | ❌ one tool | ❌ one machine | ❌ |
+| claude-mem | ✅ | ❌ local only | ❌ |
+| basic-memory | ✅ | 💲 paid cloud | ❌ |
+| mem0 / OpenMemory | ✅ | 💲 paid cloud | ❌ |
+
+Native memory is locked to one tool on one machine. The others keep your memory in plaintext, or put cross-machine sync behind a paywall. memoir is the only one that does all three — every tool, every machine, encrypted under a key only you hold — for free. <sub>(Based on public docs, June 2026.)</sub>
 
 ## Quick start
 
@@ -67,7 +83,7 @@ Your AI gets 14 memory tools:
 
 Your AI forgets everything between sessions. You re-explain your codebase, your conventions, your decisions — every time.
 
-memoir fixes this by giving your AI a shared memory layer that works across **every tool you use**. Tell Claude something once. Cursor knows it too. Sync AI memory between tools, back it up to the cloud, restore it on any machine. And when your memories pile up, `memoir consolidate` cleans house — finds duplicates, flags stale context, and optionally uses AI to merge and prune.
+memoir fixes that. Tell Claude something once and Cursor knows it too — your memory syncs between tools, backs up to the cloud, and restores on any machine. When it piles up, `memoir consolidate` cleans house: finds duplicates, flags stale context, and can use AI to merge and prune.
 
 **11 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev.
 
