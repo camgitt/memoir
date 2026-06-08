@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import inquirer from 'inquirer';
+import { detectAvailableTargets } from '../session/inject.js';
 
 // The instruction files each AI tool reads, in priority order
 const INSTRUCTION_FILES = [
@@ -63,6 +64,25 @@ async function injectBlock(filePath) {
     await fs.writeFile(filePath, MEMOIR_BLOCK + '\n');
     return 'created';
   }
+}
+
+/**
+ * Auto-activate recall GLOBALLY: ensure the memoir instruction block exists in
+ * each installed tool's user-global config (e.g. ~/.claude/CLAUDE.md), so the AI
+ * is told to use memoir_recall/remember in EVERY project — no per-project step.
+ * Idempotent and additive (never clobbers existing content). Opt out by setting
+ * MEMOIR_NO_AUTO_ACTIVATE. Called from the SessionStart hook (auto-refresh).
+ */
+export async function ensureRecallInstruction() {
+  if (process.env.MEMOIR_NO_AUTO_ACTIVATE) return { skipped: true, added: 0 };
+  let added = 0;
+  for (const target of Object.values(detectAvailableTargets())) {
+    try {
+      const res = await injectBlock(target);
+      if (res === 'appended' || res === 'created') added++;
+    } catch {}
+  }
+  return { added };
 }
 
 /**

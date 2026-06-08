@@ -9,6 +9,7 @@
 import { readSession } from '../session/state.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
+import { ensureRecallInstruction } from './activate.js';
 
 export async function autoRefreshCommand(options = {}) {
   const verbose = !!options.verbose;
@@ -23,6 +24,14 @@ export async function autoRefreshCommand(options = {}) {
       } catch (err) {
         if (verbose) console.error(`memoir auto-refresh: ${tool} failed: ${err.message}`);
       }
+    }
+    // Ensure recall is globally active (idempotent) so the AI uses memoir in
+    // every project without a manual `memoir activate`.
+    try {
+      const r = await ensureRecallInstruction();
+      if (verbose && r.added) console.log(`memoir auto-refresh: enabled recall in ${r.added} global config(s)`);
+    } catch (err) {
+      if (verbose) console.error(`memoir auto-refresh: ensureRecallInstruction failed: ${err.message}`);
     }
   } catch (err) {
     if (verbose) console.error(`memoir auto-refresh: ${err.message}`);

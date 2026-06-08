@@ -12,6 +12,7 @@ const suites = [
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
   { name: 'session (unit)', cmd: 'node', args: ['test-session.mjs'] },
   { name: 'capture-quality (unit)', cmd: 'node', args: ['test-capture-quality.mjs'] },
+  { name: 'auto-activate (unit)', cmd: 'node', args: ['test-auto-activate.mjs'] },
   { name: 'encryption (unit)', cmd: 'node', args: ['test-encryption.mjs'] },
   { name: 'cloud (unit)', cmd: 'node', args: ['test-cloud.mjs'] },
   { name: 'secret-scan (unit)', cmd: 'node', args: ['test-secret-scan.mjs'] },
