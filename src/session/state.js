@@ -10,6 +10,7 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import { withSessionLock } from './lock.js';
+import { SCHEMA_VERSION, migrateSessionData, emptySession } from './migrations.js';
 
 const home = os.homedir();
 const CONFIG_DIR = path.join(home, '.config', 'memoir');
@@ -17,7 +18,10 @@ const SESSION_PATH = path.join(CONFIG_DIR, 'session.json');
 const MACHINE_ID_PATH = path.join(CONFIG_DIR, 'machine.id');
 const SESSION_LOCK_PATH = path.join(CONFIG_DIR, 'session.json.lock');
 
-export const SCHEMA_VERSION = 1;
+// Re-exported for external consumers (e.g. test-session.mjs asserts against
+// state.SCHEMA_VERSION) — the canonical constant now lives in migrations.js
+// alongside the migration ladder it governs.
+export { SCHEMA_VERSION, emptySession };
 
 // Maximum items kept in each list before oldest entries rotate into history.
 // Prevents unbounded growth of the live pinned block.
@@ -46,64 +50,77 @@ export async function getMachineId() {
   return { id, label: os.hostname() };
 }
 
-// ── Schema ───────────────────────────────────────────────────────
-
-function emptySession() {
-  return {
-    version: SCHEMA_VERSION,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    machines: {}, // { [machineId]: { label, last_seen } }
-    current: {
-      goals: [],         // { text, machine_id, set_on }
-      next_actions: [],  // { text, machine_id, added, completed? }
-      open_questions: [],// { text, machine_id, asked }
-      decisions: [],     // { text, why?, rejected?, machine_id, date }
-    },
-    history: [],         // { date, machine_id, summary, files_touched, duration_min? }
-  };
-}
-
 // ── Read / write ─────────────────────────────────────────────────
+//
+// Forward-version guard: if session.json's version is NEWER than this
+// build's SCHEMA_VERSION (the file came from a newer memoir install — e.g.
+// another machine upgraded first and this one hasn't yet), readSession()
+// backs up the original file (mirroring the corrupted-JSON quarantine
+// pattern below) and returns a safe, empty-but-valid session instead of
+// misinterpreting an unknown shape. This is centralized HERE, not in
+// individual callers, so all ~20 call sites across mcp.js (8 MCP tool
+// handlers), commands/session.js, commands/why.js, commands/auto-refresh.js,
+// commands/push.js, commands/restore.js automatically get safe behavior
+// with zero changes required at each call site — and critically, no MCP
+// tool call is ever allowed to throw/crash because of a schema mismatch.
+let warnedForwardVersion = false; // print the upgrade warning once per process, not once per call
 
-// Atomic read with graceful recovery from corrupted JSON.
+// Atomic read with graceful recovery from corrupted JSON AND from a
+// too-new schema version.
 export async function readSession() {
   if (!await fs.pathExists(SESSION_PATH)) return emptySession();
 
+  let raw;
   try {
-    const raw = await fs.readFile(SESSION_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-    return migrateIfNeeded(parsed);
-  } catch (err) {
+    raw = await fs.readFile(SESSION_PATH, 'utf8');
+  } catch {
+    // Unreadable (permissions, race with a concurrent delete, etc.) —
+    // degrade to a safe empty session rather than throwing.
+    return emptySession();
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
     // Corrupted — preserve it for inspection, start fresh.
     const backup = `${SESSION_PATH}.corrupted-${Date.now()}`;
     try { await fs.copy(SESSION_PATH, backup); } catch {}
     return emptySession();
   }
+
+  const { future, state } = migrateSessionData(parsed);
+
+  if (future) {
+    const backup = `${SESSION_PATH}.pre-migration-${Date.now()}`;
+    try { await fs.copy(SESSION_PATH, backup); } catch {}
+    if (!warnedForwardVersion) {
+      warnedForwardVersion = true;
+      try {
+        process.stderr.write(
+          `memoir: session.json is from a newer version of memoir than this install understands ` +
+          `(schema v${parsed?.version} > v${SCHEMA_VERSION}). It has been backed up to ${backup}. ` +
+          `Run: npm i -g memoir-cli@latest\n`
+        );
+      } catch {}
+    }
+  }
+
+  return state;
 }
 
 // Atomic write: write to tmp, rename. Prevents torn writes on crash.
+// Unconditionally stamps version — every write lands at the CURRENT
+// SCHEMA_VERSION, since it always passed through readSession/migrateSessionData
+// (or emptySession()) to get here. Always called from within a locked
+// critical section (see the mutators below and lock.js).
 export async function writeSession(state) {
   await fs.ensureDir(CONFIG_DIR);
+  state.version = SCHEMA_VERSION;
   state.updated_at = new Date().toISOString();
   const tmp = `${SESSION_PATH}.tmp-${process.pid}`;
   await fs.writeFile(tmp, JSON.stringify(state, null, 2));
   await fs.move(tmp, SESSION_PATH, { overwrite: true });
-}
-
-function migrateIfNeeded(state) {
-  if (state && state.version === SCHEMA_VERSION) return state;
-  // Future versions: add migration steps here.
-  // For now, if version mismatch, merge defaults to fill gaps.
-  const fresh = emptySession();
-  return {
-    ...fresh,
-    ...state,
-    version: SCHEMA_VERSION,
-    current: { ...fresh.current, ...(state?.current || {}) },
-    machines: { ...fresh.machines, ...(state?.machines || {}) },
-    history: Array.isArray(state?.history) ? state.history : [],
-  };
 }
 
 // ── Machine registration ────────────────────────────────────────

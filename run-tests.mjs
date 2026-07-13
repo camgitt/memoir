@@ -19,6 +19,7 @@ const suites = [
   { name: 'secret-scan (unit)', cmd: 'node', args: ['test-secret-scan.mjs'] },
   { name: 'mcp-contract (unit)', cmd: 'node', args: ['test-mcp-contract.mjs'] },
   { name: 'session-lock (unit)', cmd: 'node', args: ['test-session-lock.mjs'] },
+  { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'cross-machine (e2e)', cmd: 'bash', args: ['test-cross-machine-e2e.sh'], bash: true },
   { name: 'session-sync (e2e)', cmd: 'bash', args: ['test-session-sync.sh'], bash: true },
 ];
