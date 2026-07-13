@@ -162,6 +162,50 @@ console.log(`\n${BOLD}${CYAN}mergeSessions${RESET}\n`);
   assert(merged.history[0].summary === 'Latest', 'newest history first');
 }
 
+// ── mergeSessions — tombstones are STICKY ─────────────────────────
+// Real incident (2026-07-13): a tombstoned junk decision on this machine was
+// about to be resurrected by the git remote's older, NOT-hidden copy of the
+// same text, because unionByText picked a winner purely on `date` and the
+// cleanup script sets `hidden` without bumping `date`. Suppression must be
+// monotonic across machines, or every machine re-hides the same junk forever.
+console.log(`\n${BOLD}${CYAN}mergeSessions — hidden tombstones survive merges${RESET}\n`);
+
+{
+  const mkState = (decisions) => ({
+    version: 1, created_at: '', updated_at: '', machines: {},
+    current: { goals: [], next_actions: [], open_questions: [], decisions },
+    history: [],
+  });
+
+  // Local tombstoned it; remote still has the un-hidden copy — and remote's is
+  // NEWER, so a date-only merge would hand the win to the un-hidden one.
+  const local = mkState([
+    { text: 'Use Redis for caching', date: '2026-07-01T00:00:00.000Z', hidden: true, hidden_at: '2026-07-13T00:00:00.000Z' },
+  ]);
+  const remote = mkState([
+    { text: 'Use Redis for caching', date: '2026-07-09T00:00:00.000Z' },
+  ]);
+
+  const m1 = state.mergeSessions(local, remote);
+  const d1 = m1.current.decisions.find((d) => d.text === 'Use Redis for caching');
+  assert(d1 && d1.hidden === true, 'tombstone survives a NEWER un-hidden remote copy (not resurrected)');
+  assert(d1 && d1.hidden_at === '2026-07-13T00:00:00.000Z', 'hidden_at carried through the merge');
+  assert(m1.current.decisions.length === 1, 'tombstoned + un-hidden copies collapse to one entry, not two');
+
+  // Symmetric: the tombstone works no matter which side holds it.
+  const m2 = state.mergeSessions(remote, local);
+  const d2 = m2.current.decisions.find((d) => d.text === 'Use Redis for caching');
+  assert(d2 && d2.hidden === true, 'tombstone is sticky regardless of merge argument order');
+
+  // And a normal decision is NOT accidentally suppressed by this.
+  const m3 = state.mergeSessions(
+    mkState([{ text: 'Use Postgres', date: '2026-07-01T00:00:00.000Z' }]),
+    mkState([{ text: 'Use Postgres', date: '2026-07-09T00:00:00.000Z' }])
+  );
+  const d3 = m3.current.decisions.find((d) => d.text === 'Use Postgres');
+  assert(d3 && !d3.hidden, 'a decision nobody tombstoned stays visible after merge');
+}
+
 // ── render.js ─────────────────────────────────────────────────────
 console.log(`\n${BOLD}${CYAN}render.js${RESET}\n`);
 

@@ -333,6 +333,27 @@ function unionByText(a = [], b = [], dateField, cap) {
       byText.set(key, item);
     }
   }
+
+  // A tombstone is STICKY: once any machine marks an entry hidden, the merged
+  // result stays hidden, whatever the dates say.
+  //
+  // Without this, `hidden` is just another field on whichever copy has the
+  // newer date — so a machine that hasn't pulled the tombstone yet, holding an
+  // older un-hidden copy of the same text, resurrects it on its next
+  // merge/push. (The cleanup script sets `hidden` without touching `date`, so
+  // the tombstoned copy doesn't even win the date comparison.) Suppression has
+  // to be monotonic or it isn't suppression — you'd be re-hiding the same junk
+  // on every machine forever.
+  for (const [key, winner] of byText) {
+    if (winner.hidden) continue;
+    const tombstone = [...a, ...b].find(
+      (i) => i && i.text && i.text.trim().toLowerCase() === key && i.hidden
+    );
+    if (tombstone) {
+      byText.set(key, { ...winner, hidden: true, hidden_at: tombstone.hidden_at });
+    }
+  }
+
   return Array.from(byText.values())
     .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0))
     .slice(0, cap);
