@@ -13,9 +13,11 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { spawn } from 'child_process';
+import { withSessionLock } from '../session/lock.js';
 
 const home = os.homedir();
 const STAMP_FILE = path.join(home, '.config', 'memoir', 'last-autopush.timestamp');
+const STAMP_LOCK_FILE = path.join(home, '.config', 'memoir', 'last-autopush.timestamp.lock');
 const DEBOUNCE_SECONDS_DEFAULT = 30;
 
 export async function autopushCommand(options = {}) {
@@ -26,23 +28,35 @@ export async function autopushCommand(options = {}) {
     await fs.ensureDir(path.dirname(STAMP_FILE));
   } catch {}
 
-  const now = Date.now();
-  let last = 0;
-  try {
-    const raw = await fs.readFile(STAMP_FILE, 'utf8');
-    last = parseInt(raw.trim(), 10) || 0;
-  } catch {}
+  // The debounce check ("read timestamp, compare elapsed, write new
+  // timestamp") is itself an unlocked check-then-act — two Stop hooks firing
+  // in the same window could both pass the debounce gate and both spawn a
+  // detached `memoir push`, racing each other against the git remote. Wrap
+  // the whole read+compare+stamp cycle in the same lock primitive
+  // state.js's mutators use (a dedicated lock file — this stamp is an
+  // unrelated concern from session.json itself).
+  const shouldRun = await withSessionLock(STAMP_LOCK_FILE, async () => {
+    const now = Date.now();
+    let last = 0;
+    try {
+      const raw = await fs.readFile(STAMP_FILE, 'utf8');
+      last = parseInt(raw.trim(), 10) || 0;
+    } catch {}
 
-  const elapsed = (now - last) / 1000;
-  if (last && elapsed < debounce) {
-    if (verbose) console.log(`memoir autopush: skipped (${Math.floor(elapsed)}s since last, debounce=${debounce}s)`);
-    return;
-  }
+    const elapsed = (now - last) / 1000;
+    if (last && elapsed < debounce) {
+      if (verbose) console.log(`memoir autopush: skipped (${Math.floor(elapsed)}s since last, debounce=${debounce}s)`);
+      return false;
+    }
 
-  // Stamp BEFORE spawning so rapid repeat calls don't all race through.
-  try {
-    await fs.writeFile(STAMP_FILE, String(now));
-  } catch {}
+    // Stamp BEFORE spawning so rapid repeat calls don't all race through.
+    try {
+      await fs.writeFile(STAMP_FILE, String(now));
+    } catch {}
+    return true;
+  });
+
+  if (!shouldRun) return;
 
   // Detach a background push. Parent exits immediately so Claude isn't blocked.
   const memoirBin = process.argv[1]; // path to this same memoir CLI

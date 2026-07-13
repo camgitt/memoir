@@ -9,11 +9,13 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { withSessionLock } from './lock.js';
 
 const home = os.homedir();
 const CONFIG_DIR = path.join(home, '.config', 'memoir');
 const SESSION_PATH = path.join(CONFIG_DIR, 'session.json');
 const MACHINE_ID_PATH = path.join(CONFIG_DIR, 'machine.id');
+const SESSION_LOCK_PATH = path.join(CONFIG_DIR, 'session.json.lock');
 
 export const SCHEMA_VERSION = 1;
 
@@ -117,98 +119,116 @@ async function touchMachine(state) {
 
 // ── Mutators ────────────────────────────────────────────────────
 
+// Every mutator below wraps its ENTIRE read -> mutate -> write cycle in
+// withSessionLock — not just the write. Locking only the write would still
+// allow two processes to both read the same stale snapshot before either
+// writes; the read must be inside the lock too so the second process reads
+// the FIRST process's already-written change rather than a stale copy.
+
 export async function addGoal(text) {
-  const state = await readSession();
-  const machineId = await touchMachine(state);
-  state.current.goals.unshift({
-    text,
-    machine_id: machineId,
-    set_on: new Date().toISOString(),
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    const machineId = await touchMachine(state);
+    state.current.goals.unshift({
+      text,
+      machine_id: machineId,
+      set_on: new Date().toISOString(),
+    });
+    state.current.goals = state.current.goals.slice(0, MAX_GOALS);
+    await writeSession(state);
+    return state;
   });
-  state.current.goals = state.current.goals.slice(0, MAX_GOALS);
-  await writeSession(state);
-  return state;
 }
 
 export async function addNext(text) {
-  const state = await readSession();
-  const machineId = await touchMachine(state);
-  // Dedupe by text (case-insensitive)
-  const normalized = text.trim().toLowerCase();
-  const exists = state.current.next_actions.some(a => a.text.trim().toLowerCase() === normalized);
-  if (!exists) {
-    state.current.next_actions.push({
-      text,
-      machine_id: machineId,
-      added: new Date().toISOString(),
-    });
-    state.current.next_actions = state.current.next_actions.slice(-MAX_NEXT);
-  }
-  await writeSession(state);
-  return state;
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    const machineId = await touchMachine(state);
+    // Dedupe by text (case-insensitive)
+    const normalized = text.trim().toLowerCase();
+    const exists = state.current.next_actions.some(a => a.text.trim().toLowerCase() === normalized);
+    if (!exists) {
+      state.current.next_actions.push({
+        text,
+        machine_id: machineId,
+        added: new Date().toISOString(),
+      });
+      state.current.next_actions = state.current.next_actions.slice(-MAX_NEXT);
+    }
+    await writeSession(state);
+    return state;
+  });
 }
 
 export async function completeNext(textOrIndex) {
-  const state = await readSession();
-  await touchMachine(state);
-  let idx = -1;
-  if (typeof textOrIndex === 'number') {
-    idx = textOrIndex;
-  } else {
-    const normalized = String(textOrIndex).trim().toLowerCase();
-    idx = state.current.next_actions.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
-  }
-  if (idx >= 0) {
-    state.current.next_actions.splice(idx, 1);
-  }
-  await writeSession(state);
-  return state;
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    await touchMachine(state);
+    let idx = -1;
+    if (typeof textOrIndex === 'number') {
+      idx = textOrIndex;
+    } else {
+      const normalized = String(textOrIndex).trim().toLowerCase();
+      idx = state.current.next_actions.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
+    }
+    if (idx >= 0) {
+      state.current.next_actions.splice(idx, 1);
+    }
+    await writeSession(state);
+    return state;
+  });
 }
 
 export async function addNote(text, opts = {}) {
-  const state = await readSession();
-  const machineId = await touchMachine(state);
-  const decision = {
-    text,
-    machine_id: machineId,
-    date: new Date().toISOString(),
-  };
-  if (opts.why) decision.why = opts.why;
-  if (opts.rejected) decision.rejected = opts.rejected;
-  state.current.decisions.unshift(decision);
-  state.current.decisions = state.current.decisions.slice(0, MAX_DECISIONS_RECENT);
-  await writeSession(state);
-  return state;
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    const machineId = await touchMachine(state);
+    const decision = {
+      text,
+      machine_id: machineId,
+      date: new Date().toISOString(),
+    };
+    if (opts.why) decision.why = opts.why;
+    if (opts.rejected) decision.rejected = opts.rejected;
+    state.current.decisions.unshift(decision);
+    state.current.decisions = state.current.decisions.slice(0, MAX_DECISIONS_RECENT);
+    await writeSession(state);
+    return state;
+  });
 }
 
 export async function addQuestion(text) {
-  const state = await readSession();
-  const machineId = await touchMachine(state);
-  state.current.open_questions.push({
-    text,
-    machine_id: machineId,
-    asked: new Date().toISOString(),
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    const machineId = await touchMachine(state);
+    state.current.open_questions.push({
+      text,
+      machine_id: machineId,
+      asked: new Date().toISOString(),
+    });
+    state.current.open_questions = state.current.open_questions.slice(-MAX_QUESTIONS);
+    await writeSession(state);
+    return state;
   });
-  state.current.open_questions = state.current.open_questions.slice(-MAX_QUESTIONS);
-  await writeSession(state);
-  return state;
 }
 
 // Roll up the current state into a history entry. Use at session end / push.
 // Does not clear `current` — these are "the working set," not per-session scratch.
 export async function recordSessionEnd({ summary, filesTouched = [], durationMin = null } = {}) {
-  const state = await readSession();
-  const machineId = await touchMachine(state);
-  state.history.unshift({
-    date: new Date().toISOString(),
-    machine_id: machineId,
-    summary: summary || '',
-    files_touched: filesTouched.slice(0, 20),
-    duration_min: durationMin,
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    const machineId = await touchMachine(state);
+    state.history.unshift({
+      date: new Date().toISOString(),
+      machine_id: machineId,
+      summary: summary || '',
+      files_touched: filesTouched.slice(0, 20),
+      duration_min: durationMin,
+    });
+    state.history = state.history.slice(0, MAX_HISTORY);
+    await writeSession(state);
+    return state;
   });
-  state.history = state.history.slice(0, MAX_HISTORY);
-  await writeSession(state);
-  return state;
 }
 
 // ── Cross-machine merge ─────────────────────────────────────────
@@ -293,4 +313,5 @@ export const paths = {
   config: CONFIG_DIR,
   session: SESSION_PATH,
   machineId: MACHINE_ID_PATH,
+  sessionLock: SESSION_LOCK_PATH,
 };
