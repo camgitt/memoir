@@ -11,6 +11,12 @@ import os from 'os';
 import crypto from 'crypto';
 import { withSessionLock } from './lock.js';
 import { SCHEMA_VERSION, migrateSessionData, emptySession } from './migrations.js';
+// NOTE: events/log.js imports getMachineId FROM this module — this is a
+// circular import, safe here because both appendEvent (used below) and
+// getMachineId (used by events/log.js) are hoisted function declarations
+// used only inside other functions' bodies, never at module-evaluation
+// time. Verified working; see test-event-log.mjs.
+import { appendEvent } from '../events/log.js';
 
 const home = os.homedir();
 const CONFIG_DIR = path.join(home, '.config', 'memoir');
@@ -65,6 +71,32 @@ export async function getMachineId() {
 // tool call is ever allowed to throw/crash because of a schema mismatch.
 let warnedForwardVersion = false; // print the upgrade warning once per process, not once per call
 
+// Opportunistic cleanup so the .corrupted-<ts> / .pre-migration-<ts> backup
+// patterns don't accumulate forever on a machine that repeatedly hits
+// either quarantine path. Keeps the N most recent of EACH pattern, deletes
+// older ones. Best-effort — a cleanup failure never blocks the caller.
+const MAX_BACKUPS_PER_PATTERN = 3;
+function cleanupOldBackups(suffixPrefix) {
+  try {
+    const dir = path.dirname(SESSION_PATH);
+    const base = path.basename(SESSION_PATH); // "session.json"
+    const marker = `${base}.${suffixPrefix}-`;
+    const matches = fs.readdirSync(dir)
+      .filter((f) => f.startsWith(marker))
+      .map((f) => {
+        let mtime = 0;
+        try { mtime = fs.statSync(path.join(dir, f)).mtimeMs; } catch {}
+        return { name: f, mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+    for (const f of matches.slice(MAX_BACKUPS_PER_PATTERN)) {
+      try { fs.unlinkSync(path.join(dir, f.name)); } catch {}
+    }
+  } catch {
+    // Best-effort — never block the caller.
+  }
+}
+
 // Atomic read with graceful recovery from corrupted JSON AND from a
 // too-new schema version.
 export async function readSession() {
@@ -86,6 +118,7 @@ export async function readSession() {
     // Corrupted — preserve it for inspection, start fresh.
     const backup = `${SESSION_PATH}.corrupted-${Date.now()}`;
     try { await fs.copy(SESSION_PATH, backup); } catch {}
+    cleanupOldBackups('corrupted');
     return emptySession();
   }
 
@@ -94,6 +127,7 @@ export async function readSession() {
   if (future) {
     const backup = `${SESSION_PATH}.pre-migration-${Date.now()}`;
     try { await fs.copy(SESSION_PATH, backup); } catch {}
+    cleanupOldBackups('pre-migration');
     if (!warnedForwardVersion) {
       warnedForwardVersion = true;
       try {
@@ -153,6 +187,7 @@ export async function addGoal(text) {
     });
     state.current.goals = state.current.goals.slice(0, MAX_GOALS);
     await writeSession(state);
+    await appendEvent('goal_set', {}); // no PII/content — count-and-type only
     return state;
   });
 }
@@ -188,10 +223,14 @@ export async function completeNext(textOrIndex) {
       const normalized = String(textOrIndex).trim().toLowerCase();
       idx = state.current.next_actions.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
     }
-    if (idx >= 0) {
+    const completed = idx >= 0;
+    if (completed) {
       state.current.next_actions.splice(idx, 1);
     }
     await writeSession(state);
+    // Only when something was actually completed — the event should mean
+    // "something happened," not "this function was called with no match."
+    if (completed) await appendEvent('next_completed', {});
     return state;
   });
 }
@@ -210,6 +249,8 @@ export async function addNote(text, opts = {}) {
     state.current.decisions.unshift(decision);
     state.current.decisions = state.current.decisions.slice(0, MAX_DECISIONS_RECENT);
     await writeSession(state);
+    // Count/booleans only — never the decision text itself.
+    await appendEvent('decision_captured', { has_why: !!opts.why, has_rejected: !!opts.rejected });
     return state;
   });
 }

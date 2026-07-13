@@ -9,6 +9,7 @@
 
 import fs from 'fs-extra';
 import path from 'path';
+import { appendEvent } from '../events/log.js';
 
 export const DEFAULT_BUDGET = 180; // Claude loads ~200 lines of MEMORY.md; leave headroom.
 
@@ -140,6 +141,12 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
   const base = priorArchive || fm;
   if (toAppend) await atomicWrite(archivePath, base.trimEnd() + '\n\n' + toAppend.trimEnd() + '\n');
   await atomicWrite(mdPath, out.join('\n'));
+
+  // Only reached when tidyIndex actually changed something (both earlier
+  // no-op paths — under budget, or over budget with nothing archivable —
+  // return before this point, and dryRun never writes). The event should
+  // mean "something happened," not "this function was called."
+  await appendEvent('tidy_ran', { archived_count: archived.length, from_lines: lineCount, to_lines: out.length });
 
   return { overBudget: true, lineCount, newLineCount: out.length, budgetLines, archived, archiveFile };
 }

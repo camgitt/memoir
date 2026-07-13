@@ -14,6 +14,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { BLOCK_START, BLOCK_END } from './render.js';
+import { appendEvent } from '../events/log.js';
 
 const home = os.homedir();
 const isWin = process.platform === 'win32';
@@ -78,6 +79,17 @@ export async function injectInto(targetPath, renderedBlock) {
   const tmp = `${targetPath}.tmp-${process.pid}`;
   await fs.writeFile(tmp, updated);
   await fs.move(tmp, targetPath, { overwrite: true });
+
+  // One event per target (this function is called once per detected tool —
+  // up to ~4x for a single session update). Deliberate: each call here IS a
+  // successful write to one specific target file, and the payload is tiny
+  // (just the filename, no content), so per-tool visibility is worth the 4x
+  // over collapsing to one event per "session update." injectInto() only
+  // receives a raw path (callers loop over detectAvailableTargets() by
+  // value, discarding the tool-name key), so the filename itself
+  // (CLAUDE.md / memoir-session.mdc / memoir-session.md / GEMINI.md) is
+  // what's actually available here without a larger refactor.
+  await appendEvent('memory_written', { target: path.basename(targetPath) });
 
   return { path: targetPath, created: !existed, replaced: existed && BLOCK_RE.test(content) };
 }

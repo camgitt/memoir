@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import chalk from 'chalk';
 import { execFileSync } from 'child_process';
+import { appendEvent } from '../events/log.js';
 
 function sanitizeUrl(url) {
   // Reject URLs with shell metacharacters
@@ -23,6 +24,7 @@ export async function syncToLocal(config, stagingDir, spinner) {
 
   await fs.copy(stagingDir, resolvedDest);
   spinner.succeed(chalk.green('Sync complete! ') + chalk.gray(`(Saved to ${resolvedDest})`));
+  await appendEvent('sync_pushed', { provider: 'local' });
 }
 
 export async function syncToGit(config, stagingDir, spinner) {
@@ -64,7 +66,15 @@ export async function syncToGit(config, stagingDir, spinner) {
     execFileSync('git', ['push', repoUrl, 'main'], { cwd: gitDir, stdio: 'ignore', timeout: 120000 });
 
     spinner.succeed(chalk.green('Sync complete! ') + chalk.gray('(Uploaded securely to GitHub)'));
+    await appendEvent('sync_pushed', { provider: 'git' });
   } catch (err) {
+    // Makes a silently-swallowed push failure (a non-fast-forward rejection
+    // from two racing pushes, a network error, bad credentials, etc.)
+    // visible in the event log instead of vanishing into the detached
+    // autopush child's ignored stdio. Deliberately no raw error text/repo
+    // URL in the payload — those can contain usernames/paths; type+provider
+    // is enough to know "pushes are failing" without leaking anything.
+    await appendEvent('sync_failed', { provider: 'git' });
     if (err.message.includes('invalid characters')) throw err;
     throw new Error('Failed to push to git repository. Ensure your credentials are configured and the repository exists.');
   } finally {
