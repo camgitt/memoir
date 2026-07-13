@@ -15,6 +15,7 @@ import { getSession } from '../cloud/auth.js';
 import { unbundleToDir } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
+import { migrateSessionData } from '../session/migrations.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
@@ -128,7 +129,13 @@ export async function restoreCommand(options = {}) {
     try {
       const remoteSessionPath = path.join(stagingDir, 'session.json');
       if (await fs.pathExists(remoteSessionPath)) {
-        const remote = JSON.parse(await fs.readFile(remoteSessionPath, 'utf8'));
+        // Route the remote backup through the same migrate-on-load path as
+        // the local file (migrateSessionData — pure, no I/O) rather than a
+        // raw JSON.parse, so an old-schema file from a lagging machine gets
+        // migrated up (or a too-new one safely degraded) BEFORE mergeSessions
+        // ever touches it. Symmetric with the push-side fix in push.js.
+        const rawRemote = JSON.parse(await fs.readFile(remoteSessionPath, 'utf8'));
+        const { state: remote } = migrateSessionData(rawRemote);
         const local = await readSession();
         const beforeMachines = Object.keys(local.machines || {}).length;
         const merged = mergeSessions(local, remote);

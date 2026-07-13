@@ -2,6 +2,11 @@
 // Regression guard for lean-memory tidyIndex().
 // Covers the core guarantees PLUS every bug found in adversarial review:
 // code-fence misparse (data loss), archive dedup (bloat), empty-header pointers.
+//
+// Uses a scratch HOME to avoid touching ~/.config/memoir: tidyIndex() now
+// emits a tidy_ran event (src/events/log.js) on every real rewrite, and
+// that event log lives under $HOME — without this shim it would silently
+// write to the REAL user's ~/.config/memoir/events.jsonl.
 
 import fs from 'fs-extra';
 import path from 'path';
@@ -10,6 +15,12 @@ import os from 'os';
 const BOLD = '\x1b[1m', GREEN = '\x1b[32m', RED = '\x1b[31m', CYAN = '\x1b[36m', RESET = '\x1b[0m';
 let pass = 0, fail = 0;
 function assert(c, m) { if (c) { console.log(`  ${GREEN}PASS${RESET} ${m}`); pass++; } else { console.log(`  ${RED}FAIL${RESET} ${m}`); fail++; } }
+
+// Shim HOME so events/log.js (transitively imported by tidy.js) points to
+// scratch. Must happen BEFORE the dynamic import below.
+const eventsScratchHome = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-tidy-events-home-'));
+process.env.HOME = eventsScratchHome;
+process.env.USERPROFILE = eventsScratchHome; // Windows
 
 const { tidyIndex } = await import('./src/commands/tidy.js');
 const F = '```';
@@ -87,6 +98,8 @@ const detail = (n, p = 'detail line') => Array.from({ length: n }, (_, i) => `- 
   assert(after.includes('orphan detail 1'), 'empty-header section left in place, not severed to a broken link');
   await fs.remove(dir);
 }
+
+await fs.remove(eventsScratchHome);
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail > 0 ? 1 : 0);

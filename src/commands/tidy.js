@@ -9,6 +9,7 @@
 
 import fs from 'fs-extra';
 import path from 'path';
+import { appendEvent } from '../events/log.js';
 
 export const DEFAULT_BUDGET = 180; // Claude loads ~200 lines of MEMORY.md; leave headroom.
 
@@ -56,6 +57,15 @@ function inlineWeight(section) {
 }
 
 const PROTECTED = (header) => /critical behavior rules/i.test(header) || header === '(preamble)';
+
+// Informational-only schema marker for MEMORY.md itself (distinct from — and
+// unrelated to — session.json's SCHEMA_VERSION). No enforcement/refusal
+// logic: this file is human-edited markdown, so a strict gate would hurt UX,
+// not help it. Appended as a single HTML comment line (invisible when
+// rendered) only when tidyIndex actually rewrites the file, and only once —
+// idempotent, never duplicated on repeat runs. Counted in newLineCount like
+// any other line, so it never causes a silent budget overshoot.
+const MEMORY_SCHEMA_MARKER = '<!-- memoir:schemaVersion 1 -->';
 
 async function atomicWrite(filePath, content) {
   const tmp = `${filePath}.tmp-${process.pid}`;
@@ -123,10 +133,20 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
     else out.push(...sections[i].lines);
   }
 
+  if (!out.some(l => l.includes('memoir:schemaVersion'))) {
+    out.push(MEMORY_SCHEMA_MARKER);
+  }
+
   const fm = `---\nname: Memory index archive (${stamp})\ndescription: Fat inline sections moved out of MEMORY.md to keep the loaded index under ${budgetLines} lines. Nothing deleted; pointers remain in MEMORY.md.\nmetadata:\n  type: reference\n---\n`;
   const base = priorArchive || fm;
   if (toAppend) await atomicWrite(archivePath, base.trimEnd() + '\n\n' + toAppend.trimEnd() + '\n');
   await atomicWrite(mdPath, out.join('\n'));
+
+  // Only reached when tidyIndex actually changed something (both earlier
+  // no-op paths — under budget, or over budget with nothing archivable —
+  // return before this point, and dryRun never writes). The event should
+  // mean "something happened," not "this function was called."
+  await appendEvent('tidy_ran', { archived_count: archived.length, from_lines: lineCount, to_lines: out.length });
 
   return { overBudget: true, lineCount, newLineCount: out.length, budgetLines, archived, archiveFile };
 }

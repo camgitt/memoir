@@ -161,6 +161,48 @@ function looksLikeFragment(v) {
   return false;
 }
 
+// Quality gate for auto-extracted decisions before they're written to EITHER
+// persistence sink (session-decisions.md via persistDecisions, or session.json
+// via addNote — see push.js, which now runs this once over parsed.decisions
+// before both call sites). Auto-extraction is regex-based and occasionally
+// produces prose fragments, markdown-table cells, or truncated pasted-spec
+// snippets — this rejects the shapes that look like junk rather than a real
+// decision.
+//
+// 2026-07: two real junk decisions made it into a live session.json because
+// the user-note regex (see extractDecisions below) matched mid-paragraph
+// inside long pasted spec/prompt text, and one of them was a hard 150-char
+// truncation with an unbalanced closing paren. The regex is now anchored to
+// message/line start (see below), which independently prevents both from
+// matching at all — these two extra checks are defense-in-depth for the
+// other, unanchored pattern branches (rename/tech/design/stack) that can
+// still match mid-message.
+export function isQuality(text) {
+  if (!text) return false;
+  if (text.length < 15) return false;                // too short to be a real decision
+  if (text.length > 200) return false;                // probably a snippet, not a decision
+  if (/\|/.test(text)) return false;                  // markdown table fragment
+  if (/[_*`]{3,}/.test(text)) return false;           // markdown formatting leaked in
+  if (!/[a-zA-Z]/.test(text)) return false;           // no actual words
+  if (looksLikeFragment(text)) return false;          // question, or pronoun/filler-start fragment
+  const words = text.split(/\s+/).length;
+  if (words < 3) return false;                        // less than 3 words isn't a decision
+
+  // Unbalanced parens/brackets — a hallmark of a regex capture that got cut
+  // off mid-parenthetical (real junk: "...only gain is Y)" with no opener,
+  // because the opening "(" was in the text BEFORE the capture started).
+  const opens = (text.match(/[(\[]/g) || []).length;
+  const closes = (text.match(/[)\]]/g) || []).length;
+  if (opens !== closes) return false;
+
+  // Suspiciously long AND doesn't end in sentence-ending punctuation or a
+  // closing quote — another truncation signature (a capture cut off mid-word
+  // or mid-sentence by a regex length cap rather than ending naturally).
+  if (text.length >= 140 && !/[.!?"')\]]$/.test(text)) return false;
+
+  return true;
+}
+
 /**
  * Extract durable decisions from session conversation.
  * These are things like renames, tech choices, preferences — stuff that should persist.
@@ -201,12 +243,37 @@ function extractDecisions(userMessages, assistantTexts) {
     }
   }
 
-  // Look for explicit "remember this" instructions from the user
+  // Look for explicit "remember this" instructions from the user.
+  //
+  // Anchored to message/line start ((?:^|\n) immediately before optional
+  // indentation and an optional "please") — unlike the pattern branches
+  // above, this used to match ANYWHERE in the message, which meant a phrase
+  // like "note that" or "keep in mind that" appearing mid-sentence inside a
+  // long pasted spec/prompt got misread as an explicit remember-instruction.
+  // Requiring it to start the message (or a line within it) means only a
+  // genuine top-of-message instruction matches, not incidental prose deep in
+  // pasted content.
+  //
+  // Only scanned within the first ~500 chars of the message: a short
+  // "Remember that X." followed by a long paste in the SAME turn must still
+  // be captured (the instruction is still at message start), but a trigger
+  // phrase that only occurs later/mid-document in a long paste is excluded
+  // — it was never an instruction to begin with.
+  const USER_NOTE_RE = /(?:^|\n)[ \t]*(?:please\s+)?(?:remember (?:that|this)|note that|keep in mind that|from now on)[:\s]+(.{10,150})/i;
   for (const msg of userMessages) {
-    // Only match when user is clearly asking to remember something
-    const rememberMatch = msg.match(/(?:remember (?:that|this)|note that|keep in mind that|from now on)[:\s]+(.{10,150})/i);
+    const scope = msg.slice(0, 500);
+    const rememberMatch = scope.match(USER_NOTE_RE);
     if (rememberMatch) {
-      decisions.push({ type: 'user-note', value: rememberMatch[1].trim(), context: msg.slice(0, 120) });
+      const capturedRaw = rememberMatch[1];
+      // The capture group is capped at 150 chars. Hitting that cap exactly is
+      // a truncation signature — real junk in the wild was a parenthetical
+      // cut off mid-thought with an unbalanced closing paren. Reject rather
+      // than keep a truncated tail.
+      const hitCap = capturedRaw.length === 150;
+      const value = capturedRaw.trim();
+      if (!hitCap && !looksLikeFragment(value)) {
+        decisions.push({ type: 'user-note', value, context: msg.slice(0, 120) });
+      }
     }
   }
 
@@ -229,6 +296,18 @@ export function resolveHomeMemoryDir(claudeSource) {
     ? home.replace(/\\/g, '-').replace(/:/g, '-')
     : '-' + home.replace(/^\//, '').replace(/\//g, '-');
   return path.join(projectsDir, homeKey, 'memory');
+}
+
+// Atomic write (sync): write to a pid-scoped tmp file, then rename over the
+// target. Matches the tmp-then-rename idiom used elsewhere in this codebase
+// (state.js's writeSession, inject.js's injectInto) — prevents a torn/partial
+// file if the process crashes mid-write. persistDecisions stays synchronous
+// (its one caller in push.js doesn't await it), so this uses the sync
+// fs-extra APIs rather than switching the whole call chain to async.
+function writeFileAtomicSync(targetPath, content) {
+  const tmp = `${targetPath}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, content);
+  fs.moveSync(tmp, targetPath, { overwrite: true });
 }
 
 /**
@@ -277,10 +356,10 @@ type: project
 
 # Decisions from coding sessions
 ${section}`;
-    fs.writeFileSync(decisionsFile, content);
+    writeFileAtomicSync(decisionsFile, content);
   } else {
     // Append to existing
-    fs.writeFileSync(decisionsFile, existing.trimEnd() + '\n' + section);
+    writeFileAtomicSync(decisionsFile, existing.trimEnd() + '\n' + section);
   }
 
   // Ensure MEMORY.md references the decisions file
@@ -288,7 +367,7 @@ ${section}`;
     const memoryMd = fs.readFileSync(memoryMdPath, 'utf8');
     if (!memoryMd.includes('session-decisions.md')) {
       const addition = `\n- [Session Decisions](session-decisions.md) — project renames, tech choices, architecture decisions from coding sessions\n`;
-      fs.writeFileSync(memoryMdPath, memoryMd.trimEnd() + addition);
+      writeFileAtomicSync(memoryMdPath, memoryMd.trimEnd() + addition);
     }
   }
 

@@ -1,0 +1,288 @@
+{
+  "tools": [
+    {
+      "name": "memoir_add_next",
+      "description": "Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The action, one short imperative sentence"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_ask",
+      "description": "Capture an open question for later. Use when the user poses a question you cannot fully answer now, or when an ambiguity surfaces that needs resolution in a future session.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The open question"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_complete_next",
+      "description": "Mark a next action as complete (removes it from the pinned list). Match by substring — pass the relevant keywords, not the whole text.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "match": {
+            "type": "string",
+            "description": "Substring to match against existing next actions"
+          }
+        },
+        "required": [
+          "match"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_consolidate",
+      "description": "Analyze all AI tool memories for duplicates, stale files, contradictions, and bloat. Returns a consolidation report with actionable suggestions. Use this to help users keep their AI memory clean.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "smart": {
+            "description": "Use AI (Gemini Flash) for deeper analysis — finds semantic duplicates, contradictions, and merge candidates. Requires GEMINI_API_KEY.",
+            "type": "boolean"
+          }
+        }
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_list",
+      "description": "List all memory files across all detected AI tools and projects",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "tool": {
+            "description": "Filter to a specific tool: \"claude\", \"gemini\", \"cursor\", etc. Leave empty for all.",
+            "type": "string"
+          }
+        }
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_note",
+      "description": "Record a decision with optional rationale and rejected alternative. Use when a non-obvious technical or product choice is made — the kind of thing a future session would want to know \"why did we do this.\"",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The decision, one short sentence (what was decided)"
+          },
+          "why": {
+            "description": "Rationale — why this choice over others",
+            "type": "string"
+          },
+          "rejected": {
+            "description": "The alternative that was considered and rejected",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_profiles",
+      "description": "List and manage memoir profiles (personal, work, etc.)",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_read",
+      "description": "Read the full content of a specific memory file",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "description": "Tool name: \"claude\", \"gemini\", \"cursor\", etc."
+          },
+          "filepath": {
+            "type": "string",
+            "description": "Relative file path within the tool's memory directory"
+          }
+        },
+        "required": [
+          "tool",
+          "filepath"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_recall",
+      "description": "Search across all AI tool memories, project configs, and session context for relevant information. Use this to find what you know about a topic, project, or tool.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query — keywords or topic to find in memories"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_remember",
+      "description": "Save a memory to a specific AI tool's memory files. Use this to persist important context, decisions, or facts for future sessions.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "The memory content to save (markdown format)"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Filename for the memory (e.g. \"auth-setup.md\", \"project-goals.md\")"
+          },
+          "tool": {
+            "description": "Which AI tool to save to: \"claude\", \"gemini\", \"cursor\", etc. Defaults to claude.",
+            "type": "string"
+          },
+          "project": {
+            "description": "Project directory path to save a project-level memory (e.g. CLAUDE.md). If provided, saves to that project directory instead of global tool config.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "filename"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_session",
+      "description": "Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_set_goal",
+      "description": "Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Pinned into CLAUDE.md so future sessions see it.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The goal, one short sentence"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_status",
+      "description": "Show which AI tools are detected on this machine and memoir configuration status",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {}
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_why",
+      "description": "Look up past decisions by keyword. Returns the decision text, why it was made, and what alternative was rejected. Use when the user asks \"why did we do X\" or when you need to avoid re-opening a settled question.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Keyword or phrase to search in decision text, rationale, or rejected alternative"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "uri": "memoir://tools",
+      "name": "detected-tools",
+      "description": "List of AI tools detected on this machine",
+      "mimeType": "text/plain"
+    }
+  ]
+}

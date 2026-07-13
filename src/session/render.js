@@ -19,7 +19,13 @@ export function renderSession(state) {
   const goals = (state.current?.goals || []).slice(0, MAX_RENDERED_GOALS);
   const nexts = (state.current?.next_actions || []).slice(-MAX_RENDERED_NEXT).reverse();
   const questions = (state.current?.open_questions || []).slice(-MAX_RENDERED_QUESTIONS).reverse();
-  const decisions = (state.current?.decisions || []).slice(0, MAX_RENDERED_DECISIONS);
+  // hidden:true is a tombstone (see scripts/cleanup-junk-decisions-2026-07.mjs)
+  // — distinct from the `rejected` field (which is a live, user-facing "the
+  // alternative we considered and rejected" string). Filtered here, and in
+  // why.js's CLI search+display and its MCP memoir_why handler, so a
+  // tombstoned decision is fully suppressed rather than just hidden from one
+  // of the three places decisions are read/displayed/searched.
+  const decisions = (state.current?.decisions || []).filter(d => !d?.hidden).slice(0, MAX_RENDERED_DECISIONS);
   const history = (state.history || []).slice(0, MAX_RENDERED_HISTORY);
 
   const everythingEmpty = !goals.length && !nexts.length && !questions.length && !decisions.length && !history.length;

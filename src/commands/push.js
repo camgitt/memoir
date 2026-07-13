@@ -5,19 +5,71 @@ import os from 'os';
 import ora from 'ora';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
+import { execFileSync } from 'child_process';
 import { getConfig, autoSetup } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import inquirer from 'inquirer';
-import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions } from '../context/capture.js';
+import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions, isQuality } from '../context/capture.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
 import { scanWorkspace } from '../workspace/tracker.js';
 import { promptActivate } from './activate.js';
-import { paths as sessionPaths, readSession, addNote, recordSessionEnd } from '../session/state.js';
+import { paths as sessionPaths, readSession, writeSession, mergeSessions, addNote, recordSessionEnd } from '../session/state.js';
+import { migrateSessionData } from '../session/migrations.js';
+import { withSessionLock } from '../session/lock.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
+
+// Best-effort fetch of the CURRENT remote session.json, so push.js can merge
+// before overwrite instead of blindly clobbering it (see below). Returns the
+// remote session state (already migrated to SCHEMA_VERSION) or null if the
+// remote is unreachable, this is the very first push (nothing there yet), or
+// the remote backup is encrypted (best-effort only — we deliberately don't
+// force an extra decrypt passphrase prompt mid-push; falls back to
+// local-only in that case, exactly like an unreachable remote).
+async function fetchRemoteSessionBestEffort(config) {
+  try {
+    if (config.provider === 'local' || config.provider?.includes?.('local')) {
+      const resolvedDest = (config.localPath || '').replace(/^~/, os.homedir());
+      if (!resolvedDest) return null;
+      if (await fs.pathExists(path.join(resolvedDest, 'manifest.enc'))) return null; // encrypted
+      const remotePath = path.join(resolvedDest, 'session.json');
+      if (!(await fs.pathExists(remotePath))) return null;
+      const raw = JSON.parse(await fs.readFile(remotePath, 'utf8'));
+      const { state } = migrateSessionData(raw);
+      return state;
+    }
+
+    if (config.provider === 'git' || config.provider?.includes?.('git')) {
+      const repoUrl = config.gitRepo;
+      if (!repoUrl) return null;
+      const peekDir = path.join(os.tmpdir(), `memoir-push-peek-${Date.now()}`);
+      await fs.ensureDir(peekDir);
+      try {
+        try {
+          execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: peekDir, stdio: 'ignore', timeout: 30000 });
+        } catch {
+          // Unreachable, or this is the very first push (repo doesn't exist
+          // yet / is empty) — fall back to local-only.
+          return null;
+        }
+        if (await fs.pathExists(path.join(peekDir, 'manifest.enc'))) return null; // encrypted
+        const remotePath = path.join(peekDir, 'session.json');
+        if (!(await fs.pathExists(remotePath))) return null;
+        const raw = JSON.parse(await fs.readFile(remotePath, 'utf8'));
+        const { state } = migrateSessionData(raw);
+        return state;
+      } finally {
+        await fs.remove(peekDir).catch(() => {});
+      }
+    }
+  } catch {
+    // Never let a merge-fetch failure block the push.
+  }
+  return null;
+}
 
 // Recursively scan every staged file (the REAL tool memory/config files about
 // to be uploaded — CLAUDE.md, .cursorrules, settings.json, project configs,
@@ -134,11 +186,20 @@ export async function pushCommand(options = {}) {
           await fs.writeFile(path.join(localHandoffDir, `${timestamp}-claude.md`), clean);
           await fs.writeFile(path.join(localHandoffDir, 'latest.md'), clean);
 
+          // Quality filter: auto-extracted decisions come from regex patterns
+          // that sometimes catch table cells, prose fragments, or truncated
+          // pasted-spec snippets. Run the SAME filter over parsed.decisions
+          // ONCE, before either persistence sink — previously persistDecisions()
+          // received the raw unfiltered list while only the session.json sink
+          // below filtered, so junk could reach session-decisions.md even after
+          // being rejected from session.json. Both sinks now agree on what's junk.
+          const qualityDecisions = parsed.decisions.filter(d => isQuality(String(d.value || '').trim()));
+
           // Persist decisions to Claude's memory so they survive across sessions
           let decisionCount = 0;
-          if (parsed.decisions.length > 0) {
+          if (qualityDecisions.length > 0) {
             try {
-              decisionCount = persistDecisions(parsed.decisions);
+              decisionCount = persistDecisions(qualityDecisions);
             } catch {}
           }
 
@@ -150,25 +211,8 @@ export async function pushCommand(options = {}) {
             const existingTexts = new Set(
               current.current.decisions.map(d => (d.text || '').trim().toLowerCase())
             );
-            // Quality filter: auto-extracted decisions come from regex patterns
-            // that sometimes catch table cells or prose fragments. Keep only
-            // substantive-looking entries.
-            const isQuality = (text) => {
-              if (!text) return false;
-              if (text.length < 15) return false;                // too short to be a real decision
-              if (text.length > 200) return false;               // probably a snippet, not a decision
-              if (/\|/.test(text)) return false;                 // markdown table fragment
-              if (/[_*`]{3,}/.test(text)) return false;          // markdown formatting leaked in
-              if (!/[a-zA-Z]/.test(text)) return false;          // no actual words
-              if (/\?/.test(text)) return false;                 // questions aren't decisions
-              if (/^(it|this|that|these|those|we|i|they|you|some|there|here|just|back|now|also)\b/i.test(text)) return false; // fragment
-              const words = text.split(/\s+/).length;
-              if (words < 3) return false;                       // less than 3 words isn't a decision
-              return true;
-            };
-            for (const d of parsed.decisions.slice(0, 10)) {
+            for (const d of qualityDecisions.slice(0, 10)) {
               const text = String(d.value || '').trim();
-              if (!isQuality(text)) continue;
               if (existingTexts.has(text.toLowerCase())) continue;
               await addNote(text, { why: d.context ? `auto-captured: ${d.context.slice(0, 80)}` : undefined });
             }
@@ -227,11 +271,38 @@ export async function pushCommand(options = {}) {
       // Workspace scan is best-effort
     }
 
-    // Include session.json (continuity state) so it syncs across machines
+    // Include session.json (continuity state) so it syncs across machines.
+    //
+    // MERGE-BEFORE-OVERWRITE: this used to be a blind fs.copy() of the LOCAL
+    // session.json, and syncToGit/syncToLocal do a full-mirror overwrite of
+    // the remote (clone-or-init, delete every tracked file, copy the local
+    // staging dir wholesale over it, commit, push). Any machine that pushed
+    // without having restored first would silently and completely destroy
+    // whatever ANY OTHER machine had added to the remote in the interim —
+    // goals, next-actions, decisions, everything. Not an edge case: it's the
+    // default behavior of the most common operation in the tool (autopush
+    // fires after every single Claude Code response).
+    //
+    // Best-effort fetch the current remote session.json first, migrate it,
+    // and merge with mergeSessions (the same newest-timestamp-wins
+    // union-by-text function restore.js already uses) BEFORE writing the
+    // result to both the staging dir (for upload) and back to the local
+    // session.json (so this machine also gains whatever the remote had that
+    // it didn't) — symmetric with restore.js instead of a blind overwrite.
     let sessionIncluded = false;
     try {
       if (await fs.pathExists(sessionPaths.session)) {
-        await fs.copy(sessionPaths.session, path.join(stagingDir, 'session.json'));
+        const remote = await fetchRemoteSessionBestEffort(config);
+        const local = await readSession();
+        const merged = remote ? mergeSessions(local, remote) : local;
+        if (remote) {
+          // Persist the merge locally too, inside the same lock every other
+          // session.json read-modify-write cycle uses.
+          await withSessionLock(sessionPaths.sessionLock, async () => {
+            await writeSession(merged);
+          });
+        }
+        await fs.writeFile(path.join(stagingDir, 'session.json'), JSON.stringify(merged, null, 2));
         sessionIncluded = true;
       }
     } catch {
