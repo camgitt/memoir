@@ -17,6 +17,24 @@ import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
 
+// ⚠️  HOME MUST BE SHIMMED BEFORE THE FIRST ./src IMPORT — DO NOT MOVE THIS.
+//
+// src/session/state.js does `const home = os.homedir()` at MODULE LOAD and
+// derives paths.session from it once. os.homedir() reads $HOME. So any ./src
+// import that (even transitively) pulls in state.js BEFORE this shim binds
+// paths.session to the developer's REAL ~/.config/memoir/session.json for
+// the life of the process — and ESM module caching means re-importing later,
+// after setting $HOME, returns the same already-bound module.
+//
+// That is exactly what happened on 2026-07-13: this file imported
+// ./src/commands/why.js (→ state.js) at the top of the first test block,
+// then set process.env.HOME further down, then wrote a fixture to
+// stateMod.paths.session — clobbering the real session.json with test data.
+// Shim first, import second. Always.
+const scratchHome = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-decisions-hidden-test-'));
+process.env.HOME = scratchHome;
+process.env.USERPROFILE = scratchHome; // Windows
+
 const BOLD = '\x1b[1m', GREEN = '\x1b[32m', RED = '\x1b[31m', CYAN = '\x1b[36m', RESET = '\x1b[0m';
 
 let pass = 0, fail = 0;
@@ -55,11 +73,22 @@ console.log(`\n${BOLD}${CYAN}why.js — findDecisions() excludes hidden:true${RE
 console.log(`\n${BOLD}${CYAN}why.js — whyCommand() CLI display excludes hidden:true${RESET}\n`);
 
 {
-  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-why-hidden-test-'));
-  process.env.HOME = scratch;
-  process.env.USERPROFILE = scratch;
   const stateMod = await import('./src/session/state.js');
   const { whyCommand } = await import('./src/commands/why.js');
+
+  // Tripwire: prove state.js actually bound its paths inside the scratch HOME
+  // shimmed at the top of this file. If a future edit ever reintroduces a
+  // ./src import above that shim, paths.session silently points at the real
+  // ~/.config/memoir/session.json and the fixture write below would destroy
+  // real user data. Fail loudly here instead.
+  if (!stateMod.paths.session.startsWith(scratchHome)) {
+    console.error(
+      `\n${RED}FATAL${RESET} state.js resolved paths.session to ${stateMod.paths.session},\n` +
+      `which is OUTSIDE the scratch HOME (${scratchHome}).\n` +
+      `A ./src import ran before the HOME shim. Refusing to write a fixture to a real path.\n`
+    );
+    process.exit(1);
+  }
 
   await fs.ensureDir(path.dirname(stateMod.paths.session));
   const state = makeState([
@@ -79,8 +108,6 @@ console.log(`\n${BOLD}${CYAN}why.js — whyCommand() CLI display excludes hidden
 
   assert(output.includes('Use Redis for caching'), 'non-hidden decision shown by `memoir why`');
   assert(!output.includes('Use Memcached for caching'), 'hidden:true decision excluded from `memoir why` CLI output');
-
-  await fs.remove(scratch);
 }
 
 // ── mcp.js — memoir_why tool handler (real stdio MCP call) ─────────────

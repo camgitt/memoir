@@ -5,8 +5,56 @@
 // skipped on Windows (no bash) — the Node unit suites still cover the
 // platform-specific home-key path logic there.
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 const isWin = process.platform === 'win32';
+
+// ── Real-state tripwire ────────────────────────────────────────────────
+// Tests MUST run against a scratch HOME and never touch the developer's real
+// ~/.config/memoir. On 2026-07-13 test-decisions-hidden.mjs imported a ./src
+// module before shimming $HOME — state.js binds paths.session from
+// os.homedir() at module load, so the fixture write landed on the REAL
+// session.json and destroyed live data (twice, before it was caught).
+//
+// The per-file fix is to shim $HOME first. THIS is the backstop: a generic
+// guard that catches any future leak from any suite by any mechanism. It
+// looks for test-fixture signatures in the real session.json rather than
+// diffing the whole file, because a legitimate `memoir push`/autopush from a
+// concurrent Claude Code session can rewrite it mid-run — a hash compare
+// would false-positive on that; a fixture-marker match cannot.
+const REAL_SESSION = path.join(os.homedir(), '.config', 'memoir', 'session.json');
+const FIXTURE_MARKERS = [
+  'Use Redis for caching',
+  'Use Memcached for caching',
+  'test-machine',
+  'hello-from-test',
+  'concurrent-action-',
+];
+
+function scanRealStateForFixtures(label) {
+  let raw;
+  try {
+    raw = fs.readFileSync(REAL_SESSION, 'utf8');
+  } catch {
+    return null; // no real store on this machine (CI) — nothing to protect
+  }
+  const hits = FIXTURE_MARKERS.filter((m) => raw.includes(m));
+  if (hits.length === 0) return null;
+  return { label, hits, raw };
+}
+
+// If the real store is ALREADY contaminated before we start, say so loudly but
+// don't fail — the developer may be mid-recovery. Only a leak introduced BY
+// this run is a hard failure.
+const preExisting = scanRealStateForFixtures('pre-existing');
+if (preExisting) {
+  console.log(
+    `\n\x1b[33mWARNING\x1b[0m real session.json already contains test-fixture markers before the suite ran: ` +
+      `${preExisting.hits.join(', ')}\n  ${REAL_SESSION}\n  (Not failing — assuming you are mid-recovery. It will not be re-checked as a new leak.)\n`
+  );
+}
 
 const suites = [
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
@@ -39,6 +87,28 @@ for (const s of suites) {
   results.push({ name: s.name, status: r.status === 0 ? 'pass' : 'fail', code: r.status });
 }
 
+// ── Real-state tripwire: did this run leak fixtures into the real store? ──
+let leaked = false;
+if (!preExisting) {
+  const post = scanRealStateForFixtures('post-run');
+  if (post) {
+    leaked = true;
+    console.error(
+      `\n\x1b[31m╔══════════════════════════════════════════════════════════════╗\x1b[0m\n` +
+        `\x1b[31m║  TEST SUITE LEAKED INTO YOUR REAL MEMOIR STORE               ║\x1b[0m\n` +
+        `\x1b[31m╚══════════════════════════════════════════════════════════════╝\x1b[0m\n\n` +
+        `  ${REAL_SESSION}\n` +
+        `  now contains test-fixture markers: ${post.hits.join(', ')}\n\n` +
+        `  A suite wrote to the real ~/.config/memoir instead of a scratch HOME.\n` +
+        `  Almost always cause: a \`./src\` import that runs BEFORE the test file\n` +
+        `  sets process.env.HOME — src/session/state.js binds its paths from\n` +
+        `  os.homedir() at module load, so the shim must come first.\n\n` +
+        `  Your real data may have been overwritten. Recover from the newest\n` +
+        `  clean backup in ~/.config/memoir/ or from your memoir git remote.\n`
+    );
+  }
+}
+
 const failed = results.filter((r) => r.status === 'fail');
 const passed = results.filter((r) => r.status === 'pass').length;
 const skipped = results.filter((r) => r.status === 'skip').length;
@@ -50,5 +120,6 @@ for (const r of results) {
   console.log(`  ${tag}  ${r.name}${extra}`);
 }
 console.log(`\n  ${passed} passed, ${failed.length} failed, ${skipped} skipped`);
+if (leaked) console.log(`  \x1b[31m+ REAL-STATE LEAK DETECTED (see above)\x1b[0m`);
 
-process.exit(failed.length > 0 ? 1 : 0);
+process.exit(failed.length > 0 || leaked ? 1 : 0);
