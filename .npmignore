@@ -30,3 +30,7 @@ POSTS-READY-TO-GO.md
 MARKETING.md
 GAMEPLAN.md
 VISION.md
+
+# Uncommitted WIP as of 2026-07-13 (Linux-path fix, not yet reviewed/finished) —
+# remove this line once it's committed and ready to ship.
+src/utils/

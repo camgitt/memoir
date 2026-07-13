@@ -30,7 +30,7 @@
     "start": "node bin/memoir.js",
     "test": "node run-tests.mjs",
     "test:legacy": "bash test-local.sh",
-    "prepublishOnly": "npm test",
+    "prepublishOnly": "node scripts/check-clean-for-publish.mjs && npm test",
     "postinstall": "node -e \"try{const c='\\x1b[36m',r='\\x1b[0m',g='\\x1b[90m';console.log('\\n  '+c+'memoir'+r+' installed.\\n  Run '+c+'memoir activate'+r+' in any project to give your AI long-term memory.\\n  '+g+'https://memoir.sh'+r+'\\n')}catch{}\""
   },
   "keywords": [
