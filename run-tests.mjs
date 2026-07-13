@@ -20,6 +20,7 @@ const suites = [
   { name: 'mcp-contract (unit)', cmd: 'node', args: ['test-mcp-contract.mjs'] },
   { name: 'session-lock (unit)', cmd: 'node', args: ['test-session-lock.mjs'] },
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
+  { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
   { name: 'cross-machine (e2e)', cmd: 'bash', args: ['test-cross-machine-e2e.sh'], bash: true },
   { name: 'session-sync (e2e)', cmd: 'bash', args: ['test-session-sync.sh'], bash: true },
 ];

@@ -697,7 +697,13 @@ server.tool(
   { query: z.string().describe('Keyword or phrase to search in decision text, rationale, or rejected alternative') },
   async ({ query }) => {
     const state = await readSession();
-    const matches = findDecisions(state, query);
+    // findDecisions() already filters hidden:true (tombstoned) decisions —
+    // this second filter is deliberate belt-and-suspenders so this tool
+    // handler stays correct even if findDecisions' internals change without
+    // that coupling being obvious. Same tombstone semantics as render.js's
+    // pinned block and why.js's CLI display: distinct from the live
+    // `rejected` field.
+    const matches = findDecisions(state, query).filter(d => !d?.hidden);
     if (matches.length === 0) {
       return { content: [{ type: 'text', text: `No decisions match "${query}".` }] };
     }

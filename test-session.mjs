@@ -217,6 +217,25 @@ console.log(`\n${BOLD}${CYAN}render.js${RESET}\n`);
   assert(rendered.includes('Solo goal'), 'goal still rendered');
 }
 
+// 14b. hidden:true decisions (tombstoned junk) are excluded from the pinned block
+{
+  const withHidden = {
+    version: 1,
+    machines: { mac: { label: 'Mac', last_seen: '2026-04-17T12:00:00Z' } },
+    current: {
+      goals: [], next_actions: [], open_questions: [],
+      decisions: [
+        { text: 'Visible real decision', machine_id: 'mac', date: '2026-04-17T11:00:00Z' },
+        { text: 'Junk tombstoned decision', machine_id: 'mac', date: '2026-04-17T11:05:00Z', hidden: true, hidden_at: '2026-07-01T00:00:00Z' },
+      ],
+    },
+    history: [],
+  };
+  const rendered = renderSession(withHidden);
+  assert(rendered.includes('Visible real decision'), 'non-hidden decision still rendered');
+  assert(!rendered.includes('Junk tombstoned decision'), 'hidden:true decision excluded from the pinned block');
+}
+
 // ── inject.js ─────────────────────────────────────────────────────
 console.log(`\n${BOLD}${CYAN}inject.js${RESET}\n`);
 
