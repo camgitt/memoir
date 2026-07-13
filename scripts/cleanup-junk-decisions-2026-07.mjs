@@ -40,8 +40,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // avoid over-matching). Keep these as a named, easy-to-find constant so
 // they're trivial to verify before anyone runs this for real.
 export const JUNK_TEXT_SUBSTRINGS = [
-  'PLACEHOLDER_JUNK_TEXT_1__replace_with_real_junk_decision_text_before_running',
-  'PLACEHOLDER_JUNK_TEXT_2__replace_with_real_junk_decision_text_before_running',
+  'the service key is read as SUPABASE_SERVICE_KEY.',
+  'off-screen render cost is ALREADY mitigated by content-visibility:auto',
+  "the API keys live…' survives; any anchor/length fix must keep short message-start notes working",
+  'Postgres for the database layer',
 ];
 // ─────────────────────────────────────────────────────────────────────────
 
