@@ -9,7 +9,7 @@ import { getConfig, autoSetup } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import inquirer from 'inquirer';
-import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions } from '../context/capture.js';
+import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions, isQuality } from '../context/capture.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
@@ -134,11 +134,20 @@ export async function pushCommand(options = {}) {
           await fs.writeFile(path.join(localHandoffDir, `${timestamp}-claude.md`), clean);
           await fs.writeFile(path.join(localHandoffDir, 'latest.md'), clean);
 
+          // Quality filter: auto-extracted decisions come from regex patterns
+          // that sometimes catch table cells, prose fragments, or truncated
+          // pasted-spec snippets. Run the SAME filter over parsed.decisions
+          // ONCE, before either persistence sink — previously persistDecisions()
+          // received the raw unfiltered list while only the session.json sink
+          // below filtered, so junk could reach session-decisions.md even after
+          // being rejected from session.json. Both sinks now agree on what's junk.
+          const qualityDecisions = parsed.decisions.filter(d => isQuality(String(d.value || '').trim()));
+
           // Persist decisions to Claude's memory so they survive across sessions
           let decisionCount = 0;
-          if (parsed.decisions.length > 0) {
+          if (qualityDecisions.length > 0) {
             try {
-              decisionCount = persistDecisions(parsed.decisions);
+              decisionCount = persistDecisions(qualityDecisions);
             } catch {}
           }
 
@@ -150,25 +159,8 @@ export async function pushCommand(options = {}) {
             const existingTexts = new Set(
               current.current.decisions.map(d => (d.text || '').trim().toLowerCase())
             );
-            // Quality filter: auto-extracted decisions come from regex patterns
-            // that sometimes catch table cells or prose fragments. Keep only
-            // substantive-looking entries.
-            const isQuality = (text) => {
-              if (!text) return false;
-              if (text.length < 15) return false;                // too short to be a real decision
-              if (text.length > 200) return false;               // probably a snippet, not a decision
-              if (/\|/.test(text)) return false;                 // markdown table fragment
-              if (/[_*`]{3,}/.test(text)) return false;          // markdown formatting leaked in
-              if (!/[a-zA-Z]/.test(text)) return false;          // no actual words
-              if (/\?/.test(text)) return false;                 // questions aren't decisions
-              if (/^(it|this|that|these|those|we|i|they|you|some|there|here|just|back|now|also)\b/i.test(text)) return false; // fragment
-              const words = text.split(/\s+/).length;
-              if (words < 3) return false;                       // less than 3 words isn't a decision
-              return true;
-            };
-            for (const d of parsed.decisions.slice(0, 10)) {
+            for (const d of qualityDecisions.slice(0, 10)) {
               const text = String(d.value || '').trim();
-              if (!isQuality(text)) continue;
               if (existingTexts.has(text.toLowerCase())) continue;
               await addNote(text, { why: d.context ? `auto-captured: ${d.context.slice(0, 80)}` : undefined });
             }
