@@ -4,11 +4,20 @@ import path from 'path';
 import os from 'os';
 import chalk from 'chalk';
 import { shouldIgnoreProject } from '../context/capture.js';
+import { vscodeUserDir, vscodeGlobalStorage, xdgConfigDir } from '../utils/platform.js';
 
 const home = os.homedir();
 
 const isWin = process.platform === 'win32';
 const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+
+// VS Code-family config dirs — resolved per-OS (incl. Linux) via platform.js.
+const cursorUserDir = vscodeUserDir('Cursor');
+const windsurfUserDir = vscodeUserDir('Windsurf');
+const clineStorageDir = vscodeGlobalStorage('saoudrizwan.claude-dev');
+// Non-VSCode tools that store under AppData on Windows and XDG config on POSIX.
+const copilotDir = isWin ? path.join(appData, 'GitHub Copilot') : path.join(xdgConfigDir(), 'github-copilot');
+const zedDir = isWin ? path.join(appData, 'Zed') : path.join(xdgConfigDir(), 'zed');
 
 export const adapters = [
   {
@@ -78,13 +87,9 @@ export const adapters = [
   {
     name: 'Cursor',
     icon: '⚡',
-    source: isWin
-      ? path.join(appData, 'Cursor', 'User')
-      : path.join(home, 'Library', 'Application Support', 'Cursor', 'User'),
+    source: cursorUserDir,
     filter: (src) => {
-      const cursorDir = isWin
-        ? path.join(appData, 'Cursor', 'User')
-        : path.join(home, 'Library', 'Application Support', 'Cursor', 'User');
+      const cursorDir = cursorUserDir;
       const rel = path.relative(cursorDir, src);
       if (src === cursorDir) return true;
       const basename = path.basename(src);
@@ -100,13 +105,8 @@ export const adapters = [
   {
     name: 'GitHub Copilot',
     icon: '🐙',
-    source: isWin
-      ? path.join(appData, 'GitHub Copilot')
-      : path.join(home, '.config', 'github-copilot'),
+    source: copilotDir,
     filter: (src) => {
-      const copilotDir = isWin
-        ? path.join(appData, 'GitHub Copilot')
-        : path.join(home, '.config', 'github-copilot');
       if (src === copilotDir) return true;
       const basename = path.basename(src);
       // Only sync config — skip auth tokens and version files
@@ -117,13 +117,9 @@ export const adapters = [
   {
     name: 'Windsurf',
     icon: '🏄',
-    source: isWin
-      ? path.join(appData, 'Windsurf', 'User')
-      : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User'),
+    source: windsurfUserDir,
     filter: (src) => {
-      const windsurfDir = isWin
-        ? path.join(appData, 'Windsurf', 'User')
-        : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User');
+      const windsurfDir = windsurfUserDir;
       const rel = path.relative(windsurfDir, src);
       if (src === windsurfDir) return true;
       const basename = path.basename(src);
@@ -138,13 +134,8 @@ export const adapters = [
   {
     name: 'Zed',
     icon: '🔶',
-    source: isWin
-      ? path.join(appData, 'Zed')
-      : path.join(home, '.config', 'zed'),
+    source: zedDir,
     filter: (src) => {
-      const zedDir = isWin
-        ? path.join(appData, 'Zed')
-        : path.join(home, '.config', 'zed');
       const rel = path.relative(zedDir, src);
       if (src === zedDir) return true;
       const basename = path.basename(src);
@@ -163,13 +154,9 @@ export const adapters = [
   {
     name: 'Cline',
     icon: '🤖',
-    source: isWin
-      ? path.join(appData, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')
-      : path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev'),
+    source: clineStorageDir,
     filter: (src) => {
-      const clineDir = isWin
-        ? path.join(appData, 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev')
-        : path.join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev');
+      const clineDir = clineStorageDir;
       const rel = path.relative(clineDir, src);
       if (src === clineDir) return true;
       const basename = path.basename(src);
