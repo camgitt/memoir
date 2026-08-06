@@ -33,6 +33,9 @@ export { SCHEMA_VERSION, emptySession };
 // Prevents unbounded growth of the live pinned block.
 const MAX_GOALS = 3;
 const MAX_NEXT = 8;
+// Completion tombstones kept so merges can't resurrect finished actions.
+// Must outlive every stale copy that might still carry the item.
+const MAX_COMPLETED_TOMBSTONES = 50;
 const MAX_QUESTIONS = 5;
 const MAX_DECISIONS_RECENT = 10;
 const MAX_HISTORY = 30;
@@ -225,7 +228,20 @@ export async function completeNext(textOrIndex) {
     }
     const completed = idx >= 0;
     if (completed) {
-      state.current.next_actions.splice(idx, 1);
+      // Removal alone is not enough: any merge with a copy that still holds
+      // this item (the push-side backup, another machine, a stale MCP-process
+      // write) re-unions it straight back — the "completed actions resurrect"
+      // bug. So completion also records a tombstone that merges consult.
+      // Temporal, not absolute like decisions' `hidden`: a re-add whose
+      // `added` postdates `done_at` is a deliberate revival and survives.
+      const [removed] = state.current.next_actions.splice(idx, 1);
+      const key = removed.text.trim().toLowerCase();
+      state.current.completed_actions = [
+        { text: removed.text, done_at: new Date().toISOString() },
+        ...(state.current.completed_actions || []).filter(
+          c => c && c.text && c.text.trim().toLowerCase() !== key
+        ),
+      ].slice(0, MAX_COMPLETED_TOMBSTONES);
     }
     await writeSession(state);
     // Only when something was actually completed — the event should mean
@@ -312,6 +328,25 @@ export function mergeSessions(local, remote) {
     history: mergeHistory(local.history, remote.history),
   };
 
+  // Completed-action tombstones beat the union above. unionByText can only
+  // union; it cannot represent "this used to exist and was finished," so a
+  // completed item surviving in ANY stale copy resurrected on every merge —
+  // the intermittent completeNext no-op observed in production (2026-08-03).
+  // Temporal on purpose: an item re-ADDED after its done_at is a deliberate
+  // revival and must survive, so tombstones only suppress copies whose
+  // `added` predates the completion.
+  const tombstones = unionTombstones(
+    local.current?.completed_actions,
+    remote.current?.completed_actions
+  );
+  merged.current.completed_actions = tombstones;
+  merged.current.next_actions = merged.current.next_actions.filter(a => {
+    const t = tombstones.find(
+      c => c.text.trim().toLowerCase() === a.text.trim().toLowerCase()
+    );
+    return !t || new Date(a.added || 0) > new Date(t.done_at);
+  });
+
   // machines: union last_seen per id (take the newer)
   for (const [id, entry] of Object.entries(remote.machines || {})) {
     const existing = merged.machines[id];
@@ -357,6 +392,21 @@ function unionByText(a = [], b = [], dateField, cap) {
   return Array.from(byText.values())
     .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0))
     .slice(0, cap);
+}
+
+function unionTombstones(a = [], b = []) {
+  const byText = new Map();
+  for (const item of [...(a || []), ...(b || [])]) {
+    if (!item || !item.text || !item.done_at) continue;
+    const key = item.text.trim().toLowerCase();
+    const existing = byText.get(key);
+    if (!existing || new Date(item.done_at) > new Date(existing.done_at)) {
+      byText.set(key, item);
+    }
+  }
+  return Array.from(byText.values())
+    .sort((x, y) => new Date(y.done_at) - new Date(x.done_at))
+    .slice(0, MAX_COMPLETED_TOMBSTONES);
 }
 
 function mergeHistory(a = [], b = []) {

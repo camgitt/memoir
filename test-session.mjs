@@ -144,6 +144,61 @@ console.log(`\n${BOLD}${CYAN}mergeSessions${RESET}\n`);
   assert(merged.current.next_actions.length === 2, 'both unique next_actions kept');
 }
 
+// 10b. completed next_actions do NOT resurrect on merge (the 2026-08-03 bug)
+{
+  // Local completed "ship it" (removed + tombstoned); remote is a stale copy
+  // that still carries it. Union alone would bring it back.
+  const local = {
+    version: 1, created_at: '', updated_at: '', machines: {},
+    current: {
+      goals: [], next_actions: [],
+      completed_actions: [{ text: 'ship it', done_at: '2026-08-03T12:00:00Z' }],
+      open_questions: [], decisions: [],
+    },
+    history: [],
+  };
+  const remote = {
+    version: 1, created_at: '', updated_at: '', machines: {},
+    current: {
+      goals: [],
+      next_actions: [{ text: 'ship it', machine_id: 'win', added: '2026-08-01T08:00:00Z' }],
+      open_questions: [], decisions: [],
+    },
+    history: [],
+  };
+  const merged = state.mergeSessions(local, remote);
+  assert(
+    !merged.current.next_actions.some(a => a.text === 'ship it'),
+    'stale copy of a completed action does not resurrect'
+  );
+  assert(
+    merged.current.completed_actions.some(c => c.text === 'ship it'),
+    'tombstone itself survives the merge'
+  );
+  // Sticky regardless of argument order.
+  const mergedFlip = state.mergeSessions(remote, local);
+  assert(
+    !mergedFlip.current.next_actions.some(a => a.text === 'ship it'),
+    'tombstone wins regardless of merge order'
+  );
+  // Temporal, not absolute: the SAME text deliberately re-added AFTER the
+  // completion is a revival and must survive the tombstone.
+  const revived = {
+    version: 1, created_at: '', updated_at: '', machines: {},
+    current: {
+      goals: [],
+      next_actions: [{ text: 'ship it', machine_id: 'mac', added: '2026-08-05T09:00:00Z' }],
+      open_questions: [], decisions: [],
+    },
+    history: [],
+  };
+  const mergedRevive = state.mergeSessions(local, revived);
+  assert(
+    mergedRevive.current.next_actions.some(a => a.text === 'ship it'),
+    're-added-after-completion action survives (revival beats tombstone)'
+  );
+}
+
 // 11. merge history dedupes and sorts newest-first
 {
   const entry = { date: '2026-04-17T10:00:00Z', machine_id: 'mac', summary: 'Did X' };
