@@ -1,8 +1,8 @@
 {
   "name": "memoir-cli",
-  "version": "3.11.0",
+  "version": "3.11.1",
   "mcpName": "io.github.camgitt/memoir",
-  "description": "Private, portable AI memory: synced across every coding tool and machine, end-to-end encrypted, free. One memory for Claude Code, Cursor, Copilot, Gemini + more \u2014 MCP-native, zero-knowledge, open source.",
+  "description": "Private, portable AI memory: synced across every coding tool and machine, end-to-end encrypted, free. One memory for Claude Code, Cursor, Copilot, Gemini + more — MCP-native, zero-knowledge, open source.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
