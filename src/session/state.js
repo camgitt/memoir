@@ -389,9 +389,16 @@ function unionByText(a = [], b = [], dateField, cap) {
     }
   }
 
-  return Array.from(byText.values())
-    .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0))
-    .slice(0, cap);
+  // Partition before capping. Tombstones keep their original (recent) date,
+  // so a plain sort+slice let them win cap slots and silently evict real
+  // entries on merge. They must SURVIVE the merge (removing them
+  // reintroduces the resurrection the sticky-tombstone rule fixed) but must
+  // not count against the visible budget.
+  const all = Array.from(byText.values())
+    .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0));
+  const visible = all.filter((i) => !i.hidden).slice(0, cap);
+  const tombstones = all.filter((i) => i.hidden).slice(0, cap);
+  return [...visible, ...tombstones];
 }
 
 function unionTombstones(a = [], b = []) {

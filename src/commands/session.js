@@ -24,6 +24,7 @@ import {
   getMachineId,
   paths,
 } from '../session/state.js';
+import { withSessionLock } from '../session/lock.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
@@ -180,9 +181,13 @@ export async function sessionShowCommand() {
 }
 
 export async function sessionClearCommand() {
-  const state = await readSession();
-  state.current = { goals: [], next_actions: [], open_questions: [], decisions: [] };
-  await writeSession(state);
+  // Took no lock at all — a concurrent MCP write between the read and the
+  // write was silently lost, and worse, could resurrect what was cleared.
+  await withSessionLock(paths.sessionLock, async () => {
+    const state = await readSession();
+    state.current = { goals: [], next_actions: [], open_questions: [], decisions: [] };
+    await writeSession(state);
+  });
   await refreshPinned();
   console.log('\n' + chalk.green('  ✓ Current session cleared.') + chalk.gray(' History retained.\n'));
 }

@@ -68,7 +68,29 @@ export async function withSessionLock(lockPath, fn) {
       try {
         const stat = fs.statSync(lockPath);
         if (Date.now() - stat.mtimeMs > STALE_MS) {
-          try { fs.unlinkSync(lockPath); } catch {}
+          // Steal by rename, not unlink: two processes racing an unlink can
+          // both "win" and both proceed. rename() is atomic, so exactly one
+          // wins and the loser simply retries.
+          let stolen = false;
+          try {
+            const graveyard = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+            fs.renameSync(lockPath, graveyard);
+            stolen = true;
+            // The rename is only there to make the steal atomic; the file
+            // itself is debris. Remove it immediately — best-effort, and
+            // harmless to leave behind if this fails.
+            try { fs.unlinkSync(graveyard); } catch {}
+          } catch {}
+          if (stolen) {
+            continue; // we removed it; retry the acquire immediately
+          }
+          // Could not remove it (read-only dir, permissions). Fall through
+          // to the deadline + backoff below instead of spinning forever.
+          if (Date.now() - start > MAX_WAIT_MS) {
+            fd = null;
+            break;
+          }
+          await sleep(RETRY_DELAY_MS);
           continue;
         }
       } catch {
@@ -95,8 +117,20 @@ export async function withSessionLock(lockPath, fn) {
     return await fn();
   } finally {
     if (fd !== null) {
+      // Only unlink if the file at lockPath is still OURS. If our lock was
+      // stolen as stale and another process now holds a NEW file at the same
+      // path, unlinking by path would delete the current holder's lock and
+      // let a third process in. Compare inode via the fd we still hold.
+      let ours = false;
+      try {
+        const byFd = fs.fstatSync(fd);
+        const byPath = fs.statSync(lockPath);
+        ours = byFd.ino === byPath.ino && byFd.dev === byPath.dev;
+      } catch {
+        ours = false; // path gone or unreadable — nothing safe to remove
+      }
       try { fs.closeSync(fd); } catch {}
-      try { fs.unlinkSync(lockPath); } catch {}
+      if (ours) { try { fs.unlinkSync(lockPath); } catch {} }
     }
   }
 }

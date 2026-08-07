@@ -23,6 +23,27 @@ export async function syncToLocal(config, stagingDir, spinner) {
   await fs.ensureDir(resolvedDest);
 
   await fs.copy(stagingDir, resolvedDest);
+
+  // Prune orphaned encrypted blobs. Each encrypted push derives a fresh salt
+  // and therefore fresh HMAC filenames, so without this every push leaves the
+  // previous push's data/*.enc behind forever and localPath grows without
+  // bound. Only runs for a full encrypted sync (manifest.enc present in what
+  // we just wrote) — `memoir snapshot` also calls syncToLocal with a staging
+  // dir of a single handoff file, and blanket-emptying the destination there
+  // would delete the user's backup.
+  try {
+    const stagedManifest = path.join(stagingDir, 'manifest.enc');
+    const destData = path.join(resolvedDest, 'data');
+    if (await fs.pathExists(stagedManifest) && await fs.pathExists(destData)) {
+      const keep = new Set(await fs.readdir(path.join(stagingDir, 'data')).catch(() => []));
+      for (const f of await fs.readdir(destData)) {
+        if (!keep.has(f)) await fs.remove(path.join(destData, f)).catch(() => {});
+      }
+    }
+  } catch {
+    // Pruning is housekeeping — never fail a completed backup over it.
+  }
+
   spinner.succeed(chalk.green('Sync complete! ') + chalk.gray(`(Saved to ${resolvedDest})`));
   await appendEvent('sync_pushed', { provider: 'local' });
 }

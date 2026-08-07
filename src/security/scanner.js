@@ -31,7 +31,7 @@ const SECRET_PATTERNS = [
 
   // Generic secrets in env/config patterns
   { regex: /(?:^|[\s;])(?:export\s+)?(?:API_KEY|SECRET_KEY|AUTH_TOKEN|ACCESS_TOKEN|PRIVATE_KEY|DB_PASSWORD|DATABASE_URL|JWT_SECRET|ENCRYPTION_KEY|MASTER_KEY)\s*=\s*["']?([^\s'"]{8,})/gmi, label: 'Environment variable secret' },
-  { regex: /(?:password|passwd|pwd)\s*[:=]\s*["']?([^\s'"]{6,})/gi, label: 'Password' },
+  { regex: /(?:password|passwd|pwd)\s*[:=]\s*["']?([^\s'"]{6,})/gi, label: 'Password', minLength: 6 },
 
   // Private keys
   { regex: /(-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----)/g, label: 'Private key' },
@@ -55,10 +55,18 @@ export function scanForSecrets(text) {
     let match;
     while ((match = pattern.regex.exec(text)) !== null) {
       const secret = match[1] || match[0];
-      // Skip very short matches (likely false positives)
-      if (secret.length < 8) continue;
+      // Per-pattern floor. A global 8 threw away 6-7 char matches that the
+      // Password pattern ({6,}) was written to catch: `password: s3cr3t`
+      // survived verbatim into the handoff and the backup while the scan
+      // reported "no secrets detected" — a silent miss is worse than a
+      // false positive in a tool that promises redaction.
+      if (secret.length < (pattern.minLength ?? 8)) continue;
 
-      const redacted = secret.slice(0, 4) + '****' + secret.slice(-4);
+      // For short secrets, slice(0,4)+slice(-4) can reproduce the whole
+      // thing (a 6-char secret would show 4+4 of 6 characters).
+      const redacted = secret.length >= 12
+        ? secret.slice(0, 4) + '****' + secret.slice(-4)
+        : secret.slice(0, 2) + '****';
       findings.push({
         label: pattern.label,
         match: secret,

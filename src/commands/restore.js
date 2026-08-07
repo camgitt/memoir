@@ -15,6 +15,7 @@ import { getSession } from '../cloud/auth.js';
 import { unbundleToDir } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
+import { withSessionLock } from '../session/lock.js';
 import { migrateSessionData } from '../session/migrations.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
@@ -136,10 +137,17 @@ export async function restoreCommand(options = {}) {
         // ever touches it. Symmetric with the push-side fix in push.js.
         const rawRemote = JSON.parse(await fs.readFile(remoteSessionPath, 'utf8'));
         const { state: remote } = migrateSessionData(rawRemote);
-        const local = await readSession();
-        const beforeMachines = Object.keys(local.machines || {}).length;
-        const merged = mergeSessions(local, remote);
-        await writeSession(merged);
+        // Read+merge+write inside ONE lock, like every state.js mutator.
+        // Reading outside the lock and locking only the write is a
+        // check-then-act: a concurrent MCP memoir_note landing in the window
+        // is silently discarded by our merge of the stale copy.
+        let merged, beforeMachines;
+        await withSessionLock(sessionPaths.sessionLock, async () => {
+          const local = await readSession();
+          beforeMachines = Object.keys(local.machines || {}).length;
+          merged = mergeSessions(local, remote);
+          await writeSession(merged);
+        });
         // Re-render + inject into every detected tool so the pinned block
         // reflects the merged state right away across Claude/Cursor/Windsurf/Gemini
         try {

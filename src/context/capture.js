@@ -225,7 +225,11 @@ function extractDecisions(userMessages, assistantTexts) {
     { regex: /(?:switch|migrate|move)\s+(?:from\s+\S+\s+)?to\s+([A-Z][a-zA-Z0-9_./-]+)/gi, type: 'tech' },
     // Architecture / design — require an explicit decision verb and a capitalized
     // target. Bare "pick/choose" caught conversational fragments as decisions.
-    { regex: /(?:decided|settled|going|chose|chosen)\s+(?:to\s+(?:go\s+with|use)|with|on)\s+([A-Z][\w .\/+-]{3,50}?)(?:\.|$|,|\n)/g, type: 'design' },
+    // 'going' dropped from the bare alternation: "going on Monday to the
+    // office" minted a decision (live proof: "going on PostDash" in the real
+    // store). "going to go with/use" is still covered by the to-clause.
+    { regex: /(?:decided|settled|chose|chosen)\s+(?:to\s+(?:go\s+with|use)|with|on)\s+([A-Z][\w .\/+-]{3,50}?)(?:\.|$|,|\n)/g, type: 'design' },
+    { regex: /going\s+to\s+(?:go\s+with|use)\s+([A-Z][\w .\/+-]{3,50}?)(?:\.|$|,|\n)/g, type: 'design' },
     // Stack choices — require a capitalized, tech-looking value, not a prose
     // fragment ("backend is just throwing it away" used to leak through).
     { regex: /(?:stack|framework|database|backend|frontend|hosting|infra)\s+(?:is|will be|should be)\s+([A-Z][\w .\/+-]{2,40}?)(?:\.|$|,|\n)/g, type: 'stack' },

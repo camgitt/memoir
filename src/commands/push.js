@@ -211,7 +211,17 @@ export async function pushCommand(options = {}) {
           // received the raw unfiltered list while only the session.json sink
           // below filtered, so junk could reach session-decisions.md even after
           // being rejected from session.json. Both sinks now agree on what's junk.
-          const qualityDecisions = parsed.decisions.filter(d => isQuality(String(d.value || '').trim()));
+          // Gate on the string each sink actually PERSISTS, not on d.value.
+          // For rename/tech captures d.value is a single whitespace-free
+          // token, so isQuality's words>=3 rule rejected 100% of them —
+          // two of the three advertised capture categories were dead code
+          // while persistDecisions would have written the clean d.context.
+          const decisionText = (d) => {
+            const v = String(d.value || '').trim();
+            const c = String(d.context || '').trim();
+            return (d.type === 'rename' || d.type === 'tech') && c ? c : v;
+          };
+          const qualityDecisions = parsed.decisions.filter(d => isQuality(decisionText(d)));
 
           // Persist decisions to Claude's memory so they survive across sessions
           let decisionCount = 0;
@@ -230,7 +240,7 @@ export async function pushCommand(options = {}) {
               current.current.decisions.map(d => (d.text || '').trim().toLowerCase())
             );
             for (const d of qualityDecisions.slice(0, 10)) {
-              const text = String(d.value || '').trim();
+              const text = decisionText(d);
               if (existingTexts.has(text.toLowerCase())) continue;
               await addNote(text, { why: d.context ? `auto-captured: ${d.context.slice(0, 80)}` : undefined });
             }
@@ -321,15 +331,16 @@ export async function pushCommand(options = {}) {
           preserveRemoteSession = true;
           try { appendEvent('sync_degraded', { reason: 'remote_session_unreadable' }); } catch {}
         } else {
-          const local = await readSession();
-          const merged = remote ? mergeSessions(local, remote) : local;
-          if (remote) {
-            // Persist the merge locally too, inside the same lock every other
-            // session.json read-modify-write cycle uses.
-            await withSessionLock(sessionPaths.sessionLock, async () => {
-              await writeSession(merged);
-            });
-          }
+          // Read AND merge AND write inside one lock. Reading outside it and
+          // locking only the write is a check-then-act: a concurrent MCP
+          // memoir_note in that window is silently dropped. This is the most
+          // reachable instance of that bug — it sits on the autopush path.
+          let merged;
+          await withSessionLock(sessionPaths.sessionLock, async () => {
+            const local = await readSession();
+            merged = remote ? mergeSessions(local, remote) : local;
+            if (remote) await writeSession(merged);
+          });
           await fs.writeFile(path.join(stagingDir, 'session.json'), JSON.stringify(merged, null, 2));
           sessionIncluded = true;
         }
