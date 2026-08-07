@@ -283,9 +283,23 @@ server.tool(
         return { content: [{ type: 'text', text: `Project directory not found: ${projectDir}` }] };
       }
 
-      // Default to CLAUDE.md for project-level memories
-      const targetFile = filename || 'CLAUDE.md';
-      const targetPath = path.join(projectDir, targetFile);
+      // Default to CLAUDE.md for project-level memories.
+      // Guards mirror the global branch below and memoir_read above:
+      // model-supplied filename must be a bare markdown name — no
+      // separators, no traversal — and must resolve inside the project
+      // dir. Without this, filename:".zshrc" appends to a shell rc
+      // (code execution on next shell) and "package.json" corrupts
+      // real files.
+      let targetFile = filename || 'CLAUDE.md';
+      if (!targetFile.endsWith('.md')) targetFile += '.md';
+      if (targetFile.includes('/') || targetFile.includes('\\') || targetFile.includes('..')) {
+        return { content: [{ type: 'text', text: `Invalid filename: ${filename} (must be a bare .md name)` }] };
+      }
+      const projBase = path.resolve(projectDir);
+      const targetPath = path.resolve(projBase, targetFile);
+      if (!targetPath.startsWith(projBase + path.sep)) {
+        return { content: [{ type: 'text', text: `Invalid filename: ${filename}` }] };
+      }
 
       // Append to existing file or create new
       if (await fs.pathExists(targetPath)) {
@@ -394,7 +408,14 @@ server.tool(
       return { content: [{ type: 'text', text: `Unknown tool: ${tool}. Available: ${adapters.map(a => a.name).join(', ')}` }] };
     }
 
-    const fullPath = path.join(adapter.source, filepath);
+    // Containment: filepath comes from the model, and the model reads
+    // attacker-influenceable text all day. Without this, "../.ssh/id_rsa"
+    // resolves outside the adapter dir and the file is returned verbatim.
+    const base = path.resolve(adapter.source);
+    const fullPath = path.resolve(base, filepath);
+    if (fullPath !== base && !fullPath.startsWith(base + path.sep)) {
+      return { content: [{ type: 'text', text: `Invalid path: ${filepath} (must stay inside ${adapter.name}'s directory)` }] };
+    }
 
     if (!(await fs.pathExists(fullPath))) {
       return { content: [{ type: 'text', text: `File not found: ${filepath} in ${adapter.name}` }] };

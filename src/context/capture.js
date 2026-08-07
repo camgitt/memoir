@@ -101,7 +101,10 @@ function parseLines(lines) {
       for (const block of obj.message.content) {
         if (block.type === 'text' && block.text) {
           // Capture assistant text for decision extraction (limit size)
-          if (block.text.length < 2000) assistantTexts.push(block.text);
+          // Redacted like every other untrusted input (user :95, bash :125,
+          // errors :138) — captured decisions flow into session.json, CLAUDE.md
+          // and the git backup, none of which get a later secret scan.
+          if (block.text.length < 2000) assistantTexts.push(redactSecrets(block.text));
           continue;
         }
         if (block.type !== 'tool_use') continue;

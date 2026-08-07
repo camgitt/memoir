@@ -27,7 +27,7 @@ export async function syncToLocal(config, stagingDir, spinner) {
   await appendEvent('sync_pushed', { provider: 'local' });
 }
 
-export async function syncToGit(config, stagingDir, spinner) {
+export async function syncToGit(config, stagingDir, spinner, options = {}) {
   const repoUrl = sanitizeUrl(config.gitRepo);
   if (!repoUrl) throw new Error('Git repository is not configured.');
 
@@ -39,9 +39,13 @@ export async function syncToGit(config, stagingDir, spinner) {
   try {
     try {
       execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: gitDir, stdio: 'ignore', timeout: 60000 });
+      const preserve = new Set(options.preserve || []);
       const files = await fs.readdir(gitDir);
       for (const f of files) {
-        if (f !== '.git') await fs.remove(path.join(gitDir, f));
+        // preserve: files the caller knows exist remotely but could not
+        // merge (unreadable session.json) — deleting them here would be
+        // the mirror-clobber the push guard just declined to commit.
+        if (f !== '.git' && !preserve.has(f)) await fs.remove(path.join(gitDir, f));
       }
     } catch {
       execFileSync('git', ['init'], { cwd: gitDir, stdio: 'ignore' });
@@ -63,7 +67,10 @@ export async function syncToGit(config, stagingDir, spinner) {
     }
 
     spinner.text = `Pushing data to ${chalk.cyan(repoUrl)}...`;
-    execFileSync('git', ['push', repoUrl, 'main'], { cwd: gitDir, stdio: 'ignore', timeout: 120000 });
+    // HEAD:main pushes whatever branch the clone checked out (a master-
+    // default remote used to make `push main` fail silently under autopush
+    // with a misleading credentials error, while doctor reported green).
+    execFileSync('git', ['push', repoUrl, 'HEAD:main'], { cwd: gitDir, stdio: 'ignore', timeout: 120000 });
 
     spinner.succeed(chalk.green('Sync complete! ') + chalk.gray('(Uploaded securely to GitHub)'));
     await appendEvent('sync_pushed', { provider: 'git' });
