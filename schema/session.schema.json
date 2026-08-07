@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memoir.sh/schema/session.schema.json",
+  "title": "memoir session state file (session.json)",
+  "description": "The live working set plus bounded history — the 'hot' half of a memoir store. Normative text: docs/SPEC.md v0.1 (draft), sections 4-5. Matches what the reference implementation (memoir-cli src/session/state.js, schema version 1) reads and writes. Unknown fields are permitted everywhere by design: readers ignore them, writers preserve them.",
+  "type": "object",
+  "required": ["version", "created_at", "updated_at", "machines", "current", "history"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Schema version of this file. (Named `version` here and `schema_version` in entry frontmatter; both names are deployed.) Forward-version rule: quarantine + degrade, never guess (SPEC.md section 6)."
+    },
+    "created_at": { "$ref": "#/$defs/timestamp" },
+    "updated_at": { "$ref": "#/$defs/timestamp" },
+    "machines": {
+      "type": "object",
+      "description": "Stable machine UUID -> { label, last_seen }. UUIDs must never change; labels (hostnames) may. Merge keeps the newer last_seen per UUID.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["label", "last_seen"],
+        "properties": {
+          "label": { "type": "string" },
+          "last_seen": { "$ref": "#/$defs/timestamp" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "current": {
+      "type": "object",
+      "description": "The live working set. Lists are bounded (caps are implementation quality parameters, but SOME cap is normative) and merge by union-by-normalized-text, newest date wins, tombstones sticky (SPEC.md section 5).",
+      "required": ["goals", "next_actions", "open_questions", "decisions"],
+      "properties": {
+        "goals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/goal" }
+        },
+        "next_actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nextAction" }
+        },
+        "completed_actions": {
+          "type": "array",
+          "description": "Temporal tombstones for next_actions. MAY be absent in files written before any completion; readers treat absence as empty. Retention must outlive any stale replica that might still carry the completed item, or completions resurrect on merge (SPEC.md 5.3.2).",
+          "items": { "$ref": "#/$defs/completedTombstone" }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/openQuestion" }
+        },
+        "decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/decision" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "history": {
+      "type": "array",
+      "description": "Bounded roll-up of past sessions, newest first, deduplicated by (date, machine_id, summary).",
+      "items": { "$ref": "#/$defs/historyEntry" }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 date-time.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}"
+    },
+    "goal": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity key: normalized (trimmed, case-folded) text."
+        },
+        "machine_id": { "type": "string" },
+        "set_on": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Merge recency key for goals."
+        }
+      },
+      "additionalProperties": true
+    },
+    "nextAction": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "machine_id": { "type": "string" },
+        "added": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Merge recency key, and the field compared against a tombstone's done_at: added <= done_at is suppressed; added > done_at is a deliberate revival and survives."
+        }
+      },
+      "additionalProperties": true
+    },
+    "completedTombstone": {
+      "type": "object",
+      "required": ["text", "done_at"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "done_at": { "$ref": "#/$defs/timestamp" }
+      },
+      "additionalProperties": true
+    },
+    "openQuestion": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "machine_id": { "type": "string" },
+        "asked": { "$ref": "#/$defs/timestamp" }
+      },
+      "additionalProperties": true
+    },
+    "decision": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "machine_id": { "type": "string" },
+        "date": {
+          "$ref": "#/$defs/timestamp",
+          "description": "Merge recency key for decisions."
+        },
+        "why": { "type": "string" },
+        "rejected": {
+          "type": "string",
+          "description": "The rejected alternative. (Deployed field name; not rejected_alternative.)"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "true = absolute tombstone. Sticky and monotonic across merges REGARDLESS of the date comparison: if any copy on either side is hidden, the merged copy is hidden (SPEC.md 5.3.1)."
+        },
+        "hidden_at": { "$ref": "#/$defs/timestamp" }
+      },
+      "dependentRequired": {
+        "hidden": ["hidden_at"]
+      },
+      "additionalProperties": true
+    },
+    "historyEntry": {
+      "type": "object",
+      "required": ["date"],
+      "properties": {
+        "date": { "$ref": "#/$defs/timestamp" },
+        "machine_id": { "type": "string" },
+        "summary": { "type": "string" },
+        "files_touched": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "duration_min": { "type": ["number", "null"] }
+      },
+      "additionalProperties": true
+    }
+  }
+}

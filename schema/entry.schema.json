@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memoir.sh/schema/entry.schema.json",
+  "title": "memoir entry frontmatter",
+  "description": "Frontmatter of a single memoir entry file (markdown + YAML frontmatter), after the YAML has been parsed to JSON. Normative text: docs/SPEC.md v0.1 (draft), section 3. Validates canonical (v0.1) entries only; legacy dialects (SPEC.md Appendix A) are handled by reader compatibility rules, not by this schema. Unknown fields are permitted everywhere by design: readers ignore them, writers preserve them.",
+  "type": "object",
+  "required": ["type", "name"],
+  "properties": {
+    "type": {
+      "description": "Entry type. Answers: what should a tool DO with this entry when it loads?",
+      "enum": ["fact", "preference", "decision", "lesson", "goal", "next_action"]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable title (or slug) for the entry."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary. Indexes and pickers render this."
+    },
+    "created": { "$ref": "#/$defs/isoDate" },
+    "updated": { "$ref": "#/$defs/isoDate" },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Entry schema version. Absent means 1. Forward-version rule: quarantine + degrade, never guess (SPEC.md section 6)."
+    },
+    "project": {
+      "type": "string",
+      "description": "Project this entry is scoped to; absent means global."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "origin": {
+      "type": "object",
+      "description": "Where the entry came from.",
+      "properties": {
+        "tool": { "type": "string" },
+        "session_id": { "type": "string" },
+        "machine_id": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "oneOf": [
+    {
+      "title": "fact",
+      "description": "Something true about the world, the project, or the environment.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "fact" },
+        "source": {
+          "type": "string",
+          "description": "Where the fact was established."
+        }
+      }
+    },
+    {
+      "title": "preference",
+      "description": "How the user wants things done; a standing instruction.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "preference" },
+        "scope": { "enum": ["global", "project"] }
+      }
+    },
+    {
+      "title": "decision",
+      "description": "Something decided, recorded so it is not silently relitigated. `why` and `rejected` are required-encouraged: not schema-required (auto-capture legitimately lacks them), but validators warn on a missing `why`.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "decision" },
+        "date": { "$ref": "#/$defs/isoDate" },
+        "why": { "type": "string" },
+        "rejected": {
+          "type": "string",
+          "description": "The alternative considered and rejected, and why it lost. (Field name matches deployed stores; not `rejected_alternative`.)"
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "true = absolute tombstone. Sticky across merges regardless of dates (SPEC.md 5.3.1)."
+        },
+        "hidden_at": { "$ref": "#/$defs/isoDate" },
+        "superseded_by": {
+          "type": "string",
+          "description": "Link name of the replacing decision."
+        }
+      },
+      "dependentRequired": {
+        "hidden": ["hidden_at"]
+      }
+    },
+    {
+      "title": "lesson",
+      "description": "A behavior correction learned from experience. Without a trigger and an application rule it is an anecdote, not a lesson.",
+      "type": "object",
+      "required": ["trigger", "how_to_apply"],
+      "properties": {
+        "type": { "const": "lesson" },
+        "trigger": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The situation that should fire this lesson."
+        },
+        "how_to_apply": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The concrete behavior change."
+        },
+        "fired_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Times this lesson demonstrably fired and changed behavior. Outcome-loop hook; optional."
+        },
+        "last_fired": { "$ref": "#/$defs/isoDate" }
+      }
+    },
+    {
+      "title": "goal",
+      "description": "The standing objective that orients sessions.",
+      "type": "object",
+      "properties": {
+        "type": { "const": "goal" },
+        "set_on": { "$ref": "#/$defs/isoDate" },
+        "done_at": {
+          "$ref": "#/$defs/isoDate",
+          "description": "Temporal tombstone (SPEC.md 5.3.2)."
+        }
+      }
+    },
+    {
+      "title": "next_action",
+      "description": "A concrete, resumable piece of work; the handoff unit.",
+      "type": "object",
+      "required": ["added"],
+      "properties": {
+        "type": { "const": "next_action" },
+        "added": {
+          "$ref": "#/$defs/isoDate",
+          "description": "When the action was added. REQUIRED: the temporal-tombstone comparison (done_at vs added) is against this field; without it, completion semantics are undefined."
+        },
+        "done_at": {
+          "$ref": "#/$defs/isoDate",
+          "description": "Temporal tombstone: suppresses copies whose `added` is not later than this; a re-add with a later `added` is a deliberate revival and survives (SPEC.md 5.3.2)."
+        },
+        "machine_id": { "type": "string" }
+      }
+    }
+  ],
+  "$defs": {
+    "isoDate": {
+      "type": "string",
+      "description": "ISO 8601 date (YYYY-MM-DD) or date-time.",
+      "anyOf": [
+        { "format": "date" },
+        { "format": "date-time" }
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}"
+    }
+  }
+}

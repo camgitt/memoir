@@ -34,6 +34,7 @@ import {
 import { autopushCommand } from '../src/commands/autopush.js';
 import { whyCommand } from '../src/commands/why.js';
 import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
+import { validateCommand } from '../src/commands/validate.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
 import { capture as track, telemetryCommand } from '../src/telemetry.js';
 import { createRequire } from 'module';
@@ -266,6 +267,19 @@ program
       else if (subcommand === 'uninstall') await hooksUninstallCommand(options);
       else await hooksStatusCommand();
     } catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('validate [paths...]')
+  .description('Check session state and memory entry files against the memoir format spec (docs/SPEC.md)')
+  .option('--strict', 'Treat warnings as failures')
+  .action(async (paths, options) => {
+    try {
+      await validateCommand(paths || [], options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error:'), err.message);
+      process.exit(1);
+    }
   });
 
 program
