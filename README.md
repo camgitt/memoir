@@ -15,15 +15,17 @@
 npx memoir-cli
 ```
 
-One command. No install, no config, no API keys. Claude Code on your Mac, Cursor on your laptop, Copilot at the office — **one memory follows you** across every tool and every machine, encrypted with a key only you hold. memoir's servers literally can't read it.
+One command. No install, no config, no API keys. Claude Code on your Mac, Cursor on your laptop, Copilot at the office — **one memory follows you** across every tool and every machine. Cloud sync is end-to-end encrypted with a key only you hold — memoir's servers can't read what you sync.
 
 ---
 
 ## What it does
 
-Your coding tools are starting to remember you — Claude Code, Cursor, and Copilot all ship built-in memory now. But that memory is **trapped: one tool, one machine, stored in plaintext.** Switch from Cursor to Claude Code, or open a different laptop, and your AI is a stranger again.
+Your coding tools are starting to remember you — Claude Code, Cursor, and Copilot all ship built-in memory now. But that memory is **trapped: one tool, one machine, one vendor's format.** Switch from Cursor to Claude Code, or open a different laptop, and your AI is a stranger again.
 
-memoir is the [MCP memory server](https://modelcontextprotocol.io) that breaks it out. **One memory, shared across every tool and synced to every machine — encrypted client-side, so even memoir's servers can't read it.** Your AI searches, saves, and recalls context automatically, everywhere you work.
+memoir is the [MCP memory server](https://modelcontextprotocol.io) that breaks it out. **One memory, shared across every tool and synced to every machine — E2E-encrypted in the cloud, plain readable markdown on your disk.** Your AI searches, saves, and recalls context automatically, everywhere you work.
+
+It's built on an **open, published format** — [the memoir format, v0.1](docs/SPEC.md) — so your AI's accumulated context is never trapped in this tool either. Six entry types, normative merge semantics, JSON Schemas, and a validator (`npx memoir-cli validate`). Any tool can implement it; [critique welcome](https://github.com/camgitt/memoir/issues).
 
 ```
 you: how does auth work in this project?
