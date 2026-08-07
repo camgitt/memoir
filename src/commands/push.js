@@ -371,6 +371,18 @@ export async function pushCommand(options = {}) {
     let shouldEncrypt = config.encrypt;
 
     if (shouldEncrypt === undefined) {
+      if (background || !process.stdin.isTTY) {
+        // First push with nobody to ask (the detached autopush hook, CI, a
+        // pipe). Any inquirer prompt here dies or hangs against ignored
+        // stdio. Encrypt if MEMOIR_PASSPHRASE makes that possible;
+        // otherwise push unencrypted THIS ONCE without persisting the
+        // choice — a backup beats no backup, and the next interactive push
+        // still gets the real question (default Yes).
+        shouldEncrypt = Boolean(process.env.MEMOIR_PASSPHRASE);
+        if (!shouldEncrypt) {
+          config.encrypt = undefined; // do not let the fallthrough persist "off"
+        }
+      } else {
       // First push since encryption was added — ask once and save preference
       spinner.stop();
       const { wantEncrypt } = await inquirer.prompt([{
@@ -380,6 +392,7 @@ export async function pushCommand(options = {}) {
         default: true
       }]);
       shouldEncrypt = wantEncrypt;
+      }
 
       // Save to config so we don't ask again
       try {
@@ -401,14 +414,19 @@ export async function pushCommand(options = {}) {
     }
 
     if (shouldEncrypt) {
-      spinner.stop();
-      const { passphrase } = await inquirer.prompt([{
-        type: 'password',
-        name: 'passphrase',
-        message: '🔒 Encryption passphrase:',
-        mask: '*',
-        validate: (input) => input.length >= 6 ? true : 'Passphrase must be at least 6 characters'
-      }]);
+      // Headless pushes can supply the passphrase via env; interactive
+      // pushes are asked as before.
+      let passphrase = process.env.MEMOIR_PASSPHRASE || '';
+      if (!passphrase || passphrase.length < 6) {
+        spinner.stop();
+        ({ passphrase } = await inquirer.prompt([{
+          type: 'password',
+          name: 'passphrase',
+          message: '🔒 Encryption passphrase:',
+          mask: '*',
+          validate: (input) => input.length >= 6 ? true : 'Passphrase must be at least 6 characters'
+        }]));
+      }
       spinner.start(chalk.gray('Deriving encryption key...'));
 
       encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
