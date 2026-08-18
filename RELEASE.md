@@ -10,8 +10,13 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
    hand-edit the `version` field; `npm version` creates the commit *and* the
    matching `vX.Y.Z` tag so they can't diverge.
 4. **Push with tags** — `git push origin main --follow-tags`.
-5. **Publish** — `npm login` (if `npm whoami` 401s), then `npm publish`.
-   `prepublishOnly` reruns the suite first.
+5. **Publish** — `npm whoami` FIRST. It 401s more often than not between
+   releases (the token silently expires — 3.10.1, 3.11.0, 3.12.0 all hit
+   it), and a dead token makes `npm publish` run the whole suite and then
+   fail with a misleading `404 Not Found - PUT .../memoir-cli`. If it 401s:
+   `npm login` (browser approval), then `npm publish` (asks for the
+   authenticator OTP). `prepublishOnly` now checks `whoami` before the suite
+   and says so plainly (`scripts/check-clean-for-publish.mjs`).
 6. **Verify** — `npm view memoir-cli version` matches `git describe --tags`.
 
 The published tarball is an allowlist (`files` in package.json: `bin/`, `src/`,
