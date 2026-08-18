@@ -25,20 +25,29 @@ Your coding tools are starting to remember you — Claude Code, Cursor, and Copi
 
 memoir is the [MCP memory server](https://modelcontextprotocol.io) that breaks it out. **One memory, shared across every tool and synced to every machine — E2E-encrypted in the cloud, plain readable markdown on your disk.** Your AI searches, saves, and recalls context automatically, everywhere you work.
 
-It's built on an **open, published format** — [the memoir format, v0.1](docs/SPEC.md) — so your AI's accumulated context is never trapped in this tool either. Six entry types, normative merge semantics, JSON Schemas, and a validator (`npx memoir-cli validate`). Any tool can implement it; [critique welcome](https://github.com/camgitt/memoir/issues).
+It's built on an **open, published format** — [the memoir format, v0.1.1](docs/SPEC.md) — so your AI's accumulated context is never trapped in this tool either. Six entry types, normative merge semantics, JSON Schemas, and a validator (`npx memoir-cli validate`). Any tool can implement it; [critique welcome](https://github.com/camgitt/memoir/issues).
 
 ```
 you: how does auth work in this project?
 
   memoir_recall("auth setup architecture")
-  Found 3 memories matching "auth"
+  Found 3 memories matching "auth setup architecture":
+
+  ── 1. Claude CLI / memory/reference_auth_flow.md ──
+     reference · How authentication works — JWT + refresh, middleware location, state choice
+     Server components must call getUser(), never getSession(). The session
+     cookie name is derived from the Supabase URL host, so previews differ.
+     ⋯
+     Chose Zustand over Redux for auth state (decided March 12).
 
 claude: Based on your previous sessions: this project uses JWT auth
   with refresh tokens, the middleware is in src/middleware/auth.ts,
   and you chose Zustand over Redux for auth state (decided March 12).
 ```
 
-No re-explaining. memoir remembered.
+No re-explaining. memoir remembered — and handed back the *passage*, not a file header.
+
+Recall ranks by how well a file covers **all** your words (aliases, names, and descriptions weigh more than prose), folds plurals/-ing/-ed, prefix-matches from 4 characters (`auth` → `authentication`), and caches parses so a long-lived session doesn't re-read your disk on every question. It does not do semantic matching — that's what `aliases:` in the frontmatter is for: the model that *saves* a memory writes down what else it might be called, and recall weights that field heaviest. Try it from the terminal: `memoir recall "what you'd ask"` shows exactly what your AI would see.
 
 ## How it's different
 
@@ -62,12 +71,12 @@ npx memoir-cli
 
 That's it. memoir detects your AI tools, configures MCP, and activates memory. No global install needed.
 
-Your AI gets 14 memory tools:
+Your AI gets 15 memory tools:
 
 | MCP Tool | What it does |
 |----------|-------------|
-| `memoir_recall` | Search across all your AI memories |
-| `memoir_remember` | Save context for future sessions |
+| `memoir_recall` | Search across all your AI memories — returns matched passages, ranked by coverage |
+| `memoir_remember` | Save context for future sessions (pass `aliases` so it's findable under other names) |
 | `memoir_list` | Browse all memory files by tool |
 | `memoir_read` | Read a specific memory in full |
 | `memoir_consolidate` | Analyze memories for duplicates, staleness, and bloat |
@@ -80,6 +89,7 @@ Your AI gets 14 memory tools:
 | `memoir_ask` | Capture an open question for later |
 | `memoir_session` | Show goals, next actions, decisions, and recent sessions |
 | `memoir_why` | Look up why a past decision was made |
+| `memoir_forget` | Retract a decision — permanent tombstone on every machine; `purge` redacts the text |
 
 ## Why memoir
 
@@ -146,6 +156,10 @@ memoir share           # create encrypted shareable link
 | `memoir cloud restore` | Restore from memoir cloud |
 | `memoir share` | Create encrypted shareable link |
 | `memoir consolidate` | Find duplicates, stale memories, and bloat |
+| `memoir recall` | Search memory exactly the way your AI does — see what it would be handed |
+| `memoir why` | Look up decisions: what, why, what was rejected |
+| `memoir forget` | Retract a decision (`--purge` to redact a leaked secret in place); refuses if ambiguous |
+| `memoir validate` | Check session state + entry files against the format spec |
 | `memoir doctor` | Diagnose issues |
 | `memoir diff` | Show changes since last backup |
 | `memoir view` | Preview what's in your backup |

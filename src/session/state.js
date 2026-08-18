@@ -40,6 +40,43 @@ const MAX_QUESTIONS = 5;
 const MAX_DECISIONS_RECENT = 10;
 const MAX_HISTORY = 30;
 
+// ── Decision identity ────────────────────────────────────────────
+//
+// SPEC.md 5.1: a decision's identity is its normalized text. A PURGED
+// tombstone (memoir forget --purge) has had that text redacted, so it
+// carries `text_hash` = sha256(identity) instead and matches by hash.
+// Both forms resolve to the same key here so unionByText/capDecisions
+// treat "the original" and "the purged tombstone of the original" as one
+// identity — that is what lets the tombstone keep suppressing copies of
+// the un-purged text on replicas that never saw the purge.
+export const PURGED_TEXT = '[purged]';
+
+export function decisionIdentity(text) {
+  return String(text || '').trim().toLowerCase();
+}
+
+export function decisionHash(text) {
+  return crypto.createHash('sha256').update(decisionIdentity(text)).digest('hex');
+}
+
+function decisionKey(item) {
+  if (!item) return null;
+  if (item.text_hash) return `sha256:${item.text_hash}`;
+  if (!item.text) return null;
+  return `sha256:${decisionHash(item.text)}`;
+}
+
+// Cap decisions WITHOUT evicting tombstones. A plain `slice(0, cap)` after
+// an unshift meant the 11th note pushed the oldest hidden decision off the
+// list — and a dropped tombstone is a resurrection waiting for the next
+// merge with any replica still holding the un-hidden copy. Tombstones and
+// visible entries get separate budgets, same as unionByText below.
+function capDecisions(list = [], cap = MAX_DECISIONS_RECENT) {
+  const visible = list.filter((d) => d && !d.hidden).slice(0, cap);
+  const tombstones = list.filter((d) => d && d.hidden).slice(0, cap);
+  return [...visible, ...tombstones];
+}
+
 // ── Machine identity ─────────────────────────────────────────────
 
 // Stable per-machine identifier. Persisted once, reused forever.
@@ -263,11 +300,68 @@ export async function addNote(text, opts = {}) {
     if (opts.why) decision.why = opts.why;
     if (opts.rejected) decision.rejected = opts.rejected;
     state.current.decisions.unshift(decision);
-    state.current.decisions = state.current.decisions.slice(0, MAX_DECISIONS_RECENT);
+    state.current.decisions = capDecisions(state.current.decisions);
     await writeSession(state);
     // Count/booleans only — never the decision text itself.
     await appendEvent('decision_captured', { has_why: !!opts.why, has_rejected: !!opts.rejected });
     return state;
+  });
+}
+
+/**
+ * Find visible decisions matching a query — substring on text/why/rejected,
+ * or an exact identity match. Pure; shared by `memoir forget` and the
+ * memoir_forget MCP tool so both agree on what "matches" means.
+ */
+export function matchDecisions(state, query) {
+  const q = decisionIdentity(query);
+  if (!q) return [];
+  const decisions = (state.current?.decisions || []).filter((d) => d && d.text && !d.hidden);
+  const exact = decisions.filter((d) => decisionIdentity(d.text) === q);
+  if (exact.length) return exact;
+  return decisions.filter((d) =>
+    [d.text, d.why, d.rejected].filter(Boolean).join(' ').toLowerCase().includes(q)
+  );
+}
+
+/**
+ * Forget a decision: set the SPEC.md 5.3.1 absolute tombstone
+ * (`hidden: true` + `hidden_at`) on the decision whose identity is `text`.
+ *
+ * With `purge`, the text/why/rejected are also redacted in place and the
+ * entry keeps only `text_hash` as its identity — for when the thing to
+ * forget is a leaked secret and hiding it from render is not enough. The
+ * hash still lets the tombstone suppress un-purged copies on other
+ * replicas at merge time (see unionByText).
+ *
+ * Deliberately NOT a delete: removal does not survive union-merge (the
+ * exact bug 3.10.2 fixed for next_actions). And there is no un-forget —
+ * `hidden` is monotonic by spec, which is why the CLI confirms first.
+ */
+export async function hideDecision(text, { purge = false } = {}) {
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    await touchMachine(state);
+    const key = decisionIdentity(text);
+    const idx = (state.current.decisions || []).findIndex(
+      (d) => d && d.text && !d.hidden && decisionIdentity(d.text) === key
+    );
+    if (idx < 0) return { state, hidden: false };
+
+    const now = new Date().toISOString();
+    const d = state.current.decisions[idx];
+    const tomb = { ...d, hidden: true, hidden_at: now };
+    if (purge) {
+      tomb.text_hash = decisionHash(d.text);
+      tomb.text = PURGED_TEXT;
+      delete tomb.why;
+      delete tomb.rejected;
+    }
+    state.current.decisions[idx] = tomb;
+    state.current.decisions = capDecisions(state.current.decisions);
+    await writeSession(state);
+    await appendEvent('decision_hidden', { purged: !!purge });
+    return { state, hidden: true, purged: !!purge };
   });
 }
 
@@ -360,9 +454,14 @@ export function mergeSessions(local, remote) {
 
 function unionByText(a = [], b = [], dateField, cap) {
   const byText = new Map();
+  // Identity is normalized text (SPEC 5.1). Keyed through decisionKey so a
+  // PURGED decision tombstone — text redacted, `text_hash` kept — lands on
+  // the same key as the un-purged copies it must keep suppressing. For
+  // goals/next_actions/questions (no purge concept) this is just a hash of
+  // the same normalized text and behaves exactly as before.
   for (const item of [...a, ...b]) {
-    if (!item || !item.text) continue;
-    const key = item.text.trim().toLowerCase();
+    const key = decisionKey(item);
+    if (!key) continue;
     const existing = byText.get(key);
     if (!existing || new Date(item[dateField] || 0) > new Date(existing[dateField] || 0)) {
       byText.set(key, item);
@@ -379,12 +478,17 @@ function unionByText(a = [], b = [], dateField, cap) {
   // the tombstoned copy doesn't even win the date comparison.) Suppression has
   // to be monotonic or it isn't suppression — you'd be re-hiding the same junk
   // on every machine forever.
+  //
+  // A PURGED tombstone wins outright — never let a date-winning un-purged
+  // copy carry the redacted text back into the merged result. Purge is
+  // "this text must leave the file"; the merged entry must be the purged one.
   for (const [key, winner] of byText) {
-    if (winner.hidden) continue;
-    const tombstone = [...a, ...b].find(
-      (i) => i && i.text && i.text.trim().toLowerCase() === key && i.hidden
-    );
-    if (tombstone) {
+    const stones = [...a, ...b].filter((i) => i && i.hidden && decisionKey(i) === key);
+    if (!stones.length) continue;
+    const tombstone = stones.find((i) => i.text_hash) || stones[0];
+    if (tombstone.text_hash) {
+      byText.set(key, tombstone);
+    } else if (!winner.hidden) {
       byText.set(key, { ...winner, hidden: true, hidden_at: tombstone.hidden_at });
     }
   }

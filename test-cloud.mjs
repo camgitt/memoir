@@ -25,10 +25,13 @@ const { MAX_BACKUPS_FREE, MAX_BACKUPS_PRO, SUPABASE_URL, STORAGE_BUCKET } = awai
 // ── constants.js — verify the REAL retention limits ──────────────────
 console.log(`\n${BOLD}${CYAN}constants.js (retention limits)${RESET}\n`);
 
-// Plan claimed MAX_BACKUPS_FREE=100, MAX_BACKUPS_PRO=50 — verify against source.
+// Retention invariant. Through 3.11 this test PINNED the inverted values
+// (FREE=100, PRO=50) — so the bug that made Pro prune twice as hard as free
+// on a destructive path had a passing test. Assert the relationship the
+// pricing promises, not the magic numbers.
 {
-  assert(MAX_BACKUPS_FREE === 100, `MAX_BACKUPS_FREE is 100 (got ${MAX_BACKUPS_FREE})`);
-  assert(MAX_BACKUPS_PRO === 50, `MAX_BACKUPS_PRO is 50 (got ${MAX_BACKUPS_PRO})`);
+  assert(Number.isInteger(MAX_BACKUPS_FREE) && MAX_BACKUPS_FREE > 0, `MAX_BACKUPS_FREE is a positive integer (got ${MAX_BACKUPS_FREE})`);
+  assert(MAX_BACKUPS_PRO > MAX_BACKUPS_FREE, `Pro retains MORE than free (pro=${MAX_BACKUPS_PRO}, free=${MAX_BACKUPS_FREE})`);
 }
 
 // ── cleanupOldBackups — retention via stubbed fetch ──────────────────

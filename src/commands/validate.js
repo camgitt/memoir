@@ -277,6 +277,19 @@ export function validateSessionObject(obj) {
       if (d && d.hidden === true && !isIsoDateString(d.hidden_at)) {
         errors.push(`current.decisions[${i}] hidden: true without a valid hidden_at (SPEC.md 5.3.1)`);
       }
+      // Purged form: text_hash only makes sense on a hidden tombstone whose
+      // text is the [purged] literal; a hash on a live decision is not an identity.
+      if (d && d.text_hash != null) {
+        if (!/^[0-9a-f]{64}$/.test(String(d.text_hash))) {
+          errors.push(`current.decisions[${i}] text_hash must be lowercase hex SHA-256 (SPEC.md 5.3.1)`);
+        }
+        if (d.hidden !== true) {
+          errors.push(`current.decisions[${i}] text_hash without hidden: true — purge implies hide (SPEC.md 5.3.1)`);
+        }
+        if (d.text !== '[purged]') {
+          warnings.push(`current.decisions[${i}] carries text_hash but text is not "[purged]" — the redacted text may still be present`);
+        }
+      }
     });
     // completed_actions is optional (absent = empty), but when present its
     // tombstones must be well-formed or the temporal merge rule breaks.

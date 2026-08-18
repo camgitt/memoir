@@ -197,5 +197,77 @@ console.log(`\n${BOLD}${CYAN}scripts/cleanup-junk-decisions-2026-07.mjs${RESET}\
   await fs.remove(scratch);
 }
 
+// ── state.js — hideDecision / matchDecisions / purge merge (memoir forget) ─
+console.log(`\n${BOLD}${CYAN}state.js — hideDecision(): the shipped way to create an absolute tombstone${RESET}\n`);
+
+{
+  const stateMod = await import('./src/session/state.js');
+  const { addNote, hideDecision, matchDecisions, readSession, mergeSessions, decisionHash, PURGED_TEXT } = stateMod;
+
+  // Fresh scratch session (HOME is shimmed above, so this is a scratch file).
+  await fs.remove(stateMod.paths.session).catch(() => {});
+  await addNote('Use Postgres for the database layer', { why: 'relational fits', rejected: 'Mongo' });
+  await addNote('switch to Sonnet', { why: 'auto-captured: switch to Sonnet' });
+  await addNote('the API key is sk-live-EXAMPLE-0000', { why: 'auto-captured from a paste' });
+
+  // matchDecisions: exact identity beats substring; ambiguity is reported, not resolved.
+  let st = await readSession();
+  assert(matchDecisions(st, 'switch to Sonnet').length === 1, 'matchDecisions: exact identity match returns exactly one');
+  assert(matchDecisions(st, 'the').length >= 2, 'matchDecisions: a vague substring returns every candidate (caller must refuse)');
+  assert(matchDecisions(st, 'zzz-none').length === 0, 'matchDecisions: no match → empty');
+
+  // Plain forget: hidden + hidden_at, text retained (spec 5.3.1), gone from every read path.
+  let res = await hideDecision('switch to Sonnet');
+  assert(res.hidden === true && res.purged === false, 'hideDecision: reports hidden, not purged');
+  st = await readSession();
+  const tomb = st.current.decisions.find(d => d.text === 'switch to Sonnet');
+  assert(tomb && tomb.hidden === true && typeof tomb.hidden_at === 'string', 'hideDecision: sets hidden:true + hidden_at, retains text');
+  const { findDecisions } = await import('./src/commands/why.js');
+  assert(findDecisions(st, 'sonnet').length === 0, 'hideDecision: hidden decision no longer found by memoir why');
+  const { renderSession } = await import('./src/session/render.js');
+  assert(!renderSession(st).includes('switch to Sonnet'), 'hideDecision: hidden decision no longer rendered into the pinned block');
+  assert(matchDecisions(st, 'switch to Sonnet').length === 0, 'hideDecision: hidden decisions are not forget-able twice');
+  res = await hideDecision('switch to Sonnet');
+  assert(res.hidden === false, 'hideDecision: second call is a no-op (reports hidden:false)');
+
+  // Purge: text/why/rejected redacted, hash retained as identity.
+  res = await hideDecision('the API key is sk-live-EXAMPLE-0000', { purge: true });
+  assert(res.hidden && res.purged, 'purge: reports hidden + purged');
+  st = await readSession();
+  const raw = await fs.readFile(stateMod.paths.session, 'utf8');
+  assert(!raw.includes('sk-live-EXAMPLE-0000'), 'purge: the secret text is gone from session.json bytes');
+  const purged = st.current.decisions.find(d => d.text_hash);
+  assert(purged && purged.text === PURGED_TEXT && purged.hidden === true && !purged.why, 'purge: entry is [purged] + hidden, why/rejected dropped');
+  assert(purged.text_hash === decisionHash('the API key is sk-live-EXAMPLE-0000'), 'purge: text_hash is sha256 of the normalized identity');
+
+  // Merge: a purged tombstone must suppress AND replace an un-purged copy on a stale replica.
+  const stale = {
+    version: 1, machines: {}, history: [],
+    current: {
+      goals: [], next_actions: [], open_questions: [], completed_actions: [],
+      decisions: [
+        { text: 'the API key is sk-live-EXAMPLE-0000', why: 'auto-captured from a paste', date: '2099-01-01T00:00:00.000Z' }, // newer date, un-purged
+        { text: 'switch to Sonnet', why: 'auto-captured: switch to Sonnet', date: '2099-01-01T00:00:00.000Z' },              // newer date, un-hidden
+      ],
+    },
+  };
+  const merged = mergeSessions(st, stale);
+  const mSecret = merged.current.decisions.filter(d => /sk-live/.test(d.text || '') || d.text_hash);
+  assert(mSecret.length === 1 && mSecret[0].text === PURGED_TEXT && mSecret[0].hidden, 'merge: purged tombstone wins over a NEWER un-purged copy (secret does not come back)');
+  assert(!JSON.stringify(merged).includes('sk-live-EXAMPLE-0000'), 'merge: the secret text is absent from the merged result');
+  const mSonnet = merged.current.decisions.filter(d => d.text === 'switch to Sonnet');
+  assert(mSonnet.length === 1 && mSonnet[0].hidden === true, 'merge: plain tombstone stays sticky against a NEWER un-hidden copy');
+  const mPg = merged.current.decisions.find(d => /Postgres/.test(d.text));
+  assert(mPg && !mPg.hidden, 'merge: unrelated visible decision untouched');
+
+  // Cap: the 11th+ note must not evict a tombstone (was: slice(0,10) after unshift).
+  for (let i = 0; i < 12; i++) await addNote(`filler decision number ${i} for the cap test`);
+  st = await readSession();
+  assert(st.current.decisions.some(d => d.text === 'switch to Sonnet' && d.hidden), 'cap: tombstone survives 12 subsequent notes (visible/tombstone budgets are separate)');
+  assert(st.current.decisions.filter(d => !d.hidden).length === 10, 'cap: visible decisions still capped at 10');
+
+  await fs.remove(stateMod.paths.session).catch(() => {});
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail > 0 ? 1 : 0);

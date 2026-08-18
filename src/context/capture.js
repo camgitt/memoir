@@ -19,8 +19,16 @@ export function findClaudeSessions() {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        // Skip Claude Code's per-session side directories. `subagents/`
+        // holds agent-*.jsonl transcripts whose FIRST user message is the
+        // orchestrator's prompt ("You are a software architect. Note that
+        // ...") — the filename check below never caught them (the file is
+        // agent-<id>.jsonl, not *subagent*), so USER_NOTE_RE minted
+        // decisions out of system prompts. Live proof: three of the
+        // author's own pinned decisions were subagent-prompt fragments.
+        if (entry.name === 'subagents' || entry.name === 'workflows' || entry.name === 'tool-results') continue;
         scanDir(full);
-      } else if (entry.name.endsWith('.jsonl') && !entry.name.includes('subagent')) {
+      } else if (entry.name.endsWith('.jsonl') && !entry.name.includes('subagent') && !entry.name.startsWith('agent-')) {
         try {
           const stat = fs.statSync(full);
           // Skip files older than 7 days for performance

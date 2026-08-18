@@ -33,6 +33,8 @@ import {
 } from '../src/commands/session.js';
 import { autopushCommand } from '../src/commands/autopush.js';
 import { whyCommand } from '../src/commands/why.js';
+import { forgetCommand } from '../src/commands/forget.js';
+import { recallCommand } from '../src/commands/recall.js';
 import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
 import { validateCommand } from '../src/commands/validate.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
@@ -217,6 +219,26 @@ program
   .description('Look up decisions by keyword — returns what was decided + why + what was rejected')
   .action(async (query) => {
     try { await whyCommand((query || []).join(' ')); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('forget <text...>')
+  .description('Forget a decision — hides it everywhere, permanently (substring match; refuses if ambiguous)')
+  .option('--purge', 'Also redact the text in place (for leaked secrets); keeps only a hash so the tombstone still syncs')
+  .option('-y, --yes', 'Skip the confirmation prompt')
+  .action(async (text, options) => {
+    try { await forgetCommand(text.join(' '), options); }
+    catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
+  });
+
+program
+  .command('recall <query...>')
+  .description('Search your AI memory the way memoir_recall does — see exactly what your AI would be handed')
+  .option('--limit <n>', 'Max results (default 10)')
+  .option('--json', 'Machine-readable output')
+  .action(async (query, options) => {
+    try { await recallCommand(query.join(' '), options); }
     catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
   });
 

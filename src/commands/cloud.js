@@ -32,7 +32,7 @@ export async function cloudPushCommand(options = {}) {
         chalk.yellow('Free plan limit reached') + '\n\n' +
         chalk.white(`You have ${existing.length}/${MAX_BACKUPS_FREE} backups.`) + '\n' +
         chalk.white('Oldest backup will be replaced.') + '\n\n' +
-        chalk.gray('Upgrade to Pro for 50 backups + version history.'),
+        chalk.gray('Upgrade to Pro for 100 backups + full version history.'),
         { padding: 1, borderStyle: 'round', borderColor: 'yellow' }
       ) + '\n');
     }

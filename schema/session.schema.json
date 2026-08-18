@@ -137,10 +137,16 @@
           "type": "boolean",
           "description": "true = absolute tombstone. Sticky and monotonic across merges REGARDLESS of the date comparison: if any copy on either side is hidden, the merged copy is hidden (SPEC.md 5.3.1)."
         },
-        "hidden_at": { "$ref": "#/$defs/timestamp" }
+        "hidden_at": { "$ref": "#/$defs/timestamp" },
+        "text_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Purged tombstone (SPEC.md 5.3.1): SHA-256 of the normalized identity text this entry replaced. Only valid together with hidden:true; text is the literal \"[purged]\"."
+        }
       },
       "dependentRequired": {
-        "hidden": ["hidden_at"]
+        "hidden": ["hidden_at"],
+        "text_hash": ["hidden", "hidden_at"]
       },
       "additionalProperties": true
     },

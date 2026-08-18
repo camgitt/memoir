@@ -63,7 +63,7 @@ export async function upgradeCommand() {
   const sep = chalk.gray('─'.repeat(col1 + col2 + 18));
 
   const rows = [
-    [chalk.gray('100 cloud backups'),  chalk.white('Unlimited backups'),  chalk.white('Unlimited backups')],
+    [chalk.gray('10 cloud backups'),   chalk.white('100 backups'),        chalk.white('100 backups')],
     [chalk.gray('Local only'),        chalk.white('Unlimited machines'), chalk.white('Shared team context')],
     [chalk.gray('Manual snapshots'),  chalk.white('Auto snapshots'),     chalk.white('Team dashboard')],
     [chalk.gray('Community support'), chalk.white('Priority support'),   chalk.white('Audit log')],
@@ -119,7 +119,7 @@ export async function upgradeCommand() {
       );
     } catch (err) {
       spinner.fail(chalk.red('  ' + err.message));
-      console.log(chalk.gray('\n  Fallback: visit ') + chalk.cyan('https://memoir.sh/pricing') + '\n');
+      console.log(chalk.gray('\n  Fallback: visit ') + chalk.cyan('https://memoir.sh/#pricing') + '\n');
     }
   } else if (!session) {
     console.log('\n' + chalk.gray('  Run ') + chalk.cyan('memoir login') + chalk.gray(' to create an account, then ') + chalk.cyan('memoir upgrade') + chalk.gray(' to subscribe.') + '\n');

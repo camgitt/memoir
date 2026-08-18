@@ -22,16 +22,18 @@ async function supaFetch(endpoint, options = {}) {
   return res;
 }
 
+// GoTrue's REST API takes the post-email landing URL as a `redirect_to`
+// QUERY PARAM. `options.emailRedirectTo` / `options.redirectTo` in the JSON
+// body is supabase-js's client shape — sent raw it is silently ignored and
+// the email links fall back to the project's Site URL. Both URLs below must
+// also be on the Auth → URL Configuration → Redirect URLs allow-list.
+const CONFIRMED_URL = 'https://memoir.sh/confirmed';
+const RESET_URL = 'https://memoir.sh/reset-password';
+
 export async function signUp(email, password) {
-  const res = await supaFetch('/auth/v1/signup', {
+  const res = await supaFetch(`/auth/v1/signup?redirect_to=${encodeURIComponent(CONFIRMED_URL)}`, {
     method: 'POST',
-    body: JSON.stringify({
-      email,
-      password,
-      options: {
-        emailRedirectTo: 'https://memoir.sh/confirmed',
-      },
-    }),
+    body: JSON.stringify({ email, password }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error_description || data.msg || 'Sign up failed');
@@ -116,14 +118,9 @@ export async function getSubscription(session) {
 }
 
 export async function resetPassword(email) {
-  const res = await supaFetch('/auth/v1/recover', {
+  const res = await supaFetch(`/auth/v1/recover?redirect_to=${encodeURIComponent(RESET_URL)}`, {
     method: 'POST',
-    body: JSON.stringify({
-      email,
-      options: {
-        redirectTo: 'https://memoir.sh/reset-password',
-      },
-    }),
+    body: JSON.stringify({ email }),
   });
   if (!res.ok) {
     const data = await res.json();

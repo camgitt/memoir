@@ -242,7 +242,15 @@ export async function pushCommand(options = {}) {
             for (const d of qualityDecisions.slice(0, 10)) {
               const text = decisionText(d);
               if (existingTexts.has(text.toLowerCase())) continue;
-              await addNote(text, { why: d.context ? `auto-captured: ${d.context.slice(0, 80)}` : undefined });
+              // A `why` that merely restates the text is not a rationale —
+              // for rename/tech captures decisionText() IS d.context, so the
+              // old line produced `why: "auto-captured: switch to Sonnet"`
+              // under text "switch to Sonnet". Content-free, and it made
+              // auto-captures indistinguishable from real reasoning in the
+              // pinned block. Emit no why rather than a fake one.
+              const ctx = String(d.context || '').trim();
+              const restates = !ctx || ctx.toLowerCase() === text.trim().toLowerCase();
+              await addNote(text, { why: restates ? undefined : `auto-captured: ${ctx.slice(0, 80)}` });
             }
             // Record a session summary in history for "recent sessions" section
             const filesList = Array.from(parsed.filesWritten || []).slice(0, 10);

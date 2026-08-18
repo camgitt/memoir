@@ -34,6 +34,11 @@
       "type": "array",
       "items": { "type": "string" }
     },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Other names/phrasings a reader might search for this entry under. Retrieval SHOULD weight above body prose (SPEC.md 3.2)."
+    },
     "origin": {
       "type": "object",
       "description": "Where the entry came from.",

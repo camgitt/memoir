@@ -27,119 +27,18 @@ import {
 import { renderSession } from './session/render.js';
 import { injectInto, detectAvailableTargets } from './session/inject.js';
 import { findDecisions } from './commands/why.js';
+import { matchDecisions, hideDecision } from './session/state.js';
+import { readMemoryFiles, searchMemories, formatRecallResults, withFrontmatterLists } from './memory/search.js';
 import { capture as track } from './telemetry.js';
+import { createRequire } from 'module';
 
 const home = os.homedir();
+const { version: VERSION } = createRequire(import.meta.url)('../package.json');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Read all memory files from a tool adapter's source directory
- */
-async function readMemoryFiles(adapter) {
-  const files = [];
-
-  if (adapter.customExtract) {
-    for (const file of adapter.files) {
-      const filePath = path.join(adapter.source, file);
-      if (await fs.pathExists(filePath)) {
-        try {
-          const content = await fs.readFile(filePath, 'utf8');
-          files.push({ path: file, content, tool: adapter.name });
-        } catch {}
-      }
-    }
-    return files;
-  }
-
-  if (!(await fs.pathExists(adapter.source))) return files;
-
-  const walk = async (dir, prefix = '') => {
-    let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
-
-      if (entry.isDirectory()) {
-        if (adapter.filter(fullPath)) {
-          await walk(fullPath, relPath);
-        }
-      } else if (entry.name.endsWith('.md') || entry.name.endsWith('.json') || entry.name.endsWith('.yml') || entry.name.endsWith('.yaml')) {
-        if (adapter.filter(fullPath)) {
-          try {
-            const content = await fs.readFile(fullPath, 'utf8');
-            files.push({ path: relPath, content, tool: adapter.name });
-          } catch {}
-        }
-      }
-    }
-  };
-
-  await walk(adapter.source);
-  return files;
-}
-
-/**
- * Search across all memory files for a query (case-insensitive keyword match)
- */
-async function searchMemories(query) {
-  const results = [];
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-
-  for (const adapter of adapters) {
-    const files = await readMemoryFiles(adapter);
-    for (const file of files) {
-      const lower = file.content.toLowerCase();
-      const score = terms.reduce((s, t) => s + (lower.includes(t) ? 1 : 0), 0);
-      if (score > 0) {
-        results.push({ ...file, score, relevance: score / terms.length });
-      }
-    }
-  }
-
-  // Also search per-project AI config files
-  const projectFiles = ['CLAUDE.md', 'GEMINI.md', 'CHATGPT.md', '.cursorrules', '.windsurfrules', '.clinerules'];
-  const skipDirs = new Set(['node_modules', '.git', '.next', '.vercel', 'dist', 'build', '__pycache__', '.venv', 'venv', '.cache', 'Library', '.Trash', 'Applications', 'Downloads']);
-
-  const scanProjects = async (dir, depth = 0) => {
-    if (depth > 3) return;
-    let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-
-    for (const file of projectFiles) {
-      const filePath = path.join(dir, file);
-      if (await fs.pathExists(filePath)) {
-        try {
-          const content = await fs.readFile(filePath, 'utf8');
-          const lower = content.toLowerCase();
-          const score = terms.reduce((s, t) => s + (lower.includes(t) ? 1 : 0), 0);
-          if (score > 0) {
-            results.push({
-              path: `${path.basename(dir)}/${file}`,
-              content,
-              tool: `Project: ${path.basename(dir)}`,
-              score,
-              relevance: score / terms.length
-            });
-          }
-        } catch {}
-      }
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith('.') && entry.name !== '.github') continue;
-      if (skipDirs.has(entry.name)) continue;
-      await scanProjects(path.join(dir, entry.name), depth + 1);
-    }
-  };
-
-  await scanProjects(home);
-
-  return results.sort((a, b) => b.score - a.score);
-}
+// readMemoryFiles / searchMemories live in ./memory/search.js (cached,
+// field-weighted, passage-returning) so the CLI's `memoir recall` and tests
+// share one implementation with this server.
 
 /**
  * Get list of detected tools with status
@@ -164,7 +63,7 @@ async function getDetectedTools() {
 
 const server = new McpServer({
   name: 'memoir',
-  version: '3.2.0',
+  version: VERSION,
 }, {
   capabilities: {
     tools: {},
@@ -236,46 +135,30 @@ server.tool(
 
 server.tool(
   'memoir_recall',
-  'Search across all AI tool memories, project configs, and session context for relevant information. Use this to find what you know about a topic, project, or tool.',
-  { query: z.string().describe('Search query — keywords or topic to find in memories') },
-  async ({ query }) => {
-    const results = await searchMemories(query);
-
-    if (results.length === 0) {
-      return {
-        content: [{ type: 'text', text: `No memories found matching "${query}".` }]
-      };
-    }
-
-    // Return top 10 results with content
-    const top = results.slice(0, 10);
-    const output = top.map((r, i) => {
-      const preview = r.content.length > 500 ? r.content.slice(0, 500) + '...' : r.content;
-      return [
-        `── ${i + 1}. ${r.tool} / ${r.path} (relevance: ${Math.round(r.relevance * 100)}%) ──`,
-        preview,
-      ].join('\n');
-    }).join('\n\n');
-
-    return {
-      content: [{
-        type: 'text',
-        text: `Found ${results.length} memories matching "${query}":\n\n${output}`
-      }]
-    };
+  'Search across all AI tool memories, project configs, and session context for relevant information. Returns the matched passages (not file headers) from the best files, ranked by how well each file covers all your terms — aliases, names, and descriptions weigh more than body prose. Use this before answering questions about a project, a past decision, or a tool. Use memoir_read to see a whole file.',
+  {
+    query: z.string().describe('Search query — keywords or topic to find in memories. Multi-word queries rank files that match every word highest.'),
+    limit: z.number().int().min(1).max(30).optional().describe('Max results to return (default 10)'),
+  },
+  async ({ query, limit }) => {
+    const res = await searchMemories(query, { limit: limit || 10 });
+    return { content: [{ type: 'text', text: formatRecallResults(query, res) }] };
   }
 );
 
 server.tool(
   'memoir_remember',
-  'Save a memory to a specific AI tool\'s memory files. Use this to persist important context, decisions, or facts for future sessions.',
+  'Save a memory to a specific AI tool\'s memory files. Use this to persist important context, decisions, or facts for future sessions. Give the file frontmatter (type, name, description) and ALWAYS pass aliases — the other names, nicknames, or phrasings someone might search for this under (e.g. a "vertical swipe feed" surface should carry aliases like "tiktok", "reels", "/tape"). Recall weights aliases heaviest; a memory without them can only be found by the exact words it happens to use.',
   {
-    content: z.string().describe('The memory content to save (markdown format)'),
+    content: z.string().describe('The memory content to save (markdown, ideally with --- frontmatter: type, name, description)'),
     filename: z.string().describe('Filename for the memory (e.g. "auth-setup.md", "project-goals.md")'),
+    aliases: z.array(z.string()).optional().describe('Other names/phrasings this memory should be findable under. Written into frontmatter `aliases:`. Strongly recommended.'),
+    tags: z.array(z.string()).optional().describe('Topic tags. Written into frontmatter `tags:`.'),
     tool: z.string().optional().describe('Which AI tool to save to: "claude", "gemini", "cursor", etc. Defaults to claude.'),
     project: z.string().optional().describe('Project directory path to save a project-level memory (e.g. CLAUDE.md). If provided, saves to that project directory instead of global tool config.'),
   },
-  async ({ content, filename, tool, project }) => {
+  async ({ content, filename, aliases, tags, tool, project }) => {
+    content = withFrontmatterLists(content, { aliases, tags });
     // Project-level memory
     if (project) {
       const projectDir = project.startsWith('/') ? project : path.join(home, project);
@@ -736,6 +619,38 @@ server.tool(
       return parts.join('\n');
     }).join('\n\n');
     return { content: [{ type: 'text', text: `${matches.length} decision(s) matching "${query}":\n\n${out}` }] };
+  }
+);
+
+server.tool(
+  'memoir_forget',
+  'Forget a recorded decision — permanently hides it from the pinned block, memoir_why, and every synced machine (an absolute tombstone; there is no un-forget). Use when the user says a decision is wrong, obsolete, or was captured by mistake, or when a secret leaked into a decision. Refuses to act if the text matches more than one decision — call again with a more specific string. Pass purge=true to also redact the text in place (for secrets).',
+  {
+    text: z.string().describe('The decision text, or a substring unique to it'),
+    purge: z.boolean().optional().describe('Also redact the text/why/rejected in place, keeping only a hash. For leaked secrets. Default false.'),
+  },
+  async ({ text, purge }) => {
+    const state = await readSession();
+    const matches = matchDecisions(state, text);
+    if (matches.length === 0) {
+      return { content: [{ type: 'text', text: `No visible decision matches "${text}". Nothing forgotten.` }] };
+    }
+    if (matches.length > 1) {
+      const list = matches.map(d => `● ${d.text}`).join('\n');
+      return { content: [{ type: 'text', text: `"${text}" matches ${matches.length} decisions — forgetting is permanent, so nothing was changed. Call again with a string unique to one of:\n\n${list}` }] };
+    }
+    const res = await hideDecision(matches[0].text, { purge: !!purge });
+    if (!res.hidden) {
+      return { content: [{ type: 'text', text: `Nothing changed — the decision may already have been forgotten.` }] };
+    }
+    // Re-render the pinned block so the next session no longer loads it.
+    try {
+      const rendered = renderSession(res.state);
+      for (const target of Object.values(detectAvailableTargets())) {
+        try { await injectInto(target, rendered); } catch {}
+      }
+    } catch {}
+    return { content: [{ type: 'text', text: `${res.purged ? 'Forgotten and purged' : 'Forgotten'}: "${matches[0].text}". The tombstone propagates on the next push.` }] };
   }
 );
 

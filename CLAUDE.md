@@ -1,7 +1,7 @@
 # memoir — Persistent Memory for AI Coding Tools
 
 ## Project
-- **Package:** memoir-cli (npm), v3.7.1
+- **Package:** memoir-cli (npm), v3.12.0 (see package.json — this line goes stale)
 - **Website:** memoir.sh (static HTML on Vercel)
 - **Repo:** https://github.com/camgitt/memoir
 - **License:** MIT
@@ -11,13 +11,13 @@
 CLI + MCP server that gives AI tools persistent memory. Your AI can search, read, and save memories across sessions, tools, and machines. Supports 11 tools: Claude Code, Cursor, Windsurf, Gemini, Copilot, Codex, ChatGPT, Aider, Zed, Cline, Continue.dev.
 
 ## Architecture
-- **CLI commands:** push, restore, snapshot, resume, migrate, diff, profile, doctor, share, upgrade, consolidate, login (--signup), forgot-password
-- **MCP server:** 14 tools — memory: memoir_remember, memoir_recall, memoir_read, memoir_list, memoir_profiles, memoir_status, memoir_consolidate; session continuity: memoir_set_goal, memoir_add_next, memoir_complete_next, memoir_note, memoir_ask, memoir_session, memoir_why
+- **CLI commands:** push, restore, snapshot, resume, migrate, diff, profile, doctor, share, upgrade, consolidate, login (--signup), forgot-password, recall, forget, validate, why, note/goal/next/done/ask
+- **MCP server:** 15 tools — memory: memoir_remember (aliases/tags → frontmatter), memoir_recall (passages, field-weighted, cached — src/memory/search.js), memoir_read, memoir_list, memoir_profiles, memoir_status, memoir_consolidate; session continuity: memoir_set_goal, memoir_add_next, memoir_complete_next, memoir_note, memoir_ask, memoir_session, memoir_why, memoir_forget (absolute tombstone, --purge redacts)
 - **Session continuity:** AI records goals/next-actions/decisions into session.json, auto-rendered into CLAUDE.md so the next session picks up where the last ended
 - **Consolidate:** scans all tool memories for duplicates, stale files, and bloat (`--smart` adds a Gemini Flash semantic pass)
 - **Cloud sync:** Supabase auth (email/password), gzipped bundles in Storage, PostgreSQL metadata
 - **Encryption:** AES-256-GCM, async scrypt, client-side before upload (zero-knowledge)
-- **Tiers:** Free (100 cloud backups), Pro ($15/mo — purchasable via `memoir upgrade`, Stripe checkout wired), Teams ($29/seat, planned)
+- **Tiers:** Free (10 cloud backups), Pro ($15/mo, 100 backups + version history — purchasable via `memoir upgrade`, Stripe checkout wired), Teams ($29/seat, planned)
 
 ## Key files
 - `bin/memoir.js` — CLI entry point
@@ -35,7 +35,7 @@ CLI + MCP server that gives AI tools persistent memory. Your AI can search, read
 - Has pricing page, waitlist (Supabase), SEO, OG image, blog posts
 
 ## Current status
-- Core product solid, v3.7.1 published
+- Core product solid; 3.12.0 = retrieval rewrite (passages not headers), memoir forget, capture guards, retention fix
 - Pricing page + waitlist live on memoir.sh
 - Stripe checkout wired — Pro is purchasable via `memoir upgrade` (hits `stripe-checkout` Supabase function, opens browser). Live-mode end-to-end not yet verified.
 - Session continuity + consolidate shipped (cross-session goal/decision handoff, memory cleanup)

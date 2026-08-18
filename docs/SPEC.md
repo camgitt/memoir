@@ -1,6 +1,6 @@
-# The memoir format, v0.1 (draft)
+# The memoir format, v0.1.1 (draft)
 
-**Status:** Draft. Version 0.1. Seeking implementations and critique.
+**Status:** Draft. Version 0.1.1. Seeking implementations and critique.
 
 This document specifies the memoir format: an open, portable, plain-text
 format for an AI assistant's accumulated working context — what it has
@@ -112,6 +112,7 @@ belongs in the body.
 | `schema_version` | MAY | Integer. Absent means `1`. See section 6. |
 | `project` | MAY | Project this entry is scoped to; absent means global. |
 | `tags` | MAY | List of strings. |
+| `aliases` | MAY | List of strings: other names, nicknames, or phrasings a reader might search for this entry under (e.g. an entry about a "vertical swipe feed" surface: `tiktok`, `reels`, `/tape`). Retrieval SHOULD weight this field above body prose. Concept-level recall in a plain-text format is a write-time job — the writer knows what else the thing is called; a substring search later does not. |
 | `origin` | MAY | Mapping with any of `tool`, `session_id`, `machine_id` — where the entry came from. |
 
 Readers MUST ignore fields they do not recognize. Writers MUST preserve
@@ -397,7 +398,9 @@ implement this section exactly.
 
 The identity of a session-list item is its **normalized text**: `text`,
 whitespace-trimmed, case-folded. Two items with the same normalized text are
-the same item. The identity of an entry file is its link name (filename).
+the same item. A purged decision tombstone (5.3.1) carries that identity as
+`text_hash` (SHA-256 of the normalized text) instead of the text. The
+identity of an entry file is its link name (filename).
 
 ### 5.2 Union, newest wins
 
@@ -441,6 +444,17 @@ retained in the data so the tombstone keeps propagating.
 `hidden: true` (and that copy's `hidden_at`) — **regardless of the date
 comparison in 5.2**. The winner-by-date inherits the tombstone from the
 loser if it lacks one.
+
+**Purged form.** A hidden decision MAY additionally have its `text` replaced
+by the literal `[purged]` (and `why` / `rejected` removed) and carry
+`text_hash`: the lowercase hex SHA-256 of the identity it replaces (the
+normalized text, 5.1). This exists for the case where the text itself must
+leave the file — a pasted credential, a client name — not merely leave the
+render. Readers MUST treat a purged tombstone as matching every decision
+whose identity hashes to `text_hash`, and on merge the purged form MUST win
+over any un-purged copy of the same identity regardless of `date`, so the
+redacted text never returns via a stale replica. Implementations MUST NOT
+purge without hiding; the hash is not an identity for a live decision.
 
 The date-independence is not an optimization; it is the correctness
 condition. Tombstoning legitimately does not touch the item's `date` (the
@@ -610,6 +624,14 @@ verbatim — validation, not generation, is where the convention is enforced.
 
 ## Appendix C: Changes
 
+- **v0.1.1 (2026-08-18)** — additive. `aliases` common frontmatter field
+  (3.2). Purged form of the absolute decision tombstone: `[purged]` +
+  `text_hash`, hash-matched and merge-winning (5.1, 5.3.1). Both shipped in
+  memoir-cli 3.12.0 (`memoir_remember aliases:`; `memoir forget [--purge]`).
+  Motivation for the first: a real retrieval failure where a shipped surface
+  was findable only by the exact words its one memory happened to use. For
+  the second: nothing shipped could create an absolute tombstone at all
+  (thanks to the agent-memory-atlas review for stating it that plainly).
 - **v0.1 (2026-08-06)** — first public draft. Extracted from memoir-cli
   3.10.x behavior. Seeking implementations and critique:
   https://github.com/camgitt/memoir/issues
