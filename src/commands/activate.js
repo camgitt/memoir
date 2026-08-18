@@ -24,8 +24,23 @@ const MEMOIR_BLOCK = `${BLOCK_START}
 <!-- Cross-session memory for AI tools — https://memoir.sh -->
 <!-- Install: npm i -g memoir-cli -->
 Use memoir_recall to search past context before answering project questions.
-Use memoir_remember to save important decisions, architecture choices, or context worth keeping.
+Use memoir_remember to save important decisions, architecture choices, or context worth keeping — always pass aliases (other names/phrasings it might be searched under) so it stays findable.
+Use memoir_note for a decision with its why; memoir_forget if a recorded decision is wrong or must be retracted.
 ${BLOCK_END}`;
+
+/**
+ * Replace an existing (older) memoir block with the current template.
+ * Blocks were only ever injected once, so an install from before a template
+ * change kept the old instructions forever. Idempotent: identical → unchanged.
+ */
+function upgradeBlock(content) {
+  const startIdx = content.indexOf(BLOCK_START);
+  const endIdx = content.indexOf(BLOCK_END);
+  if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) return content;
+  const existing = content.slice(startIdx, endIdx + BLOCK_END.length);
+  if (existing === MEMOIR_BLOCK) return content;
+  return content.slice(0, startIdx) + MEMOIR_BLOCK + content.slice(endIdx + BLOCK_END.length);
+}
 
 /**
  * Detect which instruction files exist in the current project.
@@ -54,6 +69,11 @@ async function injectBlock(filePath) {
   if (await fs.pathExists(filePath)) {
     const content = await fs.readFile(filePath, 'utf-8');
     if (hasMemoir(content)) {
+      const upgraded = upgradeBlock(content);
+      if (upgraded !== content) {
+        await fs.writeFile(filePath, upgraded);
+        return 'upgraded';
+      }
       return 'already';
     }
     // Append with spacing
@@ -79,7 +99,7 @@ export async function ensureRecallInstruction() {
   for (const target of Object.values(detectAvailableTargets())) {
     try {
       const res = await injectBlock(target);
-      if (res === 'appended' || res === 'created') added++;
+      if (res === 'appended' || res === 'created' || res === 'upgraded') added++;
     } catch {}
   }
   return { added };
@@ -175,6 +195,9 @@ export async function activateCommand(options = {}) {
       injected++;
     } else if (result === 'created') {
       console.log(chalk.green(`  ✔ Created ${file} with memoir instructions`) + chalk.gray(` (${tool})`));
+      injected++;
+    } else if (result === 'upgraded') {
+      console.log(chalk.green(`  ✔ Updated memoir instructions in ${file}`) + chalk.gray(` (${tool})`));
       injected++;
     } else if (result === 'already') {
       console.log(chalk.gray(`  · ${file} already has memoir`) + chalk.gray(` (${tool})`));
