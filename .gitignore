@@ -9,3 +9,6 @@ node_modules/
 
 # 18MB MCP-registry publisher binary — local tool, never tracked or shipped
 mcp-publisher
+
+# Private working notes — strategy/session reports, never published (repo is public)
+notes/
