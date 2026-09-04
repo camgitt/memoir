@@ -5,6 +5,23 @@ import boxen from 'boxen';
 import gradient from 'gradient-string';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
+import { paths as eventPaths } from '../events/log.js';
+import { summarizeEvents, formatSummaryLines } from '../events/summary.js';
+
+const WINDOW_DAYS = 7;
+
+// Best-effort usage block from events.jsonl (names and counts only — the
+// log never holds content). Absent or unreadable log → no block.
+async function usageLines() {
+  try {
+    if (!(await fs.pathExists(eventPaths.events))) return [];
+    const raw = await fs.readFile(eventPaths.events, 'utf8');
+    const s = summarizeEvents(raw, { sinceMs: WINDOW_DAYS * 24 * 60 * 60 * 1000 });
+    return formatSummaryLines(s, { days: WINDOW_DAYS });
+  } catch {
+    return [];
+  }
+}
 
 export async function statusCommand(options = {}) {
   const config = await getConfig(options.profile);
@@ -59,11 +76,16 @@ export async function statusCommand(options = {}) {
     ? '\n' + chalk.gray(`  Also supports: ${notFound.join(', ')}`)
     : '';
 
+  const usage = await usageLines();
+  const usageBlock = usage.length
+    ? '\n\n' + chalk.bold.white(`Last ${WINDOW_DAYS} days`) + '\n' + usage.map((l) => chalk.gray('  ') + chalk.white(l)).join('\n')
+    : '';
+
   console.log(boxen(
     gradient.pastel('  memoir status  ') + '\n\n' +
     configLine + '\n\n' +
     chalk.bold.white('AI Tools') + '\n' +
-    lines.join('\n') + notFoundLine + '\n\n' +
+    lines.join('\n') + notFoundLine + usageBlock + '\n\n' +
     chalk.gray('─'.repeat(30)) + '\n' +
     summary,
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }

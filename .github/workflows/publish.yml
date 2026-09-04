@@ -1,0 +1,50 @@
+# Publish memoir-cli to npm from a version tag, with provenance.
+#
+# Why: three releases in a row (3.10.1, 3.11.0, 3.12.0) stalled on an expired
+# local npm token + 2FA OTP, and the agentscores.xyz scan flags the package
+# for "no provenance". Trusted publishing (npm OIDC) needs no token at all
+# and stamps every release with a verifiable build attestation.
+#
+# One-time setup (npmjs.com → package memoir-cli → Settings → Trusted
+# Publisher → GitHub Actions): owner camgitt, repository memoir, workflow
+# publish.yml, environment blank. Until that exists this job fails at
+# `npm publish` with an auth error and nothing is published — safe.
+#
+# Release = `npm version <patch|minor|major>` locally (RELEASE.md), then
+# `git push origin main --follow-tags`. The tag push runs this workflow.
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm >= 11.5; Node 22 ships an older npm.
+      - run: npm install -g npm@latest
+      - run: npm ci
+      # The tag must match package.json — never publish a version the tag lies about.
+      - run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "$TAG" != "$PKG" ]; then
+            echo "tag v$TAG does not match package.json $PKG"; exit 1
+          fi
+      - run: npm test
+      # prepublishOnly re-runs the suite and checks `npm whoami`; whoami has
+      # no meaning under OIDC, so the guard is told to skip that one check.
+      - run: npm publish --provenance --access public
+        env:
+          MEMOIR_SKIP_NPM_AUTH_CHECK: '1'

@@ -9,8 +9,15 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
 3. **Bump + tag in one step** — `npm version <patch|minor|major>`. Never
    hand-edit the `version` field; `npm version` creates the commit *and* the
    matching `vX.Y.Z` tag so they can't diverge.
-4. **Push with tags** — `git push origin main --follow-tags`.
-5. **Publish** — `npm whoami` FIRST. It 401s more often than not between
+4. **Push with tags** — `git push origin main --follow-tags`. **This is the
+   release.** The tag push runs `.github/workflows/publish.yml`, which
+   re-runs the suite and publishes with provenance via npm trusted
+   publishing — no local token, no OTP. Watch it at
+   https://github.com/camgitt/memoir/actions/workflows/publish.yml and
+   verify with step 6. (One-time setup on npmjs.com is described at the
+   top of the workflow file; until it exists the job fails harmlessly at
+   `npm publish` and you fall back to step 5.)
+5. **Manual publish (fallback only)** — `npm whoami` FIRST. It 401s more often than not between
    releases (the token silently expires — 3.10.1, 3.11.0, 3.12.0 all hit
    it), and a dead token makes `npm publish` run the whole suite and then
    fail with a misleading `404 Not Found - PUT .../memoir-cli`. If it 401s:

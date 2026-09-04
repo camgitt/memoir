@@ -2,7 +2,7 @@
   "name": "memoir-cli",
   "version": "3.13.2",
   "mcpName": "io.github.camgitt/memoir",
-  "description": "Private, portable AI memory: synced across every coding tool and machine, end-to-end encrypted, free. One memory for Claude Code, Cursor, Copilot, Gemini + more — MCP-native, zero-knowledge, open source.",
+  "description": "Private, portable AI memory: synced across every coding tool and machine, end-to-end encrypted, free. One memory for Claude Code, Cursor, Copilot, Gemini + more \u2014 MCP-native, zero-knowledge, open source.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
@@ -32,7 +32,6 @@
     "test": "node run-tests.mjs",
     "test:legacy": "bash test-local.sh",
     "prepublishOnly": "node scripts/check-clean-for-publish.mjs && npm test",
-    "postinstall": "node -e \"try{const c='\\x1b[36m',r='\\x1b[0m',g='\\x1b[90m';console.log('\\n  '+c+'memoir'+r+' installed.\\n  Run '+c+'memoir activate'+r+' in any project to give your AI long-term memory.\\n  '+g+'https://memoir.sh'+r+'\\n')}catch{}\"",
     "version": "node -e \"const f=require('fs');const p=require('./package.json');const s=JSON.parse(f.readFileSync('server.json','utf8'));s.version=p.version;s.packages.forEach(x=>x.version=p.version);f.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n')\" && git add server.json"
   },
   "keywords": [
