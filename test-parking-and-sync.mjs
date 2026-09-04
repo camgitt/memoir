@@ -137,6 +137,11 @@ console.log(`\n${BOLD}${CYAN}goals${RESET}\n`);
   assert(after.current.completed_goals[0].text === 'goal-B', 'retired goal has a tombstone');
   const merged = state.mergeSessions(after, before);
   assert(!texts(merged.current.goals).includes('goal-B'), 'a stale copy cannot resurrect a retired goal on merge');
+  // The temporal rule compares set_on > done_at at millisecond resolution;
+  // retiring and re-setting inside the same millisecond (seen once in five
+  // runs) reads as a stale copy. Give the clock a tick — the rule under test
+  // is "later re-set survives", not sub-millisecond ordering.
+  await new Promise((r) => setTimeout(r, 5));
   await state.addGoal('goal-B');
   const revived = state.mergeSessions(await state.readSession(), before);
   assert(texts(revived.current.goals).includes('goal-B'), 'a goal re-set AFTER retirement survives the merge (temporal tombstone)');
