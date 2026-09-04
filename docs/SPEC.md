@@ -1,4 +1,4 @@
-# The memoir format, v0.1.1 (draft)
+# The memoir format, v0.1.2 (draft)
 
 **Status:** Draft. Version 0.1.1. Seeking implementations and critique.
 
@@ -335,7 +335,9 @@ implementation reads and writes; the machine-readable version is
   "current": {
     "goals":           [ { "text": "...", "machine_id": "...", "set_on": "..." } ],
     "next_actions":    [ { "text": "...", "machine_id": "...", "added": "..." } ],
+    "parked_actions":  [ { "text": "...", "machine_id": "...", "added": "...", "parked_at": "..." } ],
     "completed_actions": [ { "text": "...", "done_at": "..." } ],
+    "completed_goals":   [ { "text": "...", "done_at": "..." } ],
     "open_questions":  [ { "text": "...", "machine_id": "...", "asked": "..." } ],
     "decisions":       [ { "text": "...", "why": "...", "rejected": "...",
                            "hidden": true, "hidden_at": "...",
@@ -343,7 +345,7 @@ implementation reads and writes; the machine-readable version is
   },
   "history": [
     { "date": "...", "machine_id": "...", "summary": "...",
-      "files_touched": ["..."], "duration_min": 42 }
+      "files_touched": ["..."], "duration_min": 42, "session_id": "..." }
   ]
 }
 ```
@@ -359,23 +361,44 @@ Field notes:
 - `current.*` — every item carries `text` (the identity key, 4.2) and the
   list's date field (`set_on` / `added` / `asked` / `date`). `machine_id`
   SHOULD be stamped by writers.
-- `completed_actions` — temporal tombstones for `next_actions` (4.3.2):
+- `completed_actions` — temporal tombstones for `next_actions` (5.3.2):
   `{ text, done_at }`. This list MAY be absent in files written before any
   completion occurred; readers MUST treat absence as empty.
+- `parked_actions` (v0.1.2) — the overflow of `next_actions`. When the live
+  list is at its cap, the oldest actions (by `added`) move here rather than
+  being discarded. A parked action is still *open*: it MUST be rendered (it
+  may be rendered more compactly), it MUST be completable (completing it
+  records the same `completed_actions` tombstone), and adding an action
+  whose identity is parked MUST return it to `next_actions` rather than
+  create a duplicate. `parked_at` records when it overflowed; `added` is
+  unchanged and remains the merge and tombstone comparison key. This list
+  has its own, larger cap; only when *it* overflows may an action be
+  dropped, and an implementation SHOULD log that it did. MAY be absent.
+- `completed_goals` (v0.1.2) — temporal tombstones for `goals`, exactly as
+  `completed_actions` are for `next_actions`, compared against `set_on`
+  (5.3.2). Without them a retired goal returns on the next merge with any
+  replica still carrying it. MAY be absent.
 - `open_questions` — captured questions awaiting an answer. (Draft note:
   there is deliberately no `question` *entry type* in v0.1 — questions have
   so far only proven useful in the live working set. If a portable form
   earns its keep, it becomes a seventh type in a later version.)
 - `history` — bounded roll-up of past sessions, newest first, deduplicated
-  by `(date, machine_id, summary)`.
+  by `session_id` when present (v0.1.2; the same session updates its own
+  row in place instead of adding one per write), otherwise by
+  `(date, machine_id, summary)`.
 - **Bounded lists.** The live lists are capped (reference implementation:
-  goals 3, next_actions 8, open_questions 5, recent decisions 10, completed
-  tombstones 50, history 30). Caps are implementation-chosen QUALITY
-  parameters, not format constants — but *some* cap is normative: the
-  working set must stay loadable-into-context small, with rotation
-  oldest-by-date-out. In particular the completed-tombstone retention MUST
-  be large enough to outlive any stale replica that might still carry the
-  completed item, or completions resurrect (4.3.2).
+  goals 3, next_actions 8, parked_actions 20, open_questions 5, recent
+  decisions 10, completed tombstones 50, history 30). Caps are
+  implementation-chosen QUALITY parameters, not format constants — but
+  *some* cap is normative: the working set must stay loadable-into-context
+  small, with rotation oldest-by-date-out. Rotation out of `next_actions`
+  MUST go to `parked_actions`, not to nowhere (v0.1.2): the reference
+  implementation silently discarded the oldest action for five months, and
+  the loss was only noticed when three live items vanished in one week.
+  A cap on the *visible* list is a rendering budget; it is not permission
+  to forget. In particular the completed-tombstone retention MUST be large
+  enough to outlive any stale replica that might still carry the completed
+  item, or completions resurrect (5.3.2).
 
 Writers MUST write the file atomically (write temp file, rename) and MUST
 serialize concurrent read-mutate-write cycles (e.g. a lock file). Locking
@@ -409,7 +432,12 @@ Merging two replicas (local and remote) of a session list:
 1. **Union by identity.** The merged list contains every distinct identity
    from both sides. A merge MUST NOT drop an item merely because the other
    side lacks it — "never clobber." The only way items leave is cap
-   rotation (oldest by date field, off the end) and tombstoning.
+   rotation (oldest by date field, off the end) and tombstoning. For
+   `next_actions` (v0.1.2) the union pools the live *and* parked lists of
+   both sides, applies the tombstones, then re-splits: the newest N by
+   `added` are live, the rest are parked (keeping any existing `parked_at`).
+   A capped union of the live list alone evicts on merge exactly as
+   silently as a capped append does.
 2. **Newest wins per identity.** When both sides carry the same identity,
    the copy with the newer value in the list's date field (`set_on`,
    `added`, `asked`, `date`) wins wholesale. A missing or unparseable date
@@ -490,7 +518,8 @@ actions get temporal ones because finished work can recur. Implementations
 MUST NOT substitute one class for the other.
 
 The same `done_at`-vs-`added`/`set_on` comparison applies to `goal` and
-`next_action` *entry files* that carry `done_at`.
+`next_action` *entry files* that carry `done_at`, and (v0.1.2) to the
+session's `goals` list against `completed_goals`, compared on `set_on`.
 
 ### 5.4 Merge invariants (summary)
 
@@ -504,6 +533,14 @@ For any replicas A and B:
 - **Monotone suppression:** once hidden everywhere-merged, hidden in every
   future merge; a completed action stays completed against every copy whose
   `added` predates its `done_at`.
+- **Unknown fields pass through (v0.1.2):** a merge MUST carry every key
+  under `current` (and every top-level key) that it does not recognise,
+  taking the local copy when both sides have one. A merger rebuilt from the
+  keys it knows erases whatever a newer writer added — the reference
+  implementation lost two goal retirements and a parked action minutes
+  after those fields existed, to a push still running the previous version.
+  Forward compatibility of the *file* (section 6) is not enough; the merge
+  has to be forward compatible too.
 
 ## 6. Versioning
 
@@ -624,6 +661,16 @@ verbatim — validation, not generation, is where the convention is enforced.
 
 ## Appendix C: Changes
 
+- **v0.1.2 (2026-09-04)** — additive. `parked_actions`: overflow from the
+  live next-action list is parked, rendered and completable, never dropped
+  (4.1); merge pools live + parked and re-splits (5.2). `completed_goals`:
+  temporal tombstones for goals (5.3.2). `history[].session_id` for
+  in-place session rows (4.1). New invariant: unknown fields pass through a
+  merge (5.4). Shipped in memoir-cli 3.13.x. Motivation, all first-party:
+  three live next-actions silently evicted in one week by a `slice(-8)`;
+  a goal set in June still pinned in September because nothing could
+  retire it; and the new fields themselves erased by an older build's
+  merge on the day they shipped.
 - **v0.1.1 (2026-08-18)** — additive. `aliases` common frontmatter field
   (3.2). Purged form of the absolute decision tombstone: `[purged]` +
   `text_hash`, hash-matched and merge-winning (5.1, 5.3.1). Both shipped in

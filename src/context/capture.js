@@ -123,6 +123,23 @@ function parseLines(lines) {
       if (content.length > 3 && !isMachineryMessage(content)) {
         result.userMessages.push(redactSecrets(content));
       }
+      // Tool results ride inside USER turns as tool_result blocks (there is
+      // no top-level type:"tool_result" in a Claude transcript — the old
+      // branch that looked for one never matched, so "Issues I ran into"
+      // was always empty). Only blocks the tool flagged is_error count,
+      // and only when they carry a line that names the failure — a bare
+      // "Exit code 1" from a grep with no matches is not an issue.
+      if (Array.isArray(obj.message.content)) {
+        for (const block of obj.message.content) {
+          if (!block || block.type !== 'tool_result' || !block.is_error) continue;
+          const text = typeof block.content === 'string'
+            ? block.content
+            : (Array.isArray(block.content) ? block.content.map((c) => c?.text || '').join('\n') : '');
+          const line = stripAnsi(text).split('\n').map((l) => l.trim())
+            .find((l) => l && l.length < 200 && /error|fail|exception|cannot|not found|denied|refused|traceback|fatal|unexpected/i.test(l));
+          if (line) result.errors.push(redactSecrets(line));
+        }
+      }
     }
 
     // Tool uses from assistant turns. Assistant PROSE is deliberately not
@@ -159,16 +176,6 @@ function parseLines(lines) {
       }
     }
 
-    // Errors from tool results
-    if (obj.type === 'tool_result' && obj.message?.content) {
-      const content = typeof obj.message.content === 'string' ? obj.message.content : '';
-      if (content.includes('Error') || content.includes('error') || content.includes('FAIL')) {
-        const errorLine = content.split('\n').find(l => /error|fail/i.test(l));
-        if (errorLine && errorLine.length < 200) {
-          result.errors.push(redactSecrets(errorLine.trim()));
-        }
-      }
-    }
   }
 
   result.filesWritten = [...result.filesWritten];
