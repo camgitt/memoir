@@ -207,6 +207,24 @@ assert(isQuality('Decided to go with Postgres for the database layer.') === true
   assert(isMachineryMessage('<system-reminder>x</system-reminder>') && !isMachineryMessage('a < b and c > d'), 'isMachineryMessage: tag at start only');
   assert(stripAnsi('\x1b[2mdim\x1b[22m') === 'dim', 'stripAnsi strips SGR sequences');
 
+  // Tool errors arrive as tool_result blocks inside user turns.
+  const scratch4 = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-capture-test4-'));
+  const f4 = path.join(scratch4, 'session.jsonl');
+  const toolErr = (text, isErr = true) => JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 't', is_error: isErr, content: text }] } });
+  await fs.writeFile(f4, [
+    usr('please run the build'),
+    toolErr('Exit code 1'),                                   // no named failure → ignored
+    toolErr('Exit code 1\nTypeError: Cannot read properties of undefined (reading "replaced")'),
+    toolErr('Error: ENOENT: no such file or directory, open \'/x/y\'', false), // not flagged is_error → ignored
+    toolErr('\x1b[31mFAIL\x1b[0m rotation: events.jsonl -> .1'),
+  ].join('\n') + '\n');
+  const p4 = parseSession(f4);
+  assert(p4.errors.length === 2, `is_error tool results produce issues (${p4.errors.length})`);
+  assert(p4.errors[0].startsWith('TypeError: Cannot read'), 'the line that names the failure is kept, not "Exit code 1"');
+  assert(p4.errors[1] === 'FAIL rotation: events.jsonl -> .1', 'ANSI stripped from issue lines');
+  assert(generateContextHandoff(p4).includes('## Issues I ran into'), 'handoff renders the Issues section');
+  await fs.remove(scratch4);
+
   const md = generateContextHandoff(p3);
   assert(!md.includes('real message number 1 about'), 'handoff "What I was working on" drops the oldest messages…');
   assert(md.includes('real message number 10 about') && md.includes('real message number 4 about'), '…and keeps the last eight');

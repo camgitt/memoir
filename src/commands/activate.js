@@ -245,6 +245,11 @@ export async function deactivateCommand(options = {}) {
  * Prompt to activate — called from push on first push per project
  */
 export async function promptActivate() {
+  // Never in the detached autopush child or a pipe: inquirer against ignored
+  // or closed stdio throws ERR_USE_AFTER_CLOSE after the push has already
+  // succeeded, and nobody is there to answer anyway.
+  if (process.env.MEMOIR_AUTOPUSH === '1' || !process.stdin.isTTY) return;
+
   const projectDir = process.cwd();
 
   // Don't prompt if already activated or if not in a project directory
@@ -253,10 +258,12 @@ export async function promptActivate() {
   // Check if we're in a project (has git, or has instruction files, or has package.json etc.)
   const projectSignals = ['.git', 'package.json', 'Cargo.toml', 'go.mod', 'pyproject.toml', 'Makefile'];
   const isProject = projectSignals.some(f => fs.existsSync(path.join(projectDir, f)));
-  if (!isProject) {
-    await markActivated(projectDir); // Don't ask again for non-projects
-    return;
-  }
+  // A non-project cwd is simply not asked about — it used to be recorded as
+  // "activated" so the question would not repeat, which filled the list
+  // with every scratch directory a hook ever ran in (workflow sandboxes
+  // under ~/.claude/projects/…/subagents/workflows/). Nothing reads the list
+  // for non-projects, so there is nothing to remember.
+  if (!isProject) return;
 
   console.log('');
   const { activate } = await inquirer.prompt([{

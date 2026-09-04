@@ -24,6 +24,19 @@ function assert(cond, msg) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// events/log.js keeps its log under %APPDATA%\memoir on Windows and under
+// $HOME/.config/memoir elsewhere. Every scratch HOME below gets its own
+// APPDATA inside it so the child processes and the assertions agree on the
+// file (this suite was red on Windows CI from 2026-08-19 because they didn't).
+function memoirDirFor(home) {
+  return process.platform === 'win32'
+    ? path.join(home, 'AppData', 'Roaming', 'memoir')
+    : path.join(home, '.config', 'memoir');
+}
+function envFor(home) {
+  return { PATH: process.env.PATH, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming') };
+}
+
 // ── Append-only invariant + wiring tests (shared scratch HOME) ─────────
 console.log(`\n${BOLD}${CYAN}events/log.js — append-only + wiring${RESET}\n`);
 
@@ -176,7 +189,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — size-bounded rotation + cleanup${
 
 {
   const rotScratch = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-event-log-rotation-'));
-  const eventsDir = path.join(rotScratch, '.config', 'memoir');
+  const eventsDir = memoirDirFor(rotScratch);
   await fs.ensureDir(eventsDir);
   const eventsPath = path.join(eventsDir, 'events.jsonl');
 
@@ -193,7 +206,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — size-bounded rotation + cleanup${
   `;
   const r = await new Promise((resolve) => {
     const child = spawn(process.execPath, ['-e', code], {
-      env: { PATH: process.env.PATH, HOME: rotScratch, USERPROFILE: rotScratch },
+      env: envFor(rotScratch),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stderr = '';
@@ -233,7 +246,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — concurrent writers produce only v
     `;
     return new Promise((resolve, reject) => {
       const child = spawn(process.execPath, ['-e', code], {
-        env: { PATH: process.env.PATH, HOME: concScratch, USERPROFILE: concScratch },
+        env: envFor(concScratch),
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stderr = '';
@@ -252,7 +265,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — concurrent writers produce only v
   }
   assert(err === null, `both concurrent-writer child processes exited cleanly${err ? ` (${err.message})` : ''}`);
 
-  const eventsPath = path.join(concScratch, '.config', 'memoir', 'events.jsonl');
+  const eventsPath = path.join(memoirDirFor(concScratch), 'events.jsonl');
   const raw = await fs.readFile(eventsPath, 'utf8');
   const lines = raw.split('\n').filter(Boolean);
 

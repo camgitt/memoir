@@ -238,7 +238,7 @@ console.log(`\n${BOLD}${CYAN}push-merge regression (real bug: push used to blind
 // itself (a fresh mkdtemp scratch dir) has none of those signal files.
 function runMemoir(homeDir, args) {
   const r = spawnSync(process.execPath, [MEMOIR_BIN, ...args], {
-    env: { PATH: process.env.PATH, HOME: homeDir, USERPROFILE: homeDir, DO_NOT_TRACK: '1' },
+    env: { PATH: process.env.PATH, HOME: homeDir, USERPROFILE: homeDir, APPDATA: path.join(homeDir, 'AppData', 'Roaming'), DO_NOT_TRACK: '1' },
     cwd: homeDir,
     input: '',
     encoding: 'utf8',
@@ -255,8 +255,13 @@ function runMemoir(homeDir, args) {
   const homeB = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-machineB-'));
 
   for (const h of [homeA, homeB]) {
-    await fs.ensureDir(path.join(h, '.config', 'memoir'));
-    await fs.writeJson(path.join(h, '.config', 'memoir', 'config.json'), {
+    // config.js reads %APPDATA%\memoir on Windows, ~/.config/memoir elsewhere
+    // (was red on Windows CI: the config landed where nothing read it).
+    const cfgDir = process.platform === 'win32'
+      ? path.join(h, 'AppData', 'Roaming', 'memoir')
+      : path.join(h, '.config', 'memoir');
+    await fs.ensureDir(cfgDir);
+    await fs.writeJson(path.join(cfgDir, 'config.json'), {
       version: 2,
       activeProfile: 'default',
       profiles: { default: { provider: 'git', gitRepo: bareRepoDir, encrypt: false } },

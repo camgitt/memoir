@@ -44,6 +44,16 @@
           "description": "Temporal tombstones for next_actions. MAY be absent in files written before any completion; readers treat absence as empty. Retention must outlive any stale replica that might still carry the completed item, or completions resurrect on merge (SPEC.md 5.3.2).",
           "items": { "$ref": "#/$defs/completedTombstone" }
         },
+        "parked_actions": {
+          "type": "array",
+          "description": "Overflow from next_actions (SPEC.md 4.1, 5.2): when the live list is full the oldest actions move here instead of being dropped. Still open, still rendered, still completable; re-adding one returns it to next_actions. MAY be absent; readers treat absence as empty. v0.1.2.",
+          "items": { "$ref": "#/$defs/parkedAction" }
+        },
+        "completed_goals": {
+          "type": "array",
+          "description": "Temporal tombstones for goals, same rule as completed_actions with set_on in place of added (SPEC.md 5.3.2). MAY be absent. v0.1.2.",
+          "items": { "$ref": "#/$defs/completedTombstone" }
+        },
         "open_questions": {
           "type": "array",
           "items": { "$ref": "#/$defs/openQuestion" }
@@ -96,6 +106,17 @@
           "$ref": "#/$defs/timestamp",
           "description": "Merge recency key, and the field compared against a tombstone's done_at: added <= done_at is suppressed; added > done_at is a deliberate revival and survives."
         }
+      },
+      "additionalProperties": true
+    },
+    "parkedAction": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "machine_id": { "type": "string" },
+        "added": { "$ref": "#/$defs/timestamp", "description": "Original add time — still the merge recency key and the tombstone comparison field." },
+        "parked_at": { "$ref": "#/$defs/timestamp", "description": "When the action overflowed the live list." }
       },
       "additionalProperties": true
     },
@@ -154,6 +175,7 @@
       "type": "object",
       "required": ["date"],
       "properties": {
+        "session_id": { "type": "string", "description": "Transcript/session identifier; when present, history dedupes by it and a session updates its own row in place (v0.1.2)." },
         "date": { "$ref": "#/$defs/timestamp" },
         "machine_id": { "type": "string" },
         "summary": { "type": "string" },
