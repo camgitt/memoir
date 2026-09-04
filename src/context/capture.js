@@ -1,9 +1,30 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
+import { execFileSync } from 'child_process';
 import { scanForSecrets, redactSecrets } from '../security/scanner.js';
 
 const home = os.homedir();
+
+// Terminal colour codes leak into transcripts through <local-command-stdout>
+// blocks (a `/model` switch prints "\x1b[2m…"). Strip before anything is
+// persisted — a handoff is read by a human and a model, not a terminal.
+const ANSI_RE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+export function stripAnsi(s) {
+  return String(s || '').replace(ANSI_RE, '');
+}
+
+// Claude Code delivers its own machinery as `user` turns: <command-name> /
+// <command-args> / <local-command-stdout> around slash commands, the
+// <local-command-caveat> (isMeta) that precedes them, <task-notification>s
+// from background agents, hook output. A person's message never starts
+// with an XML-ish tag; these always do. Live proof: the author's 2026-09-04
+// handoff listed "/model", its caveat and its ANSI-coloured stdout as the
+// three things he "was working on".
+const MACHINERY_RE = /^\s*<[a-z][\w-]*(?:\s[^>]*)?>/i;
+export function isMachineryMessage(s) {
+  return MACHINERY_RE.test(String(s || ''));
+}
 
 /**
  * Find all Claude session files, sorted newest first
@@ -69,7 +90,6 @@ export function parseSession(sessionPath, maxSizeMB = 10) {
 }
 
 function parseLines(lines) {
-  const assistantTexts = [];
   const result = {
     sessionId: null,
     slug: null,
@@ -96,25 +116,24 @@ function parseLines(lines) {
     if (!result.firstTimestamp && obj.timestamp) result.firstTimestamp = obj.timestamp;
     if (obj.timestamp) result.lastTimestamp = obj.timestamp;
 
-    // User messages — redact secrets
-    if (obj.type === 'user' && obj.message?.content) {
-      const content = typeof obj.message.content === 'string' ? obj.message.content : '';
-      if (content.length > 3 && !content.startsWith('<task-notification>')) {
+    // User messages — redact secrets. Skip the tool's own machinery (see
+    // isMachineryMessage) and isMeta turns; strip terminal colour codes.
+    if (obj.type === 'user' && obj.message?.content && !obj.isMeta) {
+      const content = typeof obj.message.content === 'string' ? stripAnsi(obj.message.content) : '';
+      if (content.length > 3 && !isMachineryMessage(content)) {
         result.userMessages.push(redactSecrets(content));
       }
     }
 
-    // Tool uses and text from assistant
+    // Tool uses from assistant turns. Assistant PROSE is deliberately not
+    // collected: it used to feed extractDecisions, so the model's own
+    // "let's use Redis for caching" minted a decision the user never made
+    // (agent-memory-atlas issue #7, and two content-free rows in the
+    // author's store on 2026-09-04). Decisions come from the user's words
+    // or from explicit memoir_note / `memoir note` — never inferred from
+    // what the assistant said.
     if (obj.type === 'assistant' && Array.isArray(obj.message?.content)) {
       for (const block of obj.message.content) {
-        if (block.type === 'text' && block.text) {
-          // Capture assistant text for decision extraction (limit size)
-          // Redacted like every other untrusted input (user :95, bash :125,
-          // errors :138) — captured decisions flow into session.json, CLAUDE.md
-          // and the git backup, none of which get a later secret scan.
-          if (block.text.length < 2000) assistantTexts.push(redactSecrets(block.text));
-          continue;
-        }
         if (block.type !== 'tool_use') continue;
         const name = block.name;
         const input = block.input || {};
@@ -156,8 +175,8 @@ function parseLines(lines) {
   result.filesRead = [...result.filesRead];
   result.errors = [...new Set(result.errors)].slice(0, 10);
 
-  // Extract decisions from user + assistant messages
-  result.decisions = extractDecisions(result.userMessages, assistantTexts);
+  // Extract decisions from the user's messages only (see above).
+  result.decisions = extractDecisions(result.userMessages);
 
   return result;
 }
@@ -218,9 +237,9 @@ export function isQuality(text) {
  * Extract durable decisions from session conversation.
  * These are things like renames, tech choices, preferences — stuff that should persist.
  */
-function extractDecisions(userMessages, assistantTexts) {
+function extractDecisions(userMessages) {
   const decisions = [];
-  const allText = [...userMessages, ...assistantTexts].join('\n');
+  const allText = userMessages.join('\n');
 
   // Patterns that indicate a decision was made
   const patterns = [
@@ -248,6 +267,12 @@ function extractDecisions(userMessages, assistantTexts) {
     while ((match = regex.exec(allText)) !== null) {
       const value = match[1].trim().replace(/["']+$/, '');
       if (looksLikeFragment(value)) continue;
+      // The keyword half of the rename/tech patterns is case-insensitive
+      // (`i` flag) but the captured TARGET must be a proper noun — a product,
+      // a library, a name. Without this check the flag also lower-cased the
+      // [A-Z] anchor: "the name is settled" minted the value "settled" and
+      // "rename the app from …" minted "from" (both real rows, 2026-09-04).
+      if (!/^[A-Z]/.test(value)) continue;
       if (value.length > 2 && value.length < 80) {
         // Avoid duplicates
         const existing = decisions.find(d => d.value.toLowerCase() === value.toLowerCase());
@@ -467,6 +492,64 @@ export function promoteMemoriesToGlobal() {
 }
 
 /**
+ * Files changed in the session's repository according to git: every file in
+ * a commit made since the session started, plus the current uncommitted
+ * changes. The transcript only knows about Edit/Write tool calls — a session
+ * that shipped through Bash heredocs, subagents or `git commit` reports
+ * "Files I changed: None" (27 of the author's last 40 handoffs, including a
+ * 15-hour session that shipped a product rename). Git is the honest source.
+ * Best effort: no repo, no git binary, or a slow repo → [].
+ */
+export function gitChangedFiles(cwd, sinceIso, { timeoutMs = 4000, cap = 200 } = {}) {
+  if (!cwd) return [];
+  const run = (args) => execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: timeoutMs,
+  });
+  let root;
+  try { root = run(['rev-parse', '--show-toplevel']).trim(); } catch { return []; }
+  if (!root) return [];
+
+  const files = new Set();
+  try {
+    const args = ['log', '--name-only', '--format=', '--no-merges', '-n', '200'];
+    if (sinceIso) args.push(`--since=${sinceIso}`);
+    for (const line of run(args).split('\n')) {
+      const f = line.trim();
+      if (f) files.add(f);
+    }
+  } catch {}
+  try {
+    for (const line of run(['status', '--porcelain', '--untracked-files=normal']).split('\n')) {
+      if (line.length < 4) continue;
+      let f = line.slice(3).trim();
+      const arrow = f.indexOf(' -> ');
+      if (arrow >= 0) f = f.slice(arrow + 4);
+      f = f.replace(/^"|"$/g, '');
+      if (f && !f.endsWith('/')) files.add(f);
+    }
+  } catch {}
+  return [...files].slice(0, cap).map((f) => path.join(root, f));
+}
+
+/**
+ * Merge git's view of what changed into parsed.filesWritten (in place).
+ * Called by push/snapshot after parseSession; kept separate so parseSession
+ * stays a pure function of the transcript (and stays testable without git).
+ */
+export function enrichWithGit(parsed) {
+  try {
+    const fromGit = gitChangedFiles(parsed.cwd, parsed.firstTimestamp);
+    if (fromGit.length) {
+      parsed.filesWritten = [...new Set([...(parsed.filesWritten || []), ...fromGit])];
+      parsed.gitFiles = fromGit.length;
+    }
+  } catch {}
+  return parsed;
+}
+
+/**
  * Generate a concise handoff markdown from parsed session
  * This is what gets injected into the AI tool on the other machine
  */
@@ -493,10 +576,13 @@ export function generateContextHandoff(parsed) {
     return fp;
   };
 
-  // Filter meaningful user messages
+  // Filter meaningful user messages. The LAST few are what "continue where
+  // I left off" needs — the first eight of a fifteen-hour session are stale.
   const meaningful = parsed.userMessages
-    .filter(m => m.length > 10 && !/^(ok|yes|no|sure|yea|yeah|yep|nah|nope|thanks|ty|thx|good|great|nice|cool|done|hmm)$/i.test(m.trim()))
-    .map(m => m.length > 150 ? m.slice(0, 150) + '...' : m);
+    .filter(m => m.length > 10 && !isMachineryMessage(m) && !/^(ok|yes|no|sure|yea|yeah|yep|nah|nope|thanks|ty|thx|good|great|nice|cool|done|hmm)$/i.test(m.trim()))
+    .map(m => stripAnsi(m).replace(/\s+/g, ' ').trim())
+    .map(m => m.length > 150 ? m.slice(0, 150) + '...' : m)
+    .slice(-8);
 
   // Build a concise, actionable handoff
   let md = `---
@@ -511,11 +597,12 @@ type: project
 > Session: ${duration} | Branch: \`${parsed.gitBranch || 'unknown'}\` | Project: \`${cwd}\`
 
 ## What I was working on
-${meaningful.length > 0 ? meaningful.slice(0, 8).map(m => `- ${m}`).join('\n') : '_No significant messages captured_'}
+${meaningful.length > 0 ? meaningful.map(m => `- ${m}`).join('\n') : '_No significant messages captured_'}
 
 ## Files I changed
 ${parsed.filesWritten.length > 0
     ? parsed.filesWritten.slice(0, 15).map(f => `- \`${shorten(f)}\``).join('\n')
+      + (parsed.filesWritten.length > 15 ? `\n- …and ${parsed.filesWritten.length - 15} more` : '')
     : '_None_'}
 `;
 

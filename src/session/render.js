@@ -5,11 +5,23 @@
 export const BLOCK_START = '<!-- memoir:session-block v1 — managed by memoir, edit via `memoir goal/next/note` -->';
 export const BLOCK_END = '<!-- /memoir:session-block -->';
 
-const MAX_RENDERED_GOALS = 2;
-const MAX_RENDERED_NEXT = 6;
+// Render caps match the store caps for goals and next-actions. They used to
+// be lower (2 of 3 goals, 6 of 8 next-actions), which hid items the store
+// still held — a quieter version of the eviction bug parking now fixes.
+const MAX_RENDERED_GOALS = 3;
+const MAX_RENDERED_NEXT = 8;
+const MAX_RENDERED_PARKED = 4;
 const MAX_RENDERED_QUESTIONS = 4;
 const MAX_RENDERED_DECISIONS = 5;
 const MAX_RENDERED_HISTORY = 5;
+
+// History rows that carry no information: the old autopush summary was the
+// transcript's random slug ("Worked on calm-bubbling-liskov") or a file count.
+// Filtered at render so existing stores clean up without a migration.
+const CONTENT_FREE_SUMMARY = /^(?:worked on [a-z]+(?:-[a-z]+){1,3}|\d+ file\(s\) touched|—?)$/i;
+export function isContentFreeSummary(summary) {
+  return CONTENT_FREE_SUMMARY.test(String(summary || '').trim());
+}
 
 export function renderSession(state) {
   if (!state) return renderEmpty();
@@ -18,6 +30,8 @@ export function renderSession(state) {
 
   const goals = (state.current?.goals || []).slice(0, MAX_RENDERED_GOALS);
   const nexts = (state.current?.next_actions || []).slice(-MAX_RENDERED_NEXT).reverse();
+  const parkedAll = state.current?.parked_actions || [];
+  const parked = parkedAll.slice(0, MAX_RENDERED_PARKED);
   const questions = (state.current?.open_questions || []).slice(-MAX_RENDERED_QUESTIONS).reverse();
   // hidden:true is a tombstone (see scripts/cleanup-junk-decisions-2026-07.mjs)
   // — distinct from the `rejected` field (which is a live, user-facing "the
@@ -26,9 +40,9 @@ export function renderSession(state) {
   // tombstoned decision is fully suppressed rather than just hidden from one
   // of the three places decisions are read/displayed/searched.
   const decisions = (state.current?.decisions || []).filter(d => !d?.hidden).slice(0, MAX_RENDERED_DECISIONS);
-  const history = (state.history || []).slice(0, MAX_RENDERED_HISTORY);
+  const history = (state.history || []).filter((h) => !isContentFreeSummary(h?.summary)).slice(0, MAX_RENDERED_HISTORY);
 
-  const everythingEmpty = !goals.length && !nexts.length && !questions.length && !decisions.length && !history.length;
+  const everythingEmpty = !goals.length && !nexts.length && !parked.length && !questions.length && !decisions.length && !history.length;
   if (everythingEmpty) return renderEmpty();
 
   // Goals — show current goal prominently
@@ -46,6 +60,20 @@ export function renderSession(state) {
     lines.push('**Next:**');
     for (const n of nexts) {
       lines.push(`- [ ] ${n.text}${machineTag(n, state)}`);
+    }
+    lines.push('');
+  }
+
+  // Parked next-actions — overflow from the list above. Rendered so nothing
+  // the user asked for is ever invisible; kept short so the block stays a
+  // block.
+  if (parked.length) {
+    lines.push('**Parked (older next-actions, still open — `memoir done` works on these too):**');
+    for (const p of parked) {
+      lines.push(`- [ ] ${p.text}${machineTag(p, state)}`);
+    }
+    if (parkedAll.length > parked.length) {
+      lines.push(`- …and ${parkedAll.length - parked.length} more parked — \`memoir next --parked\` lists them`);
     }
     lines.push('');
   }

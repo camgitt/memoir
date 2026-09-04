@@ -71,6 +71,7 @@ const suites = [
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
   { name: 'recall (unit)', cmd: 'node', args: ['test-recall.mjs'] },
   { name: 'event-log (unit)', cmd: 'node', args: ['test-event-log.mjs'] },
+  { name: 'parking-and-sync (unit)', cmd: 'node', args: ['test-parking-and-sync.mjs'] },
   { name: 'cross-machine (e2e)', cmd: 'bash', args: ['test-cross-machine-e2e.sh'], bash: true },
   { name: 'session-sync (e2e)', cmd: 'bash', args: ['test-session-sync.sh'], bash: true },
 ];

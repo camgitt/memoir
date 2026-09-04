@@ -33,6 +33,13 @@ export { SCHEMA_VERSION, emptySession };
 // Prevents unbounded growth of the live pinned block.
 const MAX_GOALS = 3;
 const MAX_NEXT = 8;
+// Overflow from next_actions goes here instead of vanishing. `slice(-MAX_NEXT)`
+// used to drop the oldest item with no warning, no event and no render hint:
+// three of the author's live next-actions disappeared in one week (2026-09-03
+// → 09-04) while the store sat at exactly 8. Parked items stay rendered and
+// completable; only when THIS list overflows is anything dropped, and that
+// emits an event.
+const MAX_PARKED = 20;
 // Completion tombstones kept so merges can't resurrect finished actions.
 // Must outlive every stale copy that might still carry the item.
 const MAX_COMPLETED_TOMBSTONES = 50;
@@ -220,14 +227,21 @@ export async function addGoal(text) {
   return withSessionLock(SESSION_LOCK_PATH, async () => {
     const state = await readSession();
     const machineId = await touchMachine(state);
+    const key = decisionIdentity(text);
+    // Re-setting an existing goal moves it to the front; it is not a duplicate.
+    state.current.goals = (state.current.goals || []).filter((g) => decisionIdentity(g?.text) !== key);
     state.current.goals.unshift({
       text,
       machine_id: machineId,
       set_on: new Date().toISOString(),
     });
+    // The cap still applies (a pinned block with ten goals is no focus at
+    // all) but a replaced goal is reported, never silently dropped.
+    const replaced = state.current.goals.slice(MAX_GOALS);
     state.current.goals = state.current.goals.slice(0, MAX_GOALS);
     await writeSession(state);
-    await appendEvent('goal_set', {}); // no PII/content — count-and-type only
+    await appendEvent('goal_set', { replaced: replaced.length }); // no PII/content — count-and-type only
+    Object.defineProperty(state, 'replacedGoals', { value: replaced, enumerable: false });
     return state;
   });
 }
@@ -239,15 +253,68 @@ export async function addNext(text) {
     // Dedupe by text (case-insensitive)
     const normalized = text.trim().toLowerCase();
     const exists = state.current.next_actions.some(a => a.text.trim().toLowerCase() === normalized);
+    let parked = [];
     if (!exists) {
+      // Re-adding a parked item is "bring it back", not a duplicate.
+      state.current.parked_actions = (state.current.parked_actions || [])
+        .filter((a) => a?.text?.trim().toLowerCase() !== normalized);
       state.current.next_actions.push({
         text,
         machine_id: machineId,
         added: new Date().toISOString(),
       });
-      state.current.next_actions = state.current.next_actions.slice(-MAX_NEXT);
+      ({ live: state.current.next_actions, parked } = parkOverflow(state.current.next_actions));
+      if (parked.length) {
+        const merged = [...parked, ...(state.current.parked_actions || [])];
+        const dropped = merged.slice(MAX_PARKED);
+        state.current.parked_actions = merged.slice(0, MAX_PARKED);
+        await appendEvent('next_parked', { count: parked.length, dropped: dropped.length });
+      }
     }
     await writeSession(state);
+    // Non-enumerable: callers can tell the user what was parked, nothing
+    // serialises it.
+    Object.defineProperty(state, 'justParked', { value: parked, enumerable: false });
+    return state;
+  });
+}
+
+// Split a next_actions list into the MAX_NEXT newest (live) and the overflow
+// (oldest first), stamping parked_at on the overflow. Pure; shared by
+// addNext and mergeSessions so both agree on what "full" means.
+function parkOverflow(list, cap = MAX_NEXT, now = new Date().toISOString()) {
+  if (list.length <= cap) return { live: list, parked: [] };
+  const overflow = list.slice(0, list.length - cap);
+  return {
+    live: list.slice(list.length - cap),
+    parked: overflow.map((a) => ({ ...a, parked_at: a.parked_at || now })),
+  };
+}
+
+/**
+ * Retire a goal. Same shape as completeNext: remove it AND record a
+ * temporal tombstone, because a plain removal comes straight back on the
+ * next union-merge with any copy that still carries it (the push-side
+ * backup, another machine). A goal re-set after its done_at survives.
+ */
+export async function completeGoal(match) {
+  return withSessionLock(SESSION_LOCK_PATH, async () => {
+    const state = await readSession();
+    await touchMachine(state);
+    const normalized = String(match).trim().toLowerCase();
+    const idx = (state.current.goals || []).findIndex((g) => g?.text?.trim().toLowerCase().includes(normalized));
+    const completed = idx >= 0;
+    if (completed) {
+      const [removed] = state.current.goals.splice(idx, 1);
+      const key = removed.text.trim().toLowerCase();
+      state.current.completed_goals = [
+        { text: removed.text, done_at: new Date().toISOString() },
+        ...(state.current.completed_goals || []).filter((c) => c && c.text && c.text.trim().toLowerCase() !== key),
+      ].slice(0, MAX_COMPLETED_TOMBSTONES);
+    }
+    await writeSession(state);
+    if (completed) await appendEvent('goal_completed', {});
+    Object.defineProperty(state, 'completed', { value: completed, enumerable: false });
     return state;
   });
 }
@@ -257,11 +324,17 @@ export async function completeNext(textOrIndex) {
     const state = await readSession();
     await touchMachine(state);
     let idx = -1;
+    let list = state.current.next_actions;
     if (typeof textOrIndex === 'number') {
       idx = textOrIndex;
     } else {
       const normalized = String(textOrIndex).trim().toLowerCase();
-      idx = state.current.next_actions.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
+      idx = list.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
+      if (idx < 0) {
+        // Parked items are still real next-actions — finishing one must work.
+        list = state.current.parked_actions || [];
+        idx = list.findIndex(a => a?.text?.trim().toLowerCase().includes(normalized));
+      }
     }
     const completed = idx >= 0;
     if (completed) {
@@ -271,7 +344,7 @@ export async function completeNext(textOrIndex) {
       // bug. So completion also records a tombstone that merges consult.
       // Temporal, not absolute like decisions' `hidden`: a re-add whose
       // `added` postdates `done_at` is a deliberate revival and survives.
-      const [removed] = state.current.next_actions.splice(idx, 1);
+      const [removed] = list.splice(idx, 1);
       const key = removed.text.trim().toLowerCase();
       state.current.completed_actions = [
         { text: removed.text, done_at: new Date().toISOString() },
@@ -382,17 +455,27 @@ export async function addQuestion(text) {
 
 // Roll up the current state into a history entry. Use at session end / push.
 // Does not clear `current` — these are "the working set," not per-session scratch.
-export async function recordSessionEnd({ summary, filesTouched = [], durationMin = null } = {}) {
+export async function recordSessionEnd({ summary, filesTouched = [], durationMin = null, sessionId = null } = {}) {
   return withSessionLock(SESSION_LOCK_PATH, async () => {
     const state = await readSession();
     const machineId = await touchMachine(state);
-    state.history.unshift({
+    const entry = {
       date: new Date().toISOString(),
       machine_id: machineId,
       summary: summary || '',
       files_touched: filesTouched.slice(0, 20),
       duration_min: durationMin,
-    });
+    };
+    if (sessionId) entry.session_id = sessionId;
+    // Autopush fires after every response, so one long session used to fill
+    // all five "Recent sessions" rows with itself. Same session → update its
+    // row in place (duration and files grow), don't add another.
+    const existing = sessionId ? state.history.findIndex((h) => h?.session_id === sessionId) : -1;
+    if (existing >= 0) {
+      entry.date = state.history[existing].date || entry.date;
+      state.history.splice(existing, 1);
+    }
+    state.history.unshift(entry);
     state.history = state.history.slice(0, MAX_HISTORY);
     await writeSession(state);
     return state;
@@ -415,12 +498,27 @@ export function mergeSessions(local, remote) {
     machines: { ...remote.machines, ...local.machines }, // local wins for same machine
     current: {
       goals: unionByText(local.current?.goals, remote.current?.goals, 'set_on', MAX_GOALS),
-      next_actions: unionByText(local.current?.next_actions, remote.current?.next_actions, 'added', MAX_NEXT),
+      // Live + parked from both sides pooled, then re-split below: the
+      // MAX_NEXT newest are live, the rest parked. A capped union here used
+      // to evict the oldest on merge just as silently as addNext did.
+      next_actions: unionByText(
+        [...(local.current?.next_actions || []), ...(local.current?.parked_actions || [])],
+        [...(remote.current?.next_actions || []), ...(remote.current?.parked_actions || [])],
+        'added', Infinity),
+      parked_actions: [],
       open_questions: unionByText(local.current?.open_questions, remote.current?.open_questions, 'asked', MAX_QUESTIONS),
       decisions: unionByText(local.current?.decisions, remote.current?.decisions, 'date', MAX_DECISIONS_RECENT),
     },
     history: mergeHistory(local.history, remote.history),
   };
+
+  // Goal tombstones — same temporal rule as next_actions below.
+  const goalTombstones = unionTombstones(local.current?.completed_goals, remote.current?.completed_goals);
+  merged.current.completed_goals = goalTombstones;
+  merged.current.goals = merged.current.goals.filter((g) => {
+    const t = goalTombstones.find((c) => c.text.trim().toLowerCase() === g.text.trim().toLowerCase());
+    return !t || new Date(g.set_on || 0) > new Date(t.done_at);
+  });
 
   // Completed-action tombstones beat the union above. unionByText can only
   // union; it cannot represent "this used to exist and was finished," so a
@@ -440,6 +538,12 @@ export function mergeSessions(local, remote) {
     );
     return !t || new Date(a.added || 0) > new Date(t.done_at);
   });
+  // unionByText returns newest-first; next_actions is stored oldest-first
+  // (render reverses). Re-split into live (newest MAX_NEXT) and parked.
+  const pooled = [...merged.current.next_actions].reverse();
+  const split = parkOverflow(pooled);
+  merged.current.next_actions = split.live.map((a) => { const { parked_at, ...rest } = a; return rest; });
+  merged.current.parked_actions = split.parked.reverse().slice(0, MAX_PARKED);
 
   // machines: union last_seen per id (take the newer)
   for (const [id, entry] of Object.entries(remote.machines || {})) {
@@ -500,8 +604,8 @@ function unionByText(a = [], b = [], dateField, cap) {
   // not count against the visible budget.
   const all = Array.from(byText.values())
     .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0));
-  const visible = all.filter((i) => !i.hidden).slice(0, cap);
-  const tombstones = all.filter((i) => i.hidden).slice(0, cap);
+  const visible = all.filter((i) => !i.hidden).slice(0, cap === Infinity ? undefined : cap);
+  const tombstones = all.filter((i) => i.hidden).slice(0, cap === Infinity ? undefined : cap);
   return [...visible, ...tombstones];
 }
 
@@ -524,8 +628,10 @@ function mergeHistory(a = [], b = []) {
   const seen = new Set();
   const all = [...a, ...b].filter(h => h && h.date);
   // Dedupe by (date + machine_id + summary) — the three keys that make a session unique
-  const unique = all.filter(h => {
-    const key = `${h.date}|${h.machine_id}|${(h.summary || '').slice(0, 50)}`;
+  // Newest copy of a session_id wins (in-place updates change summary/duration).
+  const sorted = all.sort((x, y) => new Date(y.date) - new Date(x.date));
+  const unique = sorted.filter(h => {
+    const key = h.session_id ? `sid:${h.session_id}` : `${h.date}|${h.machine_id}|${(h.summary || '').slice(0, 50)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -7,6 +7,7 @@ import boxen from 'boxen';
 import gradient from 'gradient-string';
 import { getConfig, getGeminiApiKey } from '../config.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
+import { saveHandoff } from '../context/handoffs.js';
 
 const home = os.homedir();
 
@@ -337,7 +338,9 @@ export async function snapshotCommand(options = {}) {
       if (config.provider === 'local' || config.provider.includes('local')) {
         await syncToLocal(config, stagingDir, spinner);
       } else if (config.provider === 'git' || config.provider.includes('git')) {
-        await syncToGit(config, stagingDir, spinner);
+        // additive: the staging dir holds ONE handoff file. A mirror push
+        // here would have deleted every other file in the backup.
+        await syncToGit(config, stagingDir, spinner, { additive: true });
       }
     } catch (err) {
       spinner.warn(chalk.yellow(`Push failed: ${err.message}. Saved locally.`));
@@ -346,13 +349,9 @@ export async function snapshotCommand(options = {}) {
     await fs.remove(stagingDir);
   }
 
-  // Also save locally for immediate access
+  // Also save locally for immediate access (+ latest.md; dir is pruned)
   const localHandoffDir = path.join(home, '.config', 'memoir', 'handoffs');
-  await fs.ensureDir(localHandoffDir);
-  await fs.writeFile(path.join(localHandoffDir, filename), handoff);
-
-  // Also save as "latest" for easy access
-  await fs.writeFile(path.join(localHandoffDir, 'latest.md'), handoff);
+  await saveHandoff(handoff, { dirs: [localHandoffDir], filename });
 
   spinner.stop();
 
