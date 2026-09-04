@@ -108,6 +108,16 @@ console.log(`\n${BOLD}${CYAN}merge keeps every next-action (live or parked)${RES
   assert(live.length + parked.length === 8 + 3 + 1 - 1, 'nothing else was dropped');
 }
 
+// ── 4b. Unknown `current` fields survive a merge ─────────────────────
+{
+  const base = state.emptySession();
+  const local = { ...base, current: { ...base.current, future_field: [{ text: 'from a newer build' }] } };
+  const remote = { ...base, current: { ...base.current, other_future: 'remote-only', future_field: [{ text: 'stale' }] } };
+  const merged = state.mergeSessions(local, remote);
+  assert(Array.isArray(merged.current.future_field) && merged.current.future_field[0].text === 'from a newer build', 'unknown current.* keys pass through, local copy wins');
+  assert(merged.current.other_future === 'remote-only', 'unknown keys only the remote has are kept too');
+}
+
 // ── 5. Goals: cap reports, --done tombstones and survives merge ─────
 console.log(`\n${BOLD}${CYAN}goals${RESET}\n`);
 {
