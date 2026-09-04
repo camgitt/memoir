@@ -512,6 +512,21 @@ export function mergeSessions(local, remote) {
     history: mergeHistory(local.history, remote.history),
   };
 
+  // Fields this build does not know about pass through from the local copy
+  // instead of being dropped. `current` is rebuilt from known keys above, so
+  // a merge performed by an OLDER memoir silently erased anything newer —
+  // live proof: minutes after 3.13.0 added parked_actions and
+  // completed_goals, a Stop-hook push still running 3.12 rebuilt `current`
+  // without them and wrote that back locally, undoing two goal retirements
+  // and a parked item. Local wins over remote for unknown keys because an
+  // old build cannot merge what it cannot read.
+  const KNOWN_CURRENT = new Set(['goals', 'next_actions', 'parked_actions', 'open_questions', 'decisions', 'completed_actions', 'completed_goals']);
+  for (const src of [remote.current || {}, local.current || {}]) {
+    for (const [k, v] of Object.entries(src)) {
+      if (!KNOWN_CURRENT.has(k)) merged.current[k] = v;
+    }
+  }
+
   // Goal tombstones — same temporal rule as next_actions below.
   const goalTombstones = unionTombstones(local.current?.completed_goals, remote.current?.completed_goals);
   merged.current.completed_goals = goalTombstones;
