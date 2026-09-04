@@ -33,7 +33,12 @@ const { renderSession, isContentFreeSummary } = await import('./src/session/rend
 const { saveHandoff, pruneHandoffs, localHandoffDir } = await import('./src/context/handoffs.js');
 const { syncToGit, cloneForSync, classifyGitError } = await import('./src/providers/index.js');
 
-const eventsPath = path.join(scratch, '.config', 'memoir', 'events.jsonl');
+// events/log.js keeps its log under %APPDATA%\memoir on Windows and
+// ~/.config/memoir elsewhere — mirror that so the assertions read the file
+// the code actually writes.
+const eventsPath = process.platform === 'win32'
+  ? path.join(process.env.APPDATA, 'memoir', 'events.jsonl')
+  : path.join(scratch, '.config', 'memoir', 'events.jsonl');
 async function events(type) {
   try {
     return (await fs.readFile(eventsPath, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l)).filter((e) => e.type === type);
