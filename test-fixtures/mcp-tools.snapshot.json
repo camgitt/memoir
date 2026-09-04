@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "memoir_add_next",
-      "description": "Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear.",
+      "description": "Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear. The list holds 8; when it is full the oldest item is PARKED (still shown in the pinned block, still completable), never dropped — the response names anything parked.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -42,7 +42,7 @@
     },
     {
       "name": "memoir_complete_next",
-      "description": "Mark a next action as complete (removes it from the pinned list). Match by substring — pass the relevant keywords, not the whole text.",
+      "description": "Mark a next action as complete (removes it from the pinned list, parked items included). Match by substring — pass the relevant keywords, not the whole text.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",

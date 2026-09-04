@@ -41,8 +41,14 @@ export function emptySession() {
     current: {
       goals: [],         // { text, machine_id, set_on }
       next_actions: [],  // { text, machine_id, added, completed? }
+      // Overflow from next_actions (oldest first out) — still rendered, still
+      // completable, never silently dropped. Additive field: older readers
+      // ignore it, mergeSessions unions it, so no schema bump.
+      parked_actions: [],// { text, machine_id, added, parked_at }
       open_questions: [],// { text, machine_id, asked }
       decisions: [],     // { text, why?, rejected?, hidden?, hidden_at?, machine_id, date }
+      completed_actions: [], // { text, done_at } — temporal tombstones (see state.js)
+      completed_goals: [],   // { text, done_at } — same, for goals
     },
     history: [],          // { date, machine_id, summary, files_touched, duration_min? }
   };

@@ -39,6 +39,7 @@ import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
 import { validateCommand } from '../src/commands/validate.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
 import { capture as track, telemetryCommand } from '../src/telemetry.js';
+import { appendEvent } from '../src/events/log.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -173,18 +174,20 @@ program
 
 // ── Session continuity ──────────────────────────────────────────
 program
-  .command('goal <text...>')
+  .command('goal [text...]')
   .description('Set your current goal (pinned into CLAUDE.md, syncs across machines)')
-  .action(async (text) => {
-    try { await goalCommand(text.join(' ')); }
+  .option('--done <match>', 'Retire a goal (substring match) — tombstoned so a sync cannot bring it back')
+  .action(async (text, options) => {
+    try { await goalCommand((text || []).join(' '), options); }
     catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
   });
 
 program
-  .command('next <text...>')
-  .description('Add a next action')
-  .action(async (text) => {
-    try { await nextCommand(text.join(' ')); }
+  .command('next [text...]')
+  .description('Add a next action (the list holds 8; older ones are parked, never dropped)')
+  .option('--parked', 'List parked next-actions')
+  .action(async (text, options) => {
+    try { await nextCommand((text || []).join(' '), options); }
     catch (err) { console.error(chalk.red('\n✖ Error:'), err.message); process.exit(1); }
   });
 
@@ -746,6 +749,9 @@ program.hook('postAction', async (thisCommand, actionCommand) => {
   // Anonymous, opt-out usage event. postAction already awaits a network call
   // (checkForUpdate), so this adds no perceived latency; no-op without a key.
   try { await track('cli_command', { command: actionCommand?.name?.() || 'unknown' }); } catch {}
+  // Local twin (events.jsonl): command name only, so `memoir recall`/`why`
+  // reads are visible next to the writes and syncs already logged there.
+  try { await appendEvent('cli_command', { command: actionCommand?.name?.() || 'unknown' }); } catch {}
 });
 
 program.parse();

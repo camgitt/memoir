@@ -19,6 +19,7 @@ import {
   addGoal,
   addNext,
   completeNext,
+  completeGoal,
   addNote,
   addQuestion,
   getMachineId,
@@ -46,25 +47,57 @@ async function refreshPinned() {
   return { state, rendered, updated };
 }
 
-export async function goalCommand(text) {
-  if (!text || !String(text).trim()) {
-    console.log(chalk.yellow('\nUsage: ') + chalk.cyan('memoir goal "your current focus"\n'));
+export async function goalCommand(text, options = {}) {
+  if (options.done) {
+    const state = await completeGoal(String(options.done).trim());
+    if (state.completed) {
+      await refreshPinned();
+      console.log('\n' + chalk.green('  ✓ Goal retired: ') + chalk.white(options.done) + '\n');
+    } else {
+      console.log('\n' + chalk.yellow('  No matching goal found.\n'));
+    }
     return;
   }
-  await addGoal(String(text).trim());
+  if (!text || !String(text).trim()) {
+    console.log(chalk.yellow('\nUsage: ') + chalk.cyan('memoir goal "your current focus"') + chalk.gray('   or   ') + chalk.cyan('memoir goal --done "substring"\n'));
+    return;
+  }
+  const state = await addGoal(String(text).trim());
   const { updated } = await refreshPinned();
   console.log('\n' + chalk.green('  ✓ Goal set: ') + chalk.white(text));
+  for (const g of state.replacedGoals || []) {
+    console.log(chalk.yellow('  ⚠ Goals list is full — replaced: ') + chalk.white(g.text));
+  }
   if (updated.length) console.log(chalk.gray(`    Pinned to: ${updated.join(', ')}\n`));
 }
 
-export async function nextCommand(text) {
-  if (!text || !String(text).trim()) {
-    console.log(chalk.yellow('\nUsage: ') + chalk.cyan('memoir next "the next action"\n'));
+export async function nextCommand(text, options = {}) {
+  if (options.parked) {
+    const state = await readSession();
+    const parked = state.current.parked_actions || [];
+    if (!parked.length) {
+      console.log('\n' + chalk.gray('  Nothing parked.\n'));
+      return;
+    }
+    console.log('\n' + chalk.white.bold(`  Parked next-actions (${parked.length}):`));
+    for (const p of parked) {
+      const when = (p.parked_at || '').slice(0, 10);
+      console.log('  ' + chalk.gray(`[ ] ${when ? when + ' ' : ''}`) + chalk.white(p.text));
+    }
+    console.log(chalk.gray('\n  Re-add one with `memoir next "…"` to bring it back; `memoir done "…"` finishes it.\n'));
     return;
   }
-  await addNext(String(text).trim());
+  if (!text || !String(text).trim()) {
+    console.log(chalk.yellow('\nUsage: ') + chalk.cyan('memoir next "the next action"') + chalk.gray('   or   ') + chalk.cyan('memoir next --parked\n'));
+    return;
+  }
+  const state = await addNext(String(text).trim());
   await refreshPinned();
-  console.log('\n' + chalk.green('  ✓ Added to next: ') + chalk.white(text) + '\n');
+  console.log('\n' + chalk.green('  ✓ Added to next: ') + chalk.white(text));
+  for (const p of state.justParked || []) {
+    console.log(chalk.yellow('  ⚠ Next list is full — parked (still open): ') + chalk.white(p.text));
+  }
+  console.log('');
 }
 
 export async function doneCommand(text) {
@@ -72,10 +105,11 @@ export async function doneCommand(text) {
     console.log(chalk.yellow('\nUsage: ') + chalk.cyan('memoir done "substring of the action"\n'));
     return;
   }
+  const count = (st) => st.current.next_actions.length + (st.current.parked_actions || []).length;
   const before = await readSession();
   await completeNext(String(text).trim());
   const after = await readSession();
-  const removed = before.current.next_actions.length - after.current.next_actions.length;
+  const removed = count(before) - count(after);
   if (removed > 0) {
     await refreshPinned();
     console.log('\n' + chalk.green(`  ✓ Completed ${removed} action${removed !== 1 ? 's' : ''}\n`));
@@ -140,6 +174,14 @@ export async function sessionShowCommand() {
     body.push('');
   }
 
+  const parked = state.current.parked_actions || [];
+  if (parked.length) {
+    body.push(chalk.white.bold(`  Parked (${parked.length}):`));
+    for (const p of parked.slice(0, 4)) body.push('  ' + chalk.gray('[ ] ') + chalk.gray(p.text.length > 100 ? p.text.slice(0, 100) + '…' : p.text));
+    if (parked.length > 4) body.push(chalk.gray(`  …and ${parked.length - 4} more — memoir next --parked`));
+    body.push('');
+  }
+
   if (questions.length) {
     body.push(chalk.white.bold('  Open questions:'));
     for (const q of questions) body.push('  ' + chalk.yellow('? ') + chalk.white(q.text));
@@ -185,7 +227,7 @@ export async function sessionClearCommand() {
   // write was silently lost, and worse, could resurrect what was cleared.
   await withSessionLock(paths.sessionLock, async () => {
     const state = await readSession();
-    state.current = { goals: [], next_actions: [], open_questions: [], decisions: [] };
+    state.current = { goals: [], next_actions: [], parked_actions: [], open_questions: [], decisions: [], completed_actions: [], completed_goals: [] };
     await writeSession(state);
   });
   await refreshPinned();

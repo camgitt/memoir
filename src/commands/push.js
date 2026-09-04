@@ -8,10 +8,11 @@ import gradient from 'gradient-string';
 import { execFileSync } from 'child_process';
 import { getConfig, autoSetup } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
-import { syncToLocal, syncToGit } from '../providers/index.js';
+import { syncToLocal, syncToGit, cloneForSync, remoteHasFile, checkoutFromRemote } from '../providers/index.js';
 import inquirer from 'inquirer';
 import { appendEvent } from '../events/log.js';
-import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions, isQuality } from '../context/capture.js';
+import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions, isQuality, enrichWithGit } from '../context/capture.js';
+import { saveHandoff, handoffFilename } from '../context/handoffs.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
 import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
@@ -56,12 +57,17 @@ async function fetchRemoteSessionBestEffort(config) {
       if (!repoUrl) return { status: 'none', session: null };
       const peekDir = path.join(os.tmpdir(), `memoir-push-peek-${Date.now()}`);
       await fs.ensureDir(peekDir);
+      // This is THE clone for the whole push. It is blob-less and checkout-
+      // less (see providers/index.js), reads session.json on demand, and is
+      // then handed to syncToGit as `cloneDir` so the push never clones a
+      // second time. Kept (not removed) whenever the clone itself succeeded.
+      let keep = false;
       try {
         try {
           // Same budget as the real sync clone — the old 30s peek against a
           // 60s sync meant a 35-second clone failed the peek but succeeded
           // the mirror, deterministically wiping the remote session.
-          execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: peekDir, stdio: 'ignore', timeout: 120000 });
+          cloneForSync(repoUrl, peekDir, { timeout: 120000 });
         } catch {
           // Unreachable or first push. If the LATER sync clone succeeds
           // where this one failed, treating it as 'none' would clobber —
@@ -69,18 +75,19 @@ async function fetchRemoteSessionBestEffort(config) {
           // and 'unreadable' here would wedge first-time pushes forever.
           return { status: 'none', session: null };
         }
-        if (await fs.pathExists(path.join(peekDir, 'manifest.enc'))) return { status: 'unreadable', session: null }; // encrypted
-        const remotePath = path.join(peekDir, 'session.json');
-        if (!(await fs.pathExists(remotePath))) return { status: 'none', session: null };
+        keep = true;
+        if (remoteHasFile(peekDir, 'manifest.enc')) return { status: 'unreadable', session: null, cloneDir: peekDir }; // encrypted
+        if (!remoteHasFile(peekDir, 'session.json')) return { status: 'none', session: null, cloneDir: peekDir };
+        if (!checkoutFromRemote(peekDir, 'session.json')) return { status: 'unreadable', session: null, cloneDir: peekDir };
         try {
-          const raw = JSON.parse(await fs.readFile(remotePath, 'utf8'));
+          const raw = JSON.parse(await fs.readFile(path.join(peekDir, 'session.json'), 'utf8'));
           const { state } = migrateSessionData(raw);
-          return { status: 'ok', session: state };
+          return { status: 'ok', session: state, cloneDir: peekDir };
         } catch {
-          return { status: 'unreadable', session: null };
+          return { status: 'unreadable', session: null, cloneDir: peekDir };
         }
       } finally {
-        await fs.remove(peekDir).catch(() => {});
+        if (!keep) await fs.remove(peekDir).catch(() => {});
       }
     }
   } catch {
@@ -161,6 +168,7 @@ export async function pushCommand(options = {}) {
   await fs.ensureDir(stagingDir);
 
   let encryptedDir = null;
+  let remoteCloneDir = null; // the one clone for this push (see fetchRemoteSessionBestEffort)
 
   try {
     // Profile-level tool filter (config.only) merged with CLI --only flag
@@ -185,24 +193,18 @@ export async function pushCommand(options = {}) {
     try {
       const sessions = findClaudeSessions();
       if (sessions.length > 0) {
-        const parsed = parseSession(sessions[0].path);
+        const parsed = enrichWithGit(parseSession(sessions[0].path));
         if (parsed.userMessages.length > 0) {
           // Scan the generated handoff for any remaining secrets
           const handoff = generateContextHandoff(parsed);
           const { found, clean } = scanForSecrets(handoff);
 
-          // Save handoff to staging dir
-          const handoffDir = path.join(stagingDir, 'handoffs');
-          await fs.ensureDir(handoffDir);
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-          await fs.writeFile(path.join(handoffDir, `${timestamp}-claude.md`), clean);
-          await fs.writeFile(path.join(handoffDir, 'latest.md'), clean);
-
-          // Also save locally for memoir resume
-          const localHandoffDir = path.join(os.homedir(), '.config', 'memoir', 'handoffs');
-          await fs.ensureDir(localHandoffDir);
-          await fs.writeFile(path.join(localHandoffDir, `${timestamp}-claude.md`), clean);
-          await fs.writeFile(path.join(localHandoffDir, 'latest.md'), clean);
+          // Staged copy for upload + local copy for `memoir resume`, same
+          // filename; the local dir is pruned to a bounded window.
+          await saveHandoff(clean, {
+            dirs: [path.join(stagingDir, 'handoffs'), path.join(os.homedir(), '.config', 'memoir', 'handoffs')],
+            filename: handoffFilename(),
+          });
 
           // Quality filter: auto-extracted decisions come from regex patterns
           // that sometimes catch table cells, prose fragments, or truncated
@@ -252,13 +254,20 @@ export async function pushCommand(options = {}) {
               const restates = !ctx || ctx.toLowerCase() === text.trim().toLowerCase();
               await addNote(text, { why: restates ? undefined : `auto-captured: ${ctx.slice(0, 80)}` });
             }
-            // Record a session summary in history for "recent sessions" section
+            // Record a session summary in history for "recent sessions" section.
+            // Project + branch + the last thing the user asked for — the old
+            // summary was the transcript's random slug ("Worked on
+            // calm-bubbling-liskov"), which told the next session nothing.
             const filesList = Array.from(parsed.filesWritten || []).slice(0, 10);
             const durationMin = (parsed.firstTimestamp && parsed.lastTimestamp)
               ? Math.floor((new Date(parsed.lastTimestamp) - new Date(parsed.firstTimestamp)) / 60000)
               : null;
-            const summary = parsed.slug ? `Worked on ${parsed.slug}` : `${filesList.length} file(s) touched`;
-            await recordSessionEnd({ summary, filesTouched: filesList, durationMin });
+            const lastAsk = [...parsed.userMessages].reverse().find((m) => m.length > 10) || '';
+            const project = parsed.cwd ? path.basename(parsed.cwd) : (parsed.slug || 'session');
+            const branch = parsed.gitBranch && parsed.gitBranch !== 'HEAD' ? ` (${parsed.gitBranch})` : '';
+            const ask = lastAsk.replace(/\s+/g, ' ').trim().slice(0, 90);
+            const summary = ask ? `${project}${branch}: ${ask}` : `${project}${branch}`;
+            await recordSessionEnd({ summary, filesTouched: filesList, durationMin, sessionId: parsed.sessionId || null });
             // Re-render into every detected tool so the pinned block reflects
             // what was just auto-captured from the .jsonl
             try {
@@ -329,7 +338,8 @@ export async function pushCommand(options = {}) {
     let preserveRemoteSession = false;
     try {
       if (await fs.pathExists(sessionPaths.session)) {
-        const { status, session: remote } = await fetchRemoteSessionBestEffort(config);
+        const { status, session: remote, cloneDir } = await fetchRemoteSessionBestEffort(config);
+        remoteCloneDir = cloneDir || null;
         if (status === 'unreadable') {
           // A remote session exists and we could not read it (encrypted,
           // slow, corrupt). Staging ours anyway would mirror-overwrite the
@@ -496,7 +506,11 @@ export async function pushCommand(options = {}) {
     if (config.provider === 'local' || config.provider.includes('local')) {
       await syncToLocal(config, uploadDir, spinner);
     } else if (config.provider === 'git' || config.provider.includes('git')) {
-      await syncToGit(config, uploadDir, spinner, preserveRemoteSession ? { preserve: ['session.json'] } : {});
+      await syncToGit(config, uploadDir, spinner, {
+        cloneDir: remoteCloneDir,
+        preserve: preserveRemoteSession ? ['session.json'] : [],
+      });
+      remoteCloneDir = null; // syncToGit removed it
     } else {
       spinner.fail(chalk.red(`Unknown provider: ${config.provider}`));
       return;
@@ -572,6 +586,9 @@ export async function pushCommand(options = {}) {
     // Clean up encrypted dir if it was created
     if (encryptedDir) {
       await fs.remove(encryptedDir).catch(() => {});
+    }
+    if (remoteCloneDir) {
+      await fs.remove(remoteCloneDir).catch(() => {});
     }
   }
 }

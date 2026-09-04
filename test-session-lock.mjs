@@ -21,7 +21,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const BOLD = '\x1b[1m', GREEN = '\x1b[32m', RED = '\x1b[31m', CYAN = '\x1b[36m', RESET = '\x1b[0m';
 
@@ -37,7 +37,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // imports state.js and calls addNext(text). Resolves once the child exits
 // (rejects on non-zero exit).
 function spawnAddNext(scratchHome, text) {
-  const stateJsPath = JSON.stringify(path.join(__dirname, 'src', 'session', 'state.js'));
+  // A file URL, not a path: on Windows `import('D:\\a\\…')` throws
+  // ERR_UNSUPPORTED_ESM_URL_SCHEME (the CI red since 2026-08-19).
+  const stateJsPath = JSON.stringify(pathToFileURL(path.join(__dirname, 'src', 'session', 'state.js')).href);
   const code = `
     import(${stateJsPath}).then(async (m) => {
       await m.addNext(${JSON.stringify(text)});

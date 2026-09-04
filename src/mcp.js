@@ -24,6 +24,7 @@ import {
   addQuestion,
   getMachineId,
 } from './session/state.js';
+import { appendEvent } from './events/log.js';
 import { renderSession } from './session/render.js';
 import { injectInto, detectAvailableTargets } from './session/inject.js';
 import { findDecisions } from './commands/why.js';
@@ -83,6 +84,12 @@ server.tool = (name, ...rest) => {
   if (typeof handler === 'function') {
     rest[rest.length - 1] = (...args) => {
       try { track('mcp_tool_used', { tool: name }); } catch {}
+      // Local, no-network twin of the telemetry event: the ONLY record on
+      // this machine that a memory was READ. events.jsonl logged every write
+      // and sync but not a single recall/why/read, so "is anyone using the
+      // memory?" could only be answered by grepping transcripts. Tool name
+      // only — never the query or the content.
+      appendEvent('mcp_tool_used', { tool: name }).catch(() => {});
       return handler(...args);
     };
   }
@@ -476,33 +483,36 @@ server.tool(
   'Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Pinned into CLAUDE.md so future sessions see it.',
   { text: z.string().describe('The goal, one short sentence') },
   async ({ text }) => {
-    await addGoal(text);
+    const state = await addGoal(text);
     await refreshPinnedBlock();
-    return { content: [{ type: 'text', text: `Goal set: ${text}` }] };
+    const replaced = (state.replacedGoals || []).map((g) => `"${g.text}"`);
+    return { content: [{ type: 'text', text: `Goal set: ${text}${replaced.length ? `\nGoals list is full (3) — replaced: ${replaced.join('; ')}. Re-set it with memoir_set_goal if that was wrong.` : ''}` }] };
   }
 );
 
 server.tool(
   'memoir_add_next',
-  'Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear.',
+  'Add a next action to the current session. Use when the user decides on a concrete next step, or when you finish something and the logical next move is clear. The list holds 8; when it is full the oldest item is PARKED (still shown in the pinned block, still completable), never dropped — the response names anything parked.',
   { text: z.string().describe('The action, one short imperative sentence') },
   async ({ text }) => {
-    await addNext(text);
+    const state = await addNext(text);
     await refreshPinnedBlock();
-    return { content: [{ type: 'text', text: `Next: ${text}` }] };
+    const parked = (state.justParked || []).map((p) => `"${p.text}"`);
+    return { content: [{ type: 'text', text: `Next: ${text}${parked.length ? `\nList was full — parked (still open, still in the block): ${parked.join('; ')}` : ''}` }] };
   }
 );
 
 server.tool(
   'memoir_complete_next',
-  'Mark a next action as complete (removes it from the pinned list). Match by substring — pass the relevant keywords, not the whole text.',
+  'Mark a next action as complete (removes it from the pinned list, parked items included). Match by substring — pass the relevant keywords, not the whole text.',
   { match: z.string().describe('Substring to match against existing next actions') },
   async ({ match }) => {
+    const count = (st) => st.current.next_actions.length + (st.current.parked_actions || []).length;
     const before = await readSession();
-    const beforeCount = before.current.next_actions.length;
+    const beforeCount = count(before);
     await completeNext(match);
     const after = await readSession();
-    const removed = beforeCount - after.current.next_actions.length;
+    const removed = beforeCount - count(after);
     await refreshPinnedBlock();
     return {
       content: [{

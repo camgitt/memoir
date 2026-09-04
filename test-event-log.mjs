@@ -12,7 +12,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { execFileSync, spawn } from 'child_process';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const BOLD = '\x1b[1m', GREEN = '\x1b[32m', RED = '\x1b[31m', CYAN = '\x1b[36m', RESET = '\x1b[0m';
 
@@ -186,7 +186,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — size-bounded rotation + cleanup${
   await fs.writeFile(`${eventsPath}.2`, `OLD_GEN2:${FIVE_MB_PLUS}`);
 
   const code = `
-    import(${JSON.stringify(path.join(__dirname, 'src', 'events', 'log.js'))}).then(async (m) => {
+    import(${JSON.stringify(pathToFileURL(path.join(__dirname, 'src', 'events', 'log.js')).href)}).then(async (m) => {
       await m.appendEvent('rotation_probe', {});
       process.exit(0);
     }).catch((e) => { console.error(e); process.exit(1); });
@@ -224,7 +224,7 @@ console.log(`\n${BOLD}${CYAN}events/log.js — concurrent writers produce only v
 
   function spawnAppends(n) {
     const code = `
-      import(${JSON.stringify(path.join(__dirname, 'src', 'events', 'log.js'))}).then(async (m) => {
+      import(${JSON.stringify(pathToFileURL(path.join(__dirname, 'src', 'events', 'log.js')).href)}).then(async (m) => {
         for (let i = 0; i < ${n}; i++) {
           await m.appendEvent('concurrent_probe', { i });
         }
