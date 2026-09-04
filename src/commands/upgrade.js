@@ -18,12 +18,18 @@ async function createCheckoutSession(session) {
   return data.url;
 }
 
+// No shell. The URL comes from our own API, but `exec(\`open "${url}"\`)`
+// is still a shell string built from data — flagged (correctly) by the
+// agentscores.xyz scan as command injection, and one bad quote away from
+// being one. execFile passes the URL as a single argument; on Windows
+// rundll32's URL handler avoids cmd.exe parsing `&` inside the query string.
 function openUrl(url) {
-  const { exec } = require('child_process');
+  const { execFile } = require('child_process');
   const platform = process.platform;
-  if (platform === 'darwin') exec(`open "${url}"`);
-  else if (platform === 'win32') exec(`start "" "${url}"`);
-  else exec(`xdg-open "${url}"`);
+  const [cmd, args] = platform === 'darwin' ? ['open', [url]]
+    : platform === 'win32' ? ['rundll32', ['url.dll,FileProtocolHandler', url]]
+    : ['xdg-open', [url]];
+  try { execFile(cmd, args, () => {}); } catch {}
 }
 
 export async function upgradeCommand() {
@@ -105,11 +111,7 @@ export async function upgradeCommand() {
       const url = await createCheckoutSession(session);
       spinner.succeed(chalk.green('  Opening Stripe checkout...'));
 
-      const { exec } = await import('child_process');
-      const platform = process.platform;
-      if (platform === 'darwin') exec(`open "${url}"`);
-      else if (platform === 'win32') exec(`start "" "${url}"`);
-      else exec(`xdg-open "${url}"`);
+      openUrl(url);
 
       console.log(
         '\n' + chalk.gray('  Complete payment in your browser.') + '\n' +
