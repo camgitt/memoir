@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+import { readSafeFile, writeSafeFile, safePath } from '../security/files.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -21,7 +23,7 @@ async function readMemoryFiles(adapter) {
       const filePath = path.join(adapter.source, file);
       if (await fs.pathExists(filePath)) {
         try {
-          const content = await fs.readFile(filePath, 'utf8');
+          const content = (await readSafeFile(adapter.source, file)).toString('utf8');
           const stat = await fs.stat(filePath);
           files.push({ path: file, fullPath: filePath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
         } catch {}
@@ -44,10 +46,10 @@ async function readMemoryFiles(adapter) {
         if (adapter.filter(fullPath)) {
           await walk(fullPath, relPath);
         }
-      } else if (/\.(md|json|yml|yaml)$/.test(entry.name)) {
+      } else if (entry.isFile() && /\.(md|json|yml|yaml)$/.test(entry.name)) {
         if (adapter.filter(fullPath)) {
           try {
-            const content = await fs.readFile(fullPath, 'utf8');
+            const content = (await readSafeFile(adapter.source, relPath)).toString('utf8');
             const stat = await fs.stat(fullPath);
             files.push({ path: relPath, fullPath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
           } catch {}
@@ -148,7 +150,7 @@ async function llmConsolidate(allFiles, apiKey) {
   const memoryDigest = allFiles
     .filter(f => f.content.trim().length > 10)
     .map(f => `[${f.tool} / ${f.path}] (${daysAgo(f.mtime)}d old, ${f.size}B)\n${f.content.slice(0, 500)}${f.content.length > 500 ? '...' : ''}`)
-    .join('\n\n---\n\n');
+    .join('\n\n---\n\n').slice(0, 64000);
 
   const prompt = `You are a memory consolidation engine. Analyze these AI tool memory files and produce a consolidation report.
 
@@ -176,8 +178,11 @@ Rules:
 - Be conservative — when in doubt, keep the memory
 - Return valid JSON only, no markdown fences`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+  const model = process.env.MEMOIR_CONSOLIDATE_MODEL || 'gemini-2.0-flash';
+  if (!/^[a-z0-9.-]+$/i.test(model)) throw new Error('Invalid consolidation model');
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
+    signal: AbortSignal.timeout(30000),
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
@@ -316,7 +321,7 @@ async function applyPrune(files, allFiles) {
   const { toDelete } = await inquirer.prompt([{
     type: 'checkbox',
     name: 'toDelete',
-    message: 'Select memories to delete:',
+    message: 'Select memories to archive:',
     choices
   }]);
 
@@ -328,7 +333,7 @@ async function applyPrune(files, allFiles) {
   const { confirm } = await inquirer.prompt([{
     type: 'confirm',
     name: 'confirm',
-    message: `Delete ${toDelete.length} file(s)? This cannot be undone.`,
+    message: `Delete ${toDelete.length} file(s)? A recovery copy will be saved locally.`,
     default: false
   }]);
 
@@ -340,7 +345,7 @@ async function applyPrune(files, allFiles) {
   let deleted = 0;
   for (const file of toDelete) {
     try {
-      await fs.remove(file.fullPath);
+      await archiveFile(file);
       console.log(chalk.red(`  ✖ Deleted: ${file.tool}/${file.path}`));
       deleted++;
     } catch (err) {
@@ -355,6 +360,10 @@ async function applyMerge(duplicateGroups, allFiles) {
   let merged = 0;
 
   for (const group of duplicateGroups) {
+    if (!group.every(file => file.content === group[0].content && file.tool === group[0].tool)) {
+      console.log(chalk.gray('  Similar or cross-tool files need a reviewed merge; no files removed.'));
+      continue;
+    }
     console.log(chalk.gray('\n  ┌ Duplicate group:'));
     for (const f of group) {
       console.log(`  │ ${f.icon} ${chalk.cyan(f.tool)}/${chalk.white(f.path)} ${chalk.gray(`(${daysAgo(f.mtime)}d old)`)}`);
@@ -375,13 +384,13 @@ async function applyMerge(duplicateGroups, allFiles) {
       type: 'confirm',
       name: 'confirm',
       message: `Remove ${remove.length} duplicate(s), keep the newest?`,
-      default: true
+      default: false
     }]);
 
     if (confirm) {
       for (const r of remove) {
         try {
-          await fs.remove(r.fullPath);
+          await archiveFile(r);
           console.log(chalk.red(`  ✖ Removed: ${r.tool}/${r.path}`));
           merged++;
         } catch (err) {
@@ -397,6 +406,7 @@ async function applyMerge(duplicateGroups, allFiles) {
 // ── Main Command ─────────────────────────────────────────────────────────────
 
 export async function consolidateCommand(options = {}) {
+  if (options.undo) return undoArchive(options.undo);
   console.log();
   const spinner = ora({ text: chalk.gray('Scanning memories across all tools...'), spinner: 'dots' }).start();
 
@@ -474,4 +484,33 @@ export async function consolidateCommand(options = {}) {
       console.log(chalk.gray('  Run ') + chalk.cyan('memoir consolidate --smart') + chalk.gray(' for AI-powered analysis.\n'));
     }
   }
+}
+
+const archiveRoot = path.join(home, '.config', 'memoir', 'consolidation-history');
+
+export async function archiveFile(file) {
+  const adapter = adapters.find(a => a.name === file.tool);
+  if (!adapter) throw new Error('Unknown adapter');
+  const content = await readSafeFile(adapter.source, file.path);
+  if (content.toString('utf8') !== file.content) throw new Error('Memory changed since analysis; run analysis again');
+  const id = crypto.randomUUID();
+  await writeSafeFile(archiveRoot, id + '.json', JSON.stringify({
+    tool: adapter.name, path: file.path, content: content.toString('base64'), date: new Date().toISOString(),
+  }));
+  await fs.unlink(await safePath(adapter.source, file.path));
+  console.log('  Undo with: memoir consolidate --undo ' + id);
+  return id;
+}
+
+export async function undoArchive(id) {
+  if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid archive ID');
+  const entry = JSON.parse((await readSafeFile(archiveRoot, id + '.json')).toString());
+  const adapter = adapters.find(a => a.name === entry.tool);
+  if (!adapter || (adapter.customExtract ? !adapter.files.includes(entry.path) : !adapter.filter(path.join(adapter.source, entry.path)))) throw new Error('Archive target is outside the adapter allowlist');
+  try {
+    await readSafeFile(adapter.source, entry.path);
+    throw new Error('The target exists; review it before restoring the archive');
+  } catch (err) { if (err.code !== 'ENOENT') throw err; }
+  await writeSafeFile(adapter.source, entry.path, Buffer.from(entry.content, 'base64'));
+  console.log('Restored archived memory ' + id);
 }

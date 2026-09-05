@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { cloudMigrateCommand } from '../src/commands/cloud.js';
+import { setupCommand } from '../src/integrations/setup.js';
 import { program } from 'commander';
 import chalk from 'chalk';
 import boxen from 'boxen';
@@ -118,6 +120,7 @@ program
   .option('--only <tools>', 'Only sync specific tools (comma-separated)')
   .option('-p, --profile <name>', 'Use a specific profile')
   .option('--redact', 'Strip detected secrets from synced files before they are backed up')
+  .option('--workspace', 'Also capture project workspaces; memory-only backups are the default')
   .action(async (options) => {
     try {
       await pushCommand(options);
@@ -135,6 +138,7 @@ program
   .option('-i, --interactive', 'Confirm each tool before restoring')
   .option('-p, --profile <name>', 'Use a specific profile')
   .option('--from <token>', 'Restore from a share link token')
+  .option('--workspace', 'Also restore explicitly captured workspaces')
   .action(async (options) => {
     try {
       await restoreCommand(options);
@@ -237,6 +241,7 @@ program
 
 program
   .command('recall <query...>')
+  .option('--project <path>', 'Recall from this project (defaults to the working project)')
   .description('Search your AI memory the way memoir_recall does — see exactly what your AI would be handed')
   .option('--limit <n>', 'Max results (default 10)')
   .option('--json', 'Machine-readable output')
@@ -367,6 +372,7 @@ program
 
 program
   .command('resume')
+  .option('--project <path>', 'Project directory for the resume brief')
   .description('Pick up where you left off on another machine')
   .option('--inject', 'Write the handoff where your AI tool will read it')
   .option('--to <tool>', 'Target tool for injection (claude, gemini, cursor, codex)')
@@ -389,7 +395,10 @@ program
       const data = await res.json();
       const latest = data.version;
 
-      if (latest === VERSION) {
+      const currentParts = VERSION.split('.').map(Number);
+      const latestParts = String(latest).split('.').map(Number);
+      const newer = latestParts.some((n, i) => n > currentParts[i] && latestParts.slice(0, i).every((v, j) => v === currentParts[j]));
+      if (!newer) {
         console.log('\n' + boxen(
           chalk.green('✔ Already up to date!') + '\n' +
           chalk.gray(`v${VERSION}`),
@@ -430,6 +439,16 @@ program
       console.error(chalk.red('\n✖ Error:'), err.message);
       process.exit(1);
     }
+  });
+
+program
+  .command('setup')
+  .description('Configure and verify project MCP integration')
+  .option('--tool <clients>', 'claude, codex, cursor, all, or auto', 'auto')
+  .option('--project <path>', 'Project directory', process.cwd())
+  .action(async options => {
+    try { await setupCommand(options); }
+    catch (err) { console.error(err.message); process.exitCode = 1; }
   });
 
 program
@@ -582,6 +601,15 @@ account
 // Cloud sync
 const cloud = program.command('cloud').description('Cloud backup and restore (Pro)');
 
+cloud.command('migrate')
+  .description('Plan migration of legacy cloud encryption; --apply verifies each replacement')
+  .option('--apply', 'Create and verify replacements before deleting legacy backups')
+  .action(async options => {
+    try { await cloudMigrateCommand(options); }
+    catch (err) { console.error(chalk.red('Migration failed:'), err.message); process.exitCode = 1; }
+  });
+
+
 cloud
   .command('push')
   .description('Back up your AI memory to the cloud')
@@ -711,6 +739,7 @@ projects
 
 program
   .command('consolidate')
+  .option('--undo <id>', 'Restore a locally archived consolidation file')
   .alias('tidy')
   .description('Analyze and clean up your AI memories — find duplicates, stale files, and contradictions')
   .option('--smart', 'Use AI to analyze memories and suggest merges (requires Gemini API key)')

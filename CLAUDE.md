@@ -16,7 +16,7 @@ CLI + MCP server that gives AI tools persistent memory. Your AI can search, read
 - **Session continuity:** AI records goals/next-actions/decisions into session.json, auto-rendered into CLAUDE.md so the next session picks up where the last ended
 - **Consolidate:** scans all tool memories for duplicates, stale files, and bloat (`--smart` adds a Gemini Flash semantic pass)
 - **Cloud sync:** Supabase auth (email/password), gzipped bundles in Storage, PostgreSQL metadata
-- **Encryption:** AES-256-GCM, async scrypt, client-side before upload (zero-knowledge)
+- **Encryption:** AES-256-GCM, async scrypt, client-side before upload; cloud writes require a user-held passphrase, and legacy cloud backups remain readable with a warning
 - **Tiers:** Free (10 cloud backups), Pro ($15/mo, 100 backups + version history — purchasable via `memoir upgrade`, Stripe checkout wired), Teams ($29/seat, planned)
 
 ## Key files

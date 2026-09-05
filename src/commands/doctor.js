@@ -5,7 +5,7 @@ import boxen from 'boxen';
 import ora from 'ora';
 import gradient from 'gradient-string';
 import os from 'os';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
 import { scanForSecrets as scanTextForSecrets } from '../security/scanner.js';
@@ -100,7 +100,7 @@ export async function doctorCommand(options = {}) {
   if (config?.provider === 'git' && gitInstalled && config.gitRepo) {
     spinner.text = 'Testing remote connectivity...';
     try {
-      execSync(`git ls-remote ${config.gitRepo} HEAD`, { stdio: 'pipe', timeout: 10000 });
+      execFileSync('git', ['ls-remote', config.gitRepo, 'HEAD'], { stdio: 'pipe', timeout: 10000 });
       lines.push(pass(`Remote: ${chalk.gray(config.gitRepo)} reachable`));
     } catch {
       lines.push(fail(`Remote: cannot reach ${chalk.gray(config.gitRepo)}`));
@@ -185,7 +185,7 @@ export async function doctorCommand(options = {}) {
     lines.push(chalk.bold.white('  Last Sync'));
     try {
       const tmpDir = path.join(os.tmpdir(), 'memoir-doctor-' + Date.now());
-      execSync(`git clone --depth 1 ${config.gitRepo} ${tmpDir}`, { stdio: 'pipe', timeout: 15000 });
+      execFileSync('git', ['clone', '--depth', '1', '--', config.gitRepo, tmpDir], { stdio: 'pipe', timeout: 15000 });
       const lastCommit = execSync('git log -1 --format=%cr', { cwd: tmpDir, stdio: 'pipe' }).toString().trim();
       const lastMsg = execSync('git log -1 --format=%s', { cwd: tmpDir, stdio: 'pipe' }).toString().trim();
       await fs.remove(tmpDir);

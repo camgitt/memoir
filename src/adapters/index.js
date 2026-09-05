@@ -1,3 +1,6 @@
+import { projectIdentity } from '../memory/scope.js';
+import { readSafeFile, writeSafeFile } from '../security/files.js';
+import { stageMemories } from '../memory/store.js';
 import fs from 'fs-extra';
 import nodeFs from 'node:fs';
 import path from 'path';
@@ -80,7 +83,7 @@ export const adapters = [
       if (src === codexDir) return true;
       const basename = path.basename(src);
       // Only sync config files
-      const allowed = ['config.json', 'settings.json', 'instructions.md'];
+      const allowed = ['config.toml', 'config.json', 'settings.json', 'instructions.md', 'AGENTS.md'];
       return allowed.includes(basename) && !rel.includes(path.sep);
     }
   },
@@ -241,7 +244,7 @@ function formatSize(bytes) {
 }
 
 export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
-  let foundAny = false;
+  let foundAny = (await stageMemories(stagingDir)) > 0;
   const results = [];
 
   for (const adapter of adapters) {
@@ -264,7 +267,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
             await fs.ensureDir(dest);
             foundFile = true;
           }
-          await fs.copy(filePath, path.join(dest, file));
+          await writeSafeFile(dest, file, await readSafeFile(adapter.source, file));
           fileCount++;
         }
       }
@@ -278,7 +281,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
       spinner.text = `${adapter.icon} Scanning ${chalk.cyan(adapter.name)}...`;
       const dest = path.join(stagingDir, adapter.name.toLowerCase().replace(/ /g, '-'));
       await fs.ensureDir(dest);
-      await fs.copy(adapter.source, dest, { filter: adapter.filter });
+      await fs.copy(adapter.source, dest, { filter: (src, dest) => !fs.lstatSync(src).isSymbolicLink() && adapter.filter(src, dest) });
 
       const fileCount = await countFiles(dest);
       const size = await dirSize(dest);
@@ -309,6 +312,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
     let projectCount = 0;
     let projectFileCount = 0;
     const projectNames = [];
+    const projectManifest = {};
 
     // Walk home dir up to 3 levels deep looking for project markers
     const scanDir = async (dir, depth = 0) => {
@@ -329,7 +333,9 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
 
       if (foundFiles.length > 0 && dir !== home && !shouldIgnoreProject(dir)) {
         // This is a project with AI configs
-        const projectName = path.basename(dir);
+        const identity = projectIdentity(dir);
+        const projectName = path.basename(dir) + '-' + identity.split(':')[1].slice(0, 12);
+        projectManifest[projectName] = { identity, name: path.basename(dir), relative_path: path.relative(home, dir).replace(/\\/g, '/') };
         const projectDestDir = path.join(projectsDest, projectName);
         await fs.ensureDir(projectDestDir);
 
@@ -337,7 +343,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
           const src = path.join(dir, file);
           const dest = path.join(projectDestDir, file);
           await fs.ensureDir(path.dirname(dest));
-          await fs.copy(src, dest);
+          await writeSafeFile(projectDestDir, file, await readSafeFile(dir, file));
           projectFileCount++;
         }
 
@@ -357,6 +363,7 @@ export async function extractMemories(stagingDir, spinner, onlyFilter = null) {
     await scanDir(home);
 
     if (projectCount > 0) {
+      await writeSafeFile(stagingDir, 'projects.json', JSON.stringify(projectManifest, null, 2));
       const size = await dirSize(projectsDest);
       foundAny = true;
       results.push({

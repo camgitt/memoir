@@ -109,8 +109,8 @@ fi
 
 # Machine B's CLAUDE.md should have the merged block
 if [ -f "$HOME_B/.claude/CLAUDE.md" ]; then
-  if grep -q "Ship session sync" "$HOME_B/.claude/CLAUDE.md" && grep -q "Different local goal" "$HOME_B/.claude/CLAUDE.md"; then
-    echo -e "  ${GREEN}PASS${RESET} Machine B's CLAUDE.md shows merged goals"
+  if grep -q "memoir_session" "$HOME_B/.claude/CLAUDE.md" && ! grep -q "Ship session sync" "$HOME_B/.claude/CLAUDE.md"; then
+    echo -e "  ${GREEN}PASS${RESET} Machine B's global instructions use scoped retrieval without copying project goals"
     PASS=$((PASS + 1))
   else
     echo -e "  ${RED}FAIL${RESET} CLAUDE.md not re-rendered"

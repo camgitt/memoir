@@ -2,7 +2,7 @@
   "name": "memoir-cli",
   "version": "3.13.3",
   "mcpName": "io.github.camgitt/memoir",
-  "description": "Private, portable AI memory: synced across every coding tool and machine, end-to-end encrypted, free. One memory for Claude Code, Cursor, Copilot, Gemini + more — MCP-native, zero-knowledge, open source.",
+  "description": "Portable, project-scoped memory and session handoffs for coding agents. Readable files, MCP recall, and optional user-passphrase encrypted backups.",
   "main": "src/index.js",
   "type": "module",
   "bin": {
@@ -14,7 +14,10 @@
     "bin/",
     "src/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/",
+    "supabase/migrations/",
+    "evals/"
   ],
   "engines": {
     "node": ">=18"
@@ -32,7 +35,9 @@
     "test": "node run-tests.mjs",
     "test:legacy": "bash test-local.sh",
     "prepublishOnly": "node scripts/check-clean-for-publish.mjs && npm test",
-    "version": "node -e \"const f=require('fs');const p=require('./package.json');const s=JSON.parse(f.readFileSync('server.json','utf8'));s.version=p.version;s.packages.forEach(x=>x.version=p.version);f.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n')\" && git add server.json"
+    "version": "node -e \"const f=require('fs');const p=require('./package.json');const s=JSON.parse(f.readFileSync('server.json','utf8'));s.version=p.version;s.packages.forEach(x=>x.version=p.version);f.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n')\" && git add server.json",
+    "eval": "node evals/run.mjs",
+    "test:packed": "node scripts/test-packed.mjs"
   },
   "keywords": [
     "mcp",
@@ -81,6 +86,7 @@
     "fs-extra": "^11.2.0",
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.15",
-    "ora": "^7.0.1"
+    "ora": "^7.0.1",
+    "smol-toml": "^1.8.0"
   }
 }

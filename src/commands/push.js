@@ -1,3 +1,5 @@
+import { projectIdentity } from '../memory/scope.js';
+import { restoreStoredMemories, stageMemories } from '../memory/store.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -8,92 +10,70 @@ import gradient from 'gradient-string';
 import { execFileSync } from 'child_process';
 import { getConfig, autoSetup } from '../config.js';
 import { extractMemories, adapters } from '../adapters/index.js';
-import { syncToLocal, syncToGit, cloneForSync, remoteHasFile, checkoutFromRemote } from '../providers/index.js';
+import { syncToLocal, syncToGit, withLocalBackupLock, cloneForSync, remoteHasFile, checkoutFromRemote } from '../providers/index.js';
 import inquirer from 'inquirer';
 import { appendEvent } from '../events/log.js';
 import { findClaudeSessions, parseSession, generateContextHandoff, shouldIgnoreProject, persistDecisions, isQuality, enrichWithGit } from '../context/capture.js';
 import { saveHandoff, handoffFilename } from '../context/handoffs.js';
 import { scanForSecrets, printSecurityReport } from '../security/scanner.js';
-import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
+import { encryptDirectory, decryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { getRawConfig, saveConfig, migrateConfigToV2 } from '../config.js';
 import { scanWorkspace } from '../workspace/tracker.js';
 import { promptActivate } from './activate.js';
 import { paths as sessionPaths, readSession, writeSession, mergeSessions, addNote, recordSessionEnd } from '../session/state.js';
 import { migrateSessionData } from '../session/migrations.js';
 import { withSessionLock } from '../session/lock.js';
+import { listSafeFiles, readSafeFile, writeSafeFile } from '../security/files.js';
 import { renderSession } from '../session/render.js';
 import { injectInto, detectAvailableTargets } from '../session/inject.js';
 
-// Best-effort fetch of the CURRENT remote session.json, so push.js can merge
-// before overwrite instead of blindly clobbering it (see below). Returns the
-// remote session state (already migrated to SCHEMA_VERSION) or null if the
-// Tri-state, because the difference is destructive: 'none' means nothing is
-// there (safe to write ours), 'ok' carries the remote session for merging,
-// and 'unreadable' means A REMOTE EXISTS BUT WE CANNOT READ IT — encrypted,
-// slow clone, corrupt JSON. On 'unreadable' the caller MUST NOT stage
-// session.json at all, so the remote copy survives the mirror sweep.
-// The old boolean version returned null for 'unreadable', which collapsed
-// to merged = local and silently clobbered the other machine's state —
-// worst on encrypted remotes, where the "protection" was a complete no-op.
-async function fetchRemoteSessionBestEffort(config) {
+// A failed read never authorizes replacing an existing snapshot. Encrypted
+// snapshots are authenticated before merging, using the same user-held key.
+async function fetchRemoteSessionBestEffort(config, getPassphrase) {
+  let cloneDir = null;
+  let plainDir = null;
   try {
-    if (config.provider === 'local' || config.provider?.includes?.('local')) {
-      const resolvedDest = (config.localPath || '').replace(/^~/, os.homedir());
-      if (!resolvedDest) return { status: 'none', session: null };
-      if (await fs.pathExists(path.join(resolvedDest, 'manifest.enc'))) return { status: 'unreadable', session: null }; // encrypted
-      const remotePath = path.join(resolvedDest, 'session.json');
-      if (!(await fs.pathExists(remotePath))) return { status: 'none', session: null };
-      try {
-        const raw = JSON.parse(await fs.readFile(remotePath, 'utf8'));
-        const { state } = migrateSessionData(raw);
-        return { status: 'ok', session: state };
-      } catch {
-        return { status: 'unreadable', session: null }; // exists but corrupt
+    let source;
+    if (config.provider?.includes('local')) {
+      source = (config.localPath || '').replace(/^~/, os.homedir());
+      if (!source || !await fs.pathExists(source)) return { session: null };
+    } else if (config.provider?.includes('git')) {
+      cloneDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-push-peek-'));
+      cloneForSync(config.gitRepo, cloneDir, { timeout: 120000 });
+      source = cloneDir;
+      // Materialize the complete tree before merging a snapshot. Correctness
+      // comes before the old optimization that omitted encrypted session data.
+      if (remoteHasFile(cloneDir, 'manifest.enc') || config.encrypt !== false) {
+        if (remoteHasFile(cloneDir, '.')) {
+          if (!checkoutFromRemote(cloneDir, '.')) throw new Error('Could not read prior backup');
+        }
+      } else if (remoteHasFile(cloneDir, 'session.json') && !checkoutFromRemote(cloneDir, 'session.json')) {
+        throw new Error('Could not read prior session');
       }
-    }
+    } else { throw new Error('Unsupported backup provider'); }
 
-    if (config.provider === 'git' || config.provider?.includes?.('git')) {
-      const repoUrl = config.gitRepo;
-      if (!repoUrl) return { status: 'none', session: null };
-      const peekDir = path.join(os.tmpdir(), `memoir-push-peek-${Date.now()}`);
-      await fs.ensureDir(peekDir);
-      // This is THE clone for the whole push. It is blob-less and checkout-
-      // less (see providers/index.js), reads session.json on demand, and is
-      // then handed to syncToGit as `cloneDir` so the push never clones a
-      // second time. Kept (not removed) whenever the clone itself succeeded.
-      let keep = false;
-      try {
-        try {
-          // Same budget as the real sync clone — the old 30s peek against a
-          // 60s sync meant a 35-second clone failed the peek but succeeded
-          // the mirror, deterministically wiping the remote session.
-          cloneForSync(repoUrl, peekDir, { timeout: 120000 });
-        } catch {
-          // Unreachable or first push. If the LATER sync clone succeeds
-          // where this one failed, treating it as 'none' would clobber —
-          // but with equal timeouts that window is a genuine remote flap,
-          // and 'unreadable' here would wedge first-time pushes forever.
-          return { status: 'none', session: null };
-        }
-        keep = true;
-        if (remoteHasFile(peekDir, 'manifest.enc')) return { status: 'unreadable', session: null, cloneDir: peekDir }; // encrypted
-        if (!remoteHasFile(peekDir, 'session.json')) return { status: 'none', session: null, cloneDir: peekDir };
-        if (!checkoutFromRemote(peekDir, 'session.json')) return { status: 'unreadable', session: null, cloneDir: peekDir };
-        try {
-          const raw = JSON.parse(await fs.readFile(path.join(peekDir, 'session.json'), 'utf8'));
-          const { state } = migrateSessionData(raw);
-          return { status: 'ok', session: state, cloneDir: peekDir };
-        } catch {
-          return { status: 'unreadable', session: null, cloneDir: peekDir };
-        }
-      } finally {
-        if (!keep) await fs.remove(peekDir).catch(() => {});
-      }
+    if (cloneDir && remoteHasFile(cloneDir, 'projects.json') && !checkoutFromRemote(cloneDir, 'projects.json')) throw new Error('Could not read prior project mapping');
+    if (cloneDir && remoteHasFile(cloneDir, 'memoir-memories') && !checkoutFromRemote(cloneDir, 'memoir-memories')) throw new Error('Could not read prior memory records');
+    const encrypted = await fs.pathExists(path.join(source, 'manifest.enc'));
+    if (encrypted) {
+      if (config.encrypt === false) throw new Error('The destination is encrypted. Restore it before choosing a new plaintext destination.');
+      plainDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-prior-'));
+      await decryptDirectory(source, plainDir, await getPassphrase());
+      source = plainDir;
     }
-  } catch {
-    // Never let a merge-fetch failure block the push.
+    const file = path.join(source, 'session.json');
+    let session = null;
+    if (await fs.pathExists(file)) {
+      const migrated = migrateSessionData(JSON.parse((await readSafeFile(source, 'session.json')).toString('utf8')));
+      if (migrated.future) throw new Error('Backup uses a newer session schema; upgrade Memoir first.');
+      session = migrated.state;
+    }
+    return { session, cloneDir, plainDir, source, encrypted };
+  } catch (err) {
+    if (cloneDir) await fs.remove(cloneDir).catch(() => {});
+    if (plainDir) await fs.remove(plainDir).catch(() => {});
+    throw new Error('Previous backup could not be verified; it was left unchanged. ' + err.message);
   }
-  return { status: 'none', session: null };
 }
 
 // Recursively scan every staged file (the REAL tool memory/config files about
@@ -150,7 +130,7 @@ export async function pushCommand(options = {}) {
     const setupSpinner = ora({ text: chalk.gray('Setting up memoir automatically...'), spinner: 'dots' }).start();
     config = await autoSetup();
     if (config) {
-      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo}`));
+      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo || config.localPath}`));
     } else {
       setupSpinner.fail(chalk.red('Could not detect GitHub username'));
       console.log('\n' + boxen(
@@ -161,6 +141,11 @@ export async function pushCommand(options = {}) {
     }
   }
 
+  // Serialize the complete read/merge/write cycle, including encrypted reads.
+  if (config.provider?.includes('local') && !options.localLockHeld) {
+    return withLocalBackupLock(config, () => pushCommand({ ...options, localLockHeld: true }));
+  }
+
   console.log();
   const spinner = ora({ text: chalk.gray('Scanning for AI tools...'), spinner: 'dots' }).start();
 
@@ -168,7 +153,18 @@ export async function pushCommand(options = {}) {
   await fs.ensureDir(stagingDir);
 
   let encryptedDir = null;
-  let remoteCloneDir = null; // the one clone for this push (see fetchRemoteSessionBestEffort)
+  let remoteCloneDir = null;
+  let remotePlainDir = null;
+  let backupPassphrase = process.env.MEMOIR_PASSPHRASE || '';
+  const getPassphrase = async () => {
+    if (backupPassphrase.length >= 6) return backupPassphrase;
+    if (!process.stdin.isTTY) throw new Error('Encrypted backup requires MEMOIR_PASSPHRASE; no files were uploaded.');
+    spinner.stop();
+    const answer = await inquirer.prompt([{ type: 'password', name: 'passphrase', message: 'Encryption passphrase:', mask: '*', validate: value => value.length >= 6 || 'Use at least 6 characters' }]);
+    backupPassphrase = answer.passphrase;
+    spinner.start();
+    return backupPassphrase;
+  };
 
   try {
     // Profile-level tool filter (config.only) merged with CLI --only flag
@@ -176,7 +172,7 @@ export async function pushCommand(options = {}) {
     const onlyFilter = onlyRaw ? onlyRaw.split(',').map(t => t.trim().toLowerCase()) : null;
     const foundAny = await extractMemories(stagingDir, spinner, onlyFilter);
 
-    if (!foundAny) {
+    if (!foundAny && !await fs.pathExists(sessionPaths.session)) {
       spinner.stop();
       console.log('\n' + boxen(
         chalk.yellow('No AI tools detected on this machine.\n\n') +
@@ -194,7 +190,7 @@ export async function pushCommand(options = {}) {
       const sessions = findClaudeSessions();
       if (sessions.length > 0) {
         const parsed = enrichWithGit(parseSession(sessions[0].path));
-        if (parsed.userMessages.length > 0) {
+        if (parsed.cwd && projectIdentity(parsed.cwd) === projectIdentity() && parsed.userMessages.length > 0) {
           // Scan the generated handoff for any remaining secrets
           const handoff = generateContextHandoff(parsed);
           const { found, clean } = scanForSecrets(handoff);
@@ -225,13 +221,7 @@ export async function pushCommand(options = {}) {
           };
           const qualityDecisions = parsed.decisions.filter(d => isQuality(decisionText(d)));
 
-          // Persist decisions to Claude's memory so they survive across sessions
-          let decisionCount = 0;
-          if (qualityDecisions.length > 0) {
-            try {
-              decisionCount = persistDecisions(qualityDecisions);
-            } catch {}
-          }
+          let decisionCount = qualityDecisions.length;
 
           // Also feed structured decisions into session.json so they appear in
           // the pinned block and sync cross-machine. Dedupe against anything
@@ -252,7 +242,7 @@ export async function pushCommand(options = {}) {
               // pinned block. Emit no why rather than a fake one.
               const ctx = String(d.context || '').trim();
               const restates = !ctx || ctx.toLowerCase() === text.trim().toLowerCase();
-              await addNote(text, { why: restates ? undefined : `auto-captured: ${ctx.slice(0, 80)}` });
+              await addNote(text, { project: parsed.cwd, why: restates ? undefined : `auto-captured: ${ctx.slice(0, 80)}` });
             }
             // Record a session summary in history for "recent sessions" section.
             // Project + branch + the last thing the user asked for — the old
@@ -267,7 +257,7 @@ export async function pushCommand(options = {}) {
             const branch = parsed.gitBranch && parsed.gitBranch !== 'HEAD' ? ` (${parsed.gitBranch})` : '';
             const ask = lastAsk.replace(/\s+/g, ' ').trim().slice(0, 90);
             const summary = ask ? `${project}${branch}: ${ask}` : `${project}${branch}`;
-            await recordSessionEnd({ summary, filesTouched: filesList, durationMin, sessionId: parsed.sessionId || null });
+            await recordSessionEnd({ summary, filesTouched: filesList, durationMin, sessionId: parsed.sessionId || null, project: parsed.cwd });
             // Re-render into every detected tool so the pinned block reflects
             // what was just auto-captured from the .jsonl
             try {
@@ -311,61 +301,48 @@ export async function pushCommand(options = {}) {
     let workspaceManifest = null;
     spinner.text = chalk.gray('Scanning workspace...');
     try {
-      workspaceManifest = await scanWorkspace(stagingDir, spinner);
-    } catch {
-      // Workspace scan is best-effort
+      if (options.workspace === true || config.workspace === true) workspaceManifest = await scanWorkspace(stagingDir, spinner);
+    } catch (err) {
+      throw new Error('Workspace capture failed: ' + err.message);
     }
 
-    // Include session.json (continuity state) so it syncs across machines.
-    //
-    // MERGE-BEFORE-OVERWRITE: this used to be a blind fs.copy() of the LOCAL
-    // session.json, and syncToGit/syncToLocal do a full-mirror overwrite of
-    // the remote (clone-or-init, delete every tracked file, copy the local
-    // staging dir wholesale over it, commit, push). Any machine that pushed
-    // without having restored first would silently and completely destroy
-    // whatever ANY OTHER machine had added to the remote in the interim —
-    // goals, next-actions, decisions, everything. Not an edge case: it's the
-    // default behavior of the most common operation in the tool (autopush
-    // fires after every single Claude Code response).
-    //
-    // Best-effort fetch the current remote session.json first, migrate it,
-    // and merge with mergeSessions (the same newest-timestamp-wins
-    // union-by-text function restore.js already uses) BEFORE writing the
-    // result to both the staging dir (for upload) and back to the local
-    // session.json (so this machine also gains whatever the remote had that
-    // it didn't) — symmetric with restore.js instead of a blind overwrite.
-    let sessionIncluded = false;
-    let preserveRemoteSession = false;
-    try {
-      if (await fs.pathExists(sessionPaths.session)) {
-        const { status, session: remote, cloneDir } = await fetchRemoteSessionBestEffort(config);
-        remoteCloneDir = cloneDir || null;
-        if (status === 'unreadable') {
-          // A remote session exists and we could not read it (encrypted,
-          // slow, corrupt). Staging ours anyway would mirror-overwrite the
-          // one copy we couldn't merge — the exact clobber this guard
-          // exists to prevent. Leave session.json out of the staging dir
-          // and tell the sync to leave the remote copy alone.
-          preserveRemoteSession = true;
-          try { appendEvent('sync_degraded', { reason: 'remote_session_unreadable' }); } catch {}
-        } else {
-          // Read AND merge AND write inside one lock. Reading outside it and
-          // locking only the write is a check-then-act: a concurrent MCP
-          // memoir_note in that window is silently dropped. This is the most
-          // reachable instance of that bug — it sits on the autopush path.
-          let merged;
-          await withSessionLock(sessionPaths.sessionLock, async () => {
-            const local = await readSession();
-            merged = remote ? mergeSessions(local, remote) : local;
-            if (remote) await writeSession(merged);
-          });
-          await fs.writeFile(path.join(stagingDir, 'session.json'), JSON.stringify(merged, null, 2));
-          sessionIncluded = true;
-        }
-      }
-    } catch {
-      // Best-effort — don't fail the push over this
+    const prior = await fetchRemoteSessionBestEffort(config, getPassphrase);
+    remoteCloneDir = prior.cloneDir || null;
+    remotePlainDir = prior.plainDir || null;
+    if (prior.source) await restoreStoredMemories(prior.source);
+    // Keep mappings for projects that exist only on another machine.
+    if (prior.source && await fs.pathExists(path.join(prior.source, 'projects.json'))) {
+      const remoteProjects = JSON.parse((await readSafeFile(prior.source, 'projects.json')).toString());
+      let localProjects = {};
+      if (await fs.pathExists(path.join(stagingDir, 'projects.json'))) localProjects = JSON.parse((await readSafeFile(stagingDir, 'projects.json')).toString());
+      await writeSafeFile(stagingDir, 'projects.json', JSON.stringify({ ...remoteProjects, ...localProjects }, null, 2));
     }
+
+    await stageMemories(stagingDir);
+    // Re-encryption always starts with a complete prior snapshot. Overlay
+    // current files, preserve files absent on this machine, merge session below.
+    if ((config.encrypt !== false || prior.encrypted) && prior.source) {
+      const priorFiles = await listSafeFiles(prior.source).catch(async err => {
+        // A checked-out Git tree contains .git, which is transport metadata.
+        if (remoteCloneDir === prior.source) {
+          const files = execFileSync('git', ['ls-files', '-z'], { cwd: prior.source, encoding: 'utf8' }).split('\0').filter(Boolean);
+          return files;
+        }
+        throw err;
+      });
+      for (const rel of priorFiles) {
+        if (rel.startsWith('memoir-memories/')) continue; // Already reconciled, including purge tombstones.
+        if (!await fs.pathExists(path.join(stagingDir, rel))) await writeSafeFile(stagingDir, rel, await readSafeFile(prior.source, rel));
+      }
+    }
+    let merged;
+    await withSessionLock(sessionPaths.sessionLock, async () => {
+      const local = await readSession();
+      merged = prior.session ? mergeSessions(local, prior.session) : local;
+      await writeSession(merged);
+    });
+    await writeSafeFile(stagingDir, 'session.json', JSON.stringify(merged, null, 2));
+    const sessionIncluded = true;
 
     // Count what was found
     const found = [];
@@ -387,13 +364,8 @@ export async function pushCommand(options = {}) {
     //   • --redact            → strip secrets in place, then upload (sanitized)
     //   • otherwise           → WARN and continue
     //   • background autopush → stay silent and continue
-    // We deliberately do NOT hard-block. This is a zero-knowledge encrypted
-    // backup of the user's OWN files; silently refusing to back up — which the
-    // detached `autopush` Stop-hook path (stdio:'ignore', MEMOIR_AUTOPUSH=1, no
-    // TTY) would hit on any false-positive match — is a worse failure than
-    // backing up. A future `--strict` flag could fail-closed for the
-    // encrypt-off / shared-destination case. Wrapped so a scanner error can
-    // never break the push.
+    // Redaction is explicit and heuristic. Plaintext backups can contain
+    // secrets; a warning does not promise that every secret was detected.
     const background = process.env.MEMOIR_AUTOPUSH === '1';
     try {
       const { findings } = await scanStagedFiles(stagingDir, { redact: options.redact === true });
@@ -426,7 +398,7 @@ export async function pushCommand(options = {}) {
     // Encrypt if enabled (or ask on first push if not configured)
     let uploadDir = stagingDir;
     let encrypted = false;
-    let shouldEncrypt = config.encrypt;
+    let shouldEncrypt = prior.encrypted || config.encrypt;
 
     if (shouldEncrypt === undefined) {
       if (background || !process.stdin.isTTY) {
@@ -436,7 +408,8 @@ export async function pushCommand(options = {}) {
         // otherwise push unencrypted THIS ONCE without persisting the
         // choice — a backup beats no backup, and the next interactive push
         // still gets the real question (default Yes).
-        shouldEncrypt = Boolean(process.env.MEMOIR_PASSPHRASE);
+        if (!process.env.MEMOIR_PASSPHRASE) throw new Error('Choose encryption explicitly with memoir init before sending this backup, or set MEMOIR_PASSPHRASE.');
+        shouldEncrypt = true;
         if (!shouldEncrypt) {
           config.encrypt = undefined; // do not let the fallthrough persist "off"
         }
@@ -474,17 +447,7 @@ export async function pushCommand(options = {}) {
     if (shouldEncrypt) {
       // Headless pushes can supply the passphrase via env; interactive
       // pushes are asked as before.
-      let passphrase = process.env.MEMOIR_PASSPHRASE || '';
-      if (!passphrase || passphrase.length < 6) {
-        spinner.stop();
-        ({ passphrase } = await inquirer.prompt([{
-          type: 'password',
-          name: 'passphrase',
-          message: '🔒 Encryption passphrase:',
-          mask: '*',
-          validate: (input) => input.length >= 6 ? true : 'Passphrase must be at least 6 characters'
-        }]));
-      }
+      const passphrase = await getPassphrase();
       spinner.start(chalk.gray('Deriving encryption key...'));
 
       encryptedDir = path.join(os.tmpdir(), `memoir-encrypted-${Date.now()}`);
@@ -497,6 +460,19 @@ export async function pushCommand(options = {}) {
       const token = await createVerifyToken(passphrase);
       await fs.writeFile(path.join(encryptedDir, 'verify.enc'), token);
 
+      if (prior.source && !prior.encrypted) {
+        const verified = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-encryption-check-'));
+        try {
+          await decryptDirectory(encryptedDir, verified, passphrase);
+          const expected = (await listSafeFiles(stagingDir)).sort();
+          const actual = (await listSafeFiles(verified)).sort();
+          if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new Error('Encryption migration verification failed');
+          for (const rel of expected) {
+            if (!(await readSafeFile(stagingDir, rel)).equals(await readSafeFile(verified, rel))) throw new Error('Encryption migration content mismatch');
+          }
+        } finally { await fs.remove(verified); }
+      }
+
       uploadDir = encryptedDir;
       encrypted = true;
     }
@@ -504,11 +480,11 @@ export async function pushCommand(options = {}) {
     spinner.text = chalk.gray('Uploading to ' + (config.provider === 'git' ? 'GitHub' : 'local storage') + '...');
 
     if (config.provider === 'local' || config.provider.includes('local')) {
-      await syncToLocal(config, uploadDir, spinner);
+      await syncToLocal(config, uploadDir, spinner, { verifiedReplacement: encrypted, lockHeld: options.localLockHeld });
     } else if (config.provider === 'git' || config.provider.includes('git')) {
       await syncToGit(config, uploadDir, spinner, {
         cloneDir: remoteCloneDir,
-        preserve: preserveRemoteSession ? ['session.json'] : [],
+        additive: !encrypted,
       });
       remoteCloneDir = null; // syncToGit removed it
     } else {
@@ -557,7 +533,7 @@ export async function pushCommand(options = {}) {
     let workspaceLine = '';
     if (workspaceManifest && workspaceManifest.projects.length > 0) {
       const gitCount = workspaceManifest.projects.filter(p => p.type === 'git' && p.gitRemote).length;
-      const bundleCount = workspaceManifest.projects.filter(p => p.bundleFile).length;
+      const bundleCount = workspaceManifest.projects.filter(p => p.bundleFile || p.type === 'files').length;
       const parts = [];
       if (gitCount > 0) parts.push(`${gitCount} git`);
       if (bundleCount > 0) parts.push(`${bundleCount} bundled`);
@@ -581,7 +557,9 @@ export async function pushCommand(options = {}) {
     }
   } catch (error) {
     spinner.fail(chalk.red('Sync failed: ') + error.message);
+    throw error;
   } finally {
+    if (remotePlainDir) await fs.remove(remotePlainDir).catch(() => {});
     await fs.remove(stagingDir);
     // Clean up encrypted dir if it was created
     if (encryptedDir) {

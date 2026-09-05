@@ -5,7 +5,7 @@ import os from 'os';
 import ora from 'ora';
 import boxen from 'boxen';
 import inquirer from 'inquirer';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { getConfig } from '../config.js';
 import { adapters } from '../adapters/index.js';
 
@@ -49,7 +49,7 @@ export async function viewCommand(options = {}) {
 
   try {
     if (config.provider === 'git') {
-      execSync(`git clone --depth 1 ${config.gitRepo} .`, { cwd: stagingDir, stdio: 'ignore' });
+      execFileSync('git', ['clone', '--depth', '1', '--', config.gitRepo, '.'], { cwd: stagingDir, stdio: 'ignore' });
     } else {
       const resolvedSource = config.localPath.replace(/^~/, os.homedir());
       await fs.copy(resolvedSource, stagingDir);

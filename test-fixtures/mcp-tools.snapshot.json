@@ -68,7 +68,7 @@
         "type": "object",
         "properties": {
           "smart": {
-            "description": "Use AI (Gemini Flash) for deeper analysis — finds semantic duplicates, contradictions, and merge candidates. Requires GEMINI_API_KEY.",
+            "description": "Compatibility option. This MCP tool performs local analysis only; use memoir consolidate --smart in the CLI for external model analysis.",
             "type": "boolean"
           }
         }
@@ -86,7 +86,7 @@
         "properties": {
           "text": {
             "type": "string",
-            "description": "The decision text, or a substring unique to it"
+            "description": "A canonical memory ID, or decision text/substr uniquely identifying a decision"
           },
           "purge": {
             "description": "Also redact the text/why/rejected in place, keeping only a hash. For leaked secrets. Default false.",
@@ -172,6 +172,10 @@
           "filepath": {
             "type": "string",
             "description": "Relative file path within the tool's memory directory"
+          },
+          "project": {
+            "description": "Project directory or identity; defaults to the working project.",
+            "type": "string"
           }
         },
         "required": [
@@ -185,7 +189,7 @@
     },
     {
       "name": "memoir_recall",
-      "description": "Search across all AI tool memories, project configs, and session context for relevant information. Returns the matched passages (not file headers) from the best files, ranked by how well each file covers all your terms — aliases, names, and descriptions weigh more than body prose. Use this before answering questions about a project, a past decision, or a tool. Use memoir_read to see a whole file.",
+      "description": "Search memories and decisions for the current or selected project, including shared memories. Hidden, deleted, superseded, and unrelated project records are excluded. Returns the matched passages (not file headers) from the best files, ranked by how well each file covers all your terms — aliases, names, and descriptions weigh more than body prose. Use this before answering questions about a project, a past decision, or a tool. Use memoir_read to see a whole file.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -199,6 +203,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 30
+          },
+          "project": {
+            "description": "Project directory or identity. Defaults to the current working project; shared memories are also included.",
+            "type": "string"
+          },
+          "budget": {
+            "description": "Total character budget for returned evidence (default 6000).",
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 16000
           }
         },
         "required": [
@@ -211,7 +225,7 @@
     },
     {
       "name": "memoir_remember",
-      "description": "Save a memory to a specific AI tool's memory files. Use this to persist important context, decisions, or facts for future sessions. Give the file frontmatter (type, name, description) and ALWAYS pass aliases — the other names, nicknames, or phrasings someone might search for this under (e.g. a \"vertical swipe feed\" surface should carry aliases like \"tiktok\", \"reels\", \"/tape\"). Recall weights aliases heaviest; a memory without them can only be found by the exact words it happens to use.",
+      "description": "Save a durable, project-scoped memory in Memoir. Returns a stable ID and revision. Use this to persist important context, decisions, or facts for future sessions. Give the file frontmatter (type, name, description) and ALWAYS pass aliases — the other names, nicknames, or phrasings someone might search for this under (e.g. a \"vertical swipe feed\" surface should carry aliases like \"tiktok\", \"reels\", \"/tape\"). Recall weights aliases heaviest; a memory without them can only be found by the exact words it happens to use.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -239,11 +253,19 @@
             }
           },
           "tool": {
-            "description": "Which AI tool to save to: \"claude\", \"gemini\", \"cursor\", etc. Defaults to claude.",
+            "description": "Originating tool, recorded as provenance. Memory is stored in Memoir and is readable across clients.",
             "type": "string"
           },
+          "scope": {
+            "description": "Default project scope; shared is for deliberately reusable preferences across projects.",
+            "type": "string",
+            "enum": [
+              "project",
+              "shared"
+            ]
+          },
           "project": {
-            "description": "Project directory path to save a project-level memory (e.g. CLAUDE.md). If provided, saves to that project directory instead of global tool config.",
+            "description": "Project directory or identity for this memory. Defaults to the working project; does not modify project files.",
             "type": "string"
           }
         },
@@ -251,6 +273,23 @@
           "content",
           "filename"
         ]
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    },
+    {
+      "name": "memoir_resume",
+      "description": "Build an actionable handoff for the current project: goal, next actions, decisions with sources, open questions, and checkout drift. Saved observations never imply that current tests pass.",
+      "inputSchema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "project": {
+            "description": "Project directory; defaults to the configured working project.",
+            "type": "string"
+          }
+        }
       },
       "execution": {
         "taskSupport": "forbidden"
@@ -270,7 +309,7 @@
     },
     {
       "name": "memoir_set_goal",
-      "description": "Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Pinned into CLAUDE.md so future sessions see it.",
+      "description": "Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Available through the scoped session and resume tools.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",

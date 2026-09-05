@@ -1,3 +1,9 @@
+import { parseFrontmatter } from '../commands/validate.js';
+import { visibleMemory } from '../memory/scope.js';
+import { migrateSessionData } from '../session/migrations.js';
+import { readSafeFile, writeSafeFile, safePath, relativeFile, listSafeFiles } from '../security/files.js';
+import { projectIdentity } from '../memory/scope.js';
+import { restoreStoredMemories } from '../memory/store.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -15,7 +21,7 @@ export function detectLocalHomeKey(adapterSource) {
 
   const entries = fs.readdirSync(localProjectsDir)
     .filter(e => !e.startsWith('.'))
-    .filter(e => fs.statSync(path.join(localProjectsDir, e)).isDirectory());
+    .filter(e => fs.lstatSync(path.join(localProjectsDir, e)).isDirectory());
   if (entries.length === 0) return null;
 
   // Prefer the key that matches this machine's homedir encoding.
@@ -65,7 +71,7 @@ function remapProjectPaths(backupDir, adapterSource) {
   if (!fs.existsSync(projectsDir)) return [];
 
   const backupEntries = fs.readdirSync(projectsDir)
-    .filter(e => fs.statSync(path.join(projectsDir, e)).isDirectory());
+    .filter(e => fs.lstatSync(path.join(projectsDir, e)).isDirectory());
   if (backupEntries.length === 0) return [];
 
   // Step 1: Detect the local home key from existing Claude dirs
@@ -221,11 +227,11 @@ async function mergeMemoryDirs(src, dest) {
         const srcStat = await fs.stat(srcPath);
         const destStat = await fs.stat(destPath);
         if (srcStat.mtimeMs > destStat.mtimeMs) {
-          await fs.copy(srcPath, destPath);
+          await writeSafeFile(dest, entry.name, await readSafeFile(src, entry.name));
         }
       } else {
         // File only exists on foreign machine — always copy it
-        await fs.copy(srcPath, destPath);
+        await writeSafeFile(dest, entry.name, await readSafeFile(src, entry.name));
       }
     }
   }
@@ -246,7 +252,7 @@ async function reconcileMemoryIndexes(claudeSource) {
     const memoryMdPath = path.join(memDir, 'MEMORY.md');
     let memoryMd = '';
     if (fs.existsSync(memoryMdPath)) {
-      memoryMd = fs.readFileSync(memoryMdPath, 'utf8');
+      memoryMd = (await readSafeFile(claudeSource, path.relative(claudeSource, memoryMdPath))).toString('utf8');
     }
 
     // Find all .md files in this memory dir
@@ -265,7 +271,8 @@ async function reconcileMemoryIndexes(claudeSource) {
     // Read each unreferenced file to get its name/description from frontmatter
     let additions = '\n\n## Synced from another machine\n';
     for (const file of unreferenced) {
-      const content = fs.readFileSync(path.join(memDir, file), 'utf8');
+      const content = (await readSafeFile(claudeSource, path.relative(claudeSource, path.join(memDir, file)))).toString('utf8');
+      if (!visibleMemory(parseFrontmatter(content).fields, { allProjects: true })) continue;
       // Try to extract name from frontmatter
       const nameMatch = content.match(/^name:\s*(.+)/m);
       const descMatch = content.match(/^description:\s*(.+)/m);
@@ -281,32 +288,36 @@ async function reconcileMemoryIndexes(claudeSource) {
     // Remove old "Synced from another machine" section if it exists, then re-add
     memoryMd = memoryMd.replace(/\n\n## Synced from another machine\n[\s\S]*$/, '');
     memoryMd = memoryMd.trimEnd() + additions;
-    fs.writeFileSync(memoryMdPath, memoryMd);
+    await writeSafeFile(claudeSource, path.relative(claudeSource, memoryMdPath), memoryMd);
   }
 }
 
-async function syncFiles(src, dest, changes) {
+async function syncFiles(src, dest, changes, adapter = null, base = dest) {
   const entries = await fs.readdir(src, { withFileTypes: true });
   for (const entry of entries) {
     const srcPath = path.join(src, entry.name);
     const destPath = path.join(dest, entry.name);
 
+    if (entry.isSymbolicLink()) throw new Error('Backup contains a symlink');
+    if (adapter && !adapter.filter(destPath)) throw new Error('Backup contains a file excluded by the adapter');
     if (entry.isDirectory()) {
-      await fs.ensureDir(destPath);
-      await syncFiles(srcPath, destPath, changes);
+      // Validate an eventual child before creating directories to reject
+      // symlink parents as well as symlink files.
+      await safePath(base, path.relative(base, destPath) + '/.memoir-check', { createParents: true });
+      await syncFiles(srcPath, destPath, changes, adapter, base);
     } else {
       if (await fs.pathExists(destPath)) {
         // Compare modification times — update if backup is newer
         const srcStat = await fs.stat(srcPath);
         const destStat = await fs.stat(destPath);
         if (srcStat.mtimeMs > destStat.mtimeMs) {
-          await fs.copy(srcPath, destPath);
+          await writeSafeFile(dest, entry.name, await readSafeFile(src, entry.name));
           changes.updated.push(destPath);
         } else {
           changes.skipped.push(destPath);
         }
       } else {
-        await fs.copy(srcPath, destPath);
+        await writeSafeFile(dest, entry.name, await readSafeFile(src, entry.name));
         changes.added.push(destPath);
       }
     }
@@ -314,7 +325,32 @@ async function syncFiles(src, dest, changes) {
 }
 
 export async function restoreMemories(sourceDir, spinner, onlyFilter = null, autoYes = false) {
-  let restoredAny = false;
+  if (await fs.pathExists(path.join(sourceDir, 'session.json'))) {
+    const raw = JSON.parse((await readSafeFile(sourceDir, 'session.json')).toString('utf8'));
+    if (migrateSessionData(raw).future) throw new Error('Backup uses a newer session schema. Upgrade Memoir first.');
+  }
+  for (const adapter of adapters) {
+    if (onlyFilter && !onlyFilter.some(f => adapter.name.toLowerCase().includes(f))) continue;
+    const dir = path.join(sourceDir, adapter.name.toLowerCase().replace(/ /g, '-'));
+    if (!await fs.pathExists(dir)) continue;
+    for (const rel of await listSafeFiles(dir)) {
+      const allowed = adapter.customExtract ? adapter.files.includes(rel) : adapter.filter(path.join(adapter.source, rel));
+      if (!allowed) throw new Error('Backup contains an excluded file for ' + adapter.name);
+      if (await fs.pathExists(adapter.source)) await safePath(adapter.source, rel);
+    }
+  }
+  const importedProjects = path.join(sourceDir, 'projects');
+  if (await fs.pathExists(importedProjects)) {
+    const allowed = new Set(['CLAUDE.md','GEMINI.md','CHATGPT.md','AGENTS.md','.cursorrules','.windsurfrules','.aider.conf.yml','.clinerules','.github/copilot-instructions.md']);
+    for (const rel of await listSafeFiles(importedProjects)) {
+      if (!allowed.has(rel.split('/').slice(1).join('/'))) throw new Error('Backup contains an unsupported project file');
+    }
+    if (await fs.pathExists(path.join(sourceDir, 'projects.json'))) {
+      const manifest = JSON.parse((await readSafeFile(sourceDir, 'projects.json')).toString());
+      for (const metadata of Object.values(manifest)) relativeFile(metadata.relative_path);
+    }
+  }
+  let restoredAny = (await restoreStoredMemories(sourceDir)) > 0;
   const allResults = [];
 
   for (const adapter of adapters) {
@@ -393,25 +429,26 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
         if (adapter.customExtract) {
           const files = await fs.readdir(backupDir);
           for (const file of files) {
+            if (!adapter.files.includes(file)) throw new Error('Backup contains an excluded file');
             const destFile = path.join(adapter.source, file);
             if (await fs.pathExists(destFile)) {
               const srcStat = await fs.stat(path.join(backupDir, file));
               const destStat = await fs.stat(destFile);
               if (srcStat.mtimeMs > destStat.mtimeMs) {
-                await fs.copy(path.join(backupDir, file), destFile);
+                await writeSafeFile(adapter.source, file, await readSafeFile(backupDir, file));
                 changes.updated.push(destFile);
               } else {
                 changes.skipped.push(destFile);
               }
             } else {
-              await fs.copy(path.join(backupDir, file), destFile);
+              await writeSafeFile(adapter.source, file, await readSafeFile(backupDir, file));
               changes.added.push(destFile);
             }
           }
         } else {
           spinner.text = `Restoring ${chalk.cyan(adapter.name)} to ${adapter.source}...`;
           await fs.ensureDir(adapter.source);
-          await syncFiles(backupDir, adapter.source, changes);
+          await syncFiles(backupDir, adapter.source, changes, adapter);
         }
 
         // After syncing, reconcile MEMORY.md files
@@ -458,6 +495,8 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
   const projectsDir = path.join(sourceDir, 'projects');
   if (await fs.pathExists(projectsDir)) {
     const projectEntries = await fs.readdir(projectsDir, { withFileTypes: true });
+    const manifestPath = path.join(sourceDir, 'projects.json');
+    const projectManifest = await fs.pathExists(manifestPath) ? JSON.parse((await readSafeFile(sourceDir, 'projects.json')).toString()) : {};
     const projectDirs = projectEntries.filter(e => e.isDirectory() && e.name !== '.git');
 
     if (projectDirs.length > 0) {
@@ -474,26 +513,29 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
 
         // Search for project on local machine (up to 3 levels deep)
         let localProjDir = null;
-        const searchDirs = [home];
-        for (const searchDir of searchDirs) {
-          const candidate = path.join(searchDir, proj.name);
-          if (await fs.pathExists(candidate)) {
+        const metadata = projectManifest[proj.name];
+        if (metadata) {
+          const relative = relativeFile(metadata.relative_path);
+          const candidate = path.join(home, relative);
+          if (await fs.pathExists(candidate) && projectIdentity(candidate) === metadata.identity) {
+            await safePath(home, relative + '/.memoir-check');
             localProjDir = candidate;
-            break;
           }
-          // Check one level deeper
-          try {
-            const entries = await fs.readdir(searchDir, { withFileTypes: true });
-            for (const e of entries) {
-              if (!e.isDirectory() || e.name.startsWith('.')) continue;
-              const deeper = path.join(searchDir, e.name, proj.name);
-              if (await fs.pathExists(deeper)) {
-                localProjDir = deeper;
-                break;
-              }
-            }
-          } catch {}
-          if (localProjDir) break;
+        }
+        if (!metadata) {
+          const candidates = [];
+          const direct = path.join(home, proj.name);
+          if (await fs.pathExists(direct)) candidates.push(direct);
+          for (const e of await fs.readdir(home, { withFileTypes: true })) {
+            if (!e.isDirectory() || e.name.startsWith('.')) continue;
+            const deeper = path.join(home, e.name, proj.name);
+            if (await fs.pathExists(deeper)) candidates.push(deeper);
+          }
+          if (candidates.length === 1) {
+            await safePath(home, path.relative(home, candidates[0]) + '/.memoir-check');
+            localProjDir = candidates[0];
+          }
+          if (candidates.length > 1) console.log(chalk.yellow('  Ambiguous legacy project name; skipped ' + proj.name));
         }
 
         if (!localProjDir) {
@@ -517,6 +559,11 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
         }
 
         if (confirm) {
+          const allowedProjectFiles = new Set(['CLAUDE.md','GEMINI.md','CHATGPT.md','AGENTS.md','.cursorrules','.windsurfrules','.aider.conf.yml','.clinerules','.github/copilot-instructions.md']);
+          for (const rel of await listSafeFiles(backupProjDir)) {
+            if (!allowedProjectFiles.has(rel)) throw new Error('Backup contains an unsupported project file');
+            await safePath(localProjDir, rel);
+          }
           for (const file of files) {
             const src = path.join(backupProjDir, file);
             const dest = path.join(localProjDir, file);
@@ -530,14 +577,14 @@ export async function restoreMemories(sourceDir, spinner, onlyFilter = null, aut
                 const srcStat = await fs.stat(src);
                 const destStat = await fs.stat(dest);
                 if (srcStat.mtimeMs > destStat.mtimeMs) {
-                  await fs.copy(src, dest);
+                  await writeSafeFile(localProjDir, file, await readSafeFile(backupProjDir, file));
                   console.log(chalk.yellow(`    ↻ ${file}`) + chalk.gray(` (updated)`));
                 } else {
                   console.log(chalk.gray(`    = ${file} (up to date)`));
                 }
               } else {
                 await fs.ensureDir(path.dirname(dest));
-                await fs.copy(src, dest);
+                await writeSafeFile(localProjDir, file, await readSafeFile(backupProjDir, file));
                 console.log(chalk.green(`    + ${file}`) + chalk.gray(` (new)`));
               }
               totalRestored++;

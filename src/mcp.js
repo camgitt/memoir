@@ -30,6 +30,11 @@ import { injectInto, detectAvailableTargets } from './session/inject.js';
 import { findDecisions } from './commands/why.js';
 import { matchDecisions, hideDecision } from './session/state.js';
 import { readMemoryFiles, searchMemories, formatRecallResults, withFrontmatterLists } from './memory/search.js';
+import { buildResumeBrief, formatResumeBrief } from './session/brief.js';
+import { rememberMemory, memoryRoot, forgetStoredMemory, readStoredMemories } from './memory/store.js';
+import { memoryFilename, relativeFile, readSafeFile } from './security/files.js';
+import { visibleMemory, sessionView } from './memory/scope.js';
+import { parseFrontmatter } from './commands/validate.js';
 import { capture as track } from './telemetry.js';
 import { createRequire } from 'module';
 
@@ -82,15 +87,17 @@ const _registerTool = server.tool.bind(server);
 server.tool = (name, ...rest) => {
   const handler = rest[rest.length - 1];
   if (typeof handler === 'function') {
-    rest[rest.length - 1] = (...args) => {
-      try { track('mcp_tool_used', { tool: name }); } catch {}
-      // Local, no-network twin of the telemetry event: the ONLY record on
-      // this machine that a memory was READ. events.jsonl logged every write
-      // and sync but not a single recall/why/read, so "is anyone using the
-      // memory?" could only be answered by grepping transcripts. Tool name
-      // only — never the query or the content.
-      appendEvent('mcp_tool_used', { tool: name }).catch(() => {});
-      return handler(...args);
+    rest[rest.length - 1] = async (...args) => {
+      const started = Date.now();
+      let success = false;
+      try {
+        const result = await handler(...args);
+        success = result?.isError !== true;
+        return result;
+      } finally {
+        try { track('mcp_tool_used', { tool: name, success }); } catch {}
+        appendEvent('mcp_tool_used', { tool: name, success, ms: Date.now() - started }).catch(() => {});
+      }
     };
   }
   return _registerTool(name, ...rest);
@@ -142,97 +149,39 @@ server.tool(
 
 server.tool(
   'memoir_recall',
-  'Search across all AI tool memories, project configs, and session context for relevant information. Returns the matched passages (not file headers) from the best files, ranked by how well each file covers all your terms — aliases, names, and descriptions weigh more than body prose. Use this before answering questions about a project, a past decision, or a tool. Use memoir_read to see a whole file.',
+  'Search memories and decisions for the current or selected project, including shared memories. Hidden, deleted, superseded, and unrelated project records are excluded. Returns the matched passages (not file headers) from the best files, ranked by how well each file covers all your terms — aliases, names, and descriptions weigh more than body prose. Use this before answering questions about a project, a past decision, or a tool. Use memoir_read to see a whole file.',
   {
     query: z.string().describe('Search query — keywords or topic to find in memories. Multi-word queries rank files that match every word highest.'),
     limit: z.number().int().min(1).max(30).optional().describe('Max results to return (default 10)'),
+    project: z.string().optional().describe('Project directory or identity. Defaults to the current working project; shared memories are also included.'),
+    budget: z.number().int().min(256).max(16000).optional().describe('Total character budget for returned evidence (default 6000).'),
   },
-  async ({ query, limit }) => {
-    const res = await searchMemories(query, { limit: limit || 10 });
+  async ({ query, limit, project, budget }) => {
+    const res = await searchMemories(query, { limit: limit || 10, project, budget });
     return { content: [{ type: 'text', text: formatRecallResults(query, res) }] };
   }
 );
 
 server.tool(
   'memoir_remember',
-  'Save a memory to a specific AI tool\'s memory files. Use this to persist important context, decisions, or facts for future sessions. Give the file frontmatter (type, name, description) and ALWAYS pass aliases — the other names, nicknames, or phrasings someone might search for this under (e.g. a "vertical swipe feed" surface should carry aliases like "tiktok", "reels", "/tape"). Recall weights aliases heaviest; a memory without them can only be found by the exact words it happens to use.',
+  'Save a durable, project-scoped memory in Memoir. Returns a stable ID and revision. Use this to persist important context, decisions, or facts for future sessions. Give the file frontmatter (type, name, description) and ALWAYS pass aliases — the other names, nicknames, or phrasings someone might search for this under (e.g. a "vertical swipe feed" surface should carry aliases like "tiktok", "reels", "/tape"). Recall weights aliases heaviest; a memory without them can only be found by the exact words it happens to use.',
   {
     content: z.string().describe('The memory content to save (markdown, ideally with --- frontmatter: type, name, description)'),
     filename: z.string().describe('Filename for the memory (e.g. "auth-setup.md", "project-goals.md")'),
     aliases: z.array(z.string()).optional().describe('Other names/phrasings this memory should be findable under. Written into frontmatter `aliases:`. Strongly recommended.'),
     tags: z.array(z.string()).optional().describe('Topic tags. Written into frontmatter `tags:`.'),
-    tool: z.string().optional().describe('Which AI tool to save to: "claude", "gemini", "cursor", etc. Defaults to claude.'),
-    project: z.string().optional().describe('Project directory path to save a project-level memory (e.g. CLAUDE.md). If provided, saves to that project directory instead of global tool config.'),
+    tool: z.string().optional().describe('Originating tool, recorded as provenance. Memory is stored in Memoir and is readable across clients.'),
+    scope: z.enum(['project', 'shared']).optional().describe('Default project scope; shared is for deliberately reusable preferences across projects.'),
+    project: z.string().optional().describe('Project directory or identity for this memory. Defaults to the working project; does not modify project files.'),
   },
-  async ({ content, filename, aliases, tags, tool, project }) => {
-    content = withFrontmatterLists(content, { aliases, tags });
-    // Project-level memory
-    if (project) {
-      const projectDir = project.startsWith('/') ? project : path.join(home, project);
-      if (!(await fs.pathExists(projectDir))) {
-        return { content: [{ type: 'text', text: `Project directory not found: ${projectDir}` }] };
-      }
-
-      // Default to CLAUDE.md for project-level memories.
-      // Guards mirror the global branch below and memoir_read above:
-      // model-supplied filename must be a bare markdown name — no
-      // separators, no traversal — and must resolve inside the project
-      // dir. Without this, filename:".zshrc" appends to a shell rc
-      // (code execution on next shell) and "package.json" corrupts
-      // real files.
-      let targetFile = filename || 'CLAUDE.md';
-      if (!targetFile.endsWith('.md')) targetFile += '.md';
-      if (targetFile.includes('/') || targetFile.includes('\\') || targetFile.includes('..')) {
-        return { content: [{ type: 'text', text: `Invalid filename: ${filename} (must be a bare .md name)` }] };
-      }
-      const projBase = path.resolve(projectDir);
-      const targetPath = path.resolve(projBase, targetFile);
-      if (!targetPath.startsWith(projBase + path.sep)) {
-        return { content: [{ type: 'text', text: `Invalid filename: ${filename}` }] };
-      }
-
-      // Append to existing file or create new
-      if (await fs.pathExists(targetPath)) {
-        const existing = await fs.readFile(targetPath, 'utf8');
-        await fs.writeFile(targetPath, existing + '\n\n' + content);
-      } else {
-        await fs.writeFile(targetPath, content);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Saved to ${targetPath}` }]
-      };
+  async ({ content, filename, aliases, tags, tool, project, scope }) => {
+    try {
+      memoryFilename(filename);
+      const saved = await rememberMemory({ content, filename, aliases, tags, tool, project, scope });
+      return { content: [{ type: 'text', text: 'Memory saved: ' + saved.id + ' (revision ' + saved.revision + ', project ' + saved.project + '). Read with tool "memoir" and filepath "' + saved.path + '".' }] };
+    } catch (err) {
+      return { isError: true, content: [{ type: 'text', text: err.message }] };
     }
-
-    // Global tool memory
-    const toolKey = (tool || 'claude').toLowerCase();
-
-    // Find the right directory for the tool
-    let targetDir;
-    if (toolKey === 'claude') {
-      // Save to Claude's memory system
-      const claudeMemDir = path.join(home, '.claude', 'projects', '-Users-' + path.basename(home), 'memory');
-      await fs.ensureDir(claudeMemDir);
-      targetDir = claudeMemDir;
-    } else if (toolKey === 'gemini') {
-      targetDir = path.join(home, '.gemini');
-    } else if (toolKey === 'cursor') {
-      const cursorDir = process.platform === 'win32'
-        ? path.join(process.env.APPDATA || '', 'Cursor', 'User', 'rules')
-        : path.join(home, 'Library', 'Application Support', 'Cursor', 'User', 'rules');
-      await fs.ensureDir(cursorDir);
-      targetDir = cursorDir;
-    } else {
-      return { content: [{ type: 'text', text: `Unsupported tool for writing: ${toolKey}. Supported: claude, gemini, cursor` }] };
-    }
-
-    if (!filename.endsWith('.md')) filename += '.md';
-    const targetPath = path.join(targetDir, filename);
-    await fs.writeFile(targetPath, content);
-
-    return {
-      content: [{ type: 'text', text: `Memory saved to ${targetPath}` }]
-    };
   }
 );
 
@@ -244,6 +193,11 @@ server.tool(
   },
   async ({ tool }) => {
     const allFiles = [];
+    if (!tool || tool.toLowerCase() === 'memoir') {
+      for (const file of await readStoredMemories()) {
+        if (visibleMemory(parseFrontmatter(file.content).fields)) allFiles.push({ tool: 'Memoir', icon: '🧠', path: file.path, size: file.content.length });
+      }
+    }
 
     for (const adapter of adapters) {
       if (tool) {
@@ -253,6 +207,7 @@ server.tool(
 
       const files = await readMemoryFiles(adapter);
       for (const f of files) {
+        if (!visibleMemory(f)) continue;
         allFiles.push({ tool: adapter.name, icon: adapter.icon, path: f.path, size: f.content.length });
       }
     }
@@ -289,35 +244,35 @@ server.tool(
   {
     tool: z.string().describe('Tool name: "claude", "gemini", "cursor", etc.'),
     filepath: z.string().describe('Relative file path within the tool\'s memory directory'),
+    project: z.string().optional().describe('Project directory or identity; defaults to the working project.'),
   },
-  async ({ tool, filepath }) => {
-    const toolKey = tool.toLowerCase();
-    const adapter = adapters.find(a => a.name.toLowerCase().includes(toolKey));
-
-    if (!adapter) {
-      return { content: [{ type: 'text', text: `Unknown tool: ${tool}. Available: ${adapters.map(a => a.name).join(', ')}` }] };
-    }
-
-    // Containment: filepath comes from the model, and the model reads
-    // attacker-influenceable text all day. Without this, "../.ssh/id_rsa"
-    // resolves outside the adapter dir and the file is returned verbatim.
-    const base = path.resolve(adapter.source);
-    const fullPath = path.resolve(base, filepath);
-    if (fullPath !== base && !fullPath.startsWith(base + path.sep)) {
-      return { content: [{ type: 'text', text: `Invalid path: ${filepath} (must stay inside ${adapter.name}'s directory)` }] };
-    }
-
-    if (!(await fs.pathExists(fullPath))) {
-      return { content: [{ type: 'text', text: `File not found: ${filepath} in ${adapter.name}` }] };
-    }
-
+  async ({ tool, filepath, project }) => {
     try {
-      const content = await fs.readFile(fullPath, 'utf8');
-      return {
-        content: [{ type: 'text', text: `── ${adapter.name} / ${filepath} ──\n\n${content}` }]
-      };
+      const rel = relativeFile(filepath);
+      const toolKey = tool.toLowerCase();
+      let root, name;
+      if (toolKey === 'memoir') {
+        if (!/^[a-f0-9]{64}\.md$/.test(rel)) throw new Error('Use the memory ID returned by remember or recall.');
+        root = memoryRoot;
+        name = 'Memoir';
+      } else {
+        const adapter = adapters.find(a => a.name.toLowerCase().includes(toolKey));
+        if (!adapter) throw new Error('Unknown memory tool');
+        const permitted = adapter.customExtract ? adapter.files.includes(rel) : adapter.filter(path.join(adapter.source, rel));
+        if (!permitted) throw new Error('This file is excluded from the memory adapter');
+        root = adapter.source;
+        name = adapter.name;
+      }
+      let content = (await readSafeFile(root, rel)).toString('utf8');
+      const { fields } = parseFrontmatter(content);
+      if (toolKey.includes('claude')) fields.claudeProjectKey = rel.match(/^projects\/([^/]+)\//)?.[1];
+      if (!visibleMemory(fields, { project })) throw new Error('This memory is hidden, expired, superseded, or belongs to another project.');
+      // Generated session blocks are projections; authoritative decisions are
+      // retrieved from state so old projections cannot bypass a deletion.
+      content = content.replace(/<!--\s*memoir:session-block[^>]*-->[\s\S]*?<!--\s*\/memoir:session-block\s*-->/g, '');
+      return { content: [{ type: 'text', text: '── ' + name + ' / ' + rel + ' ──\n\n' + content }] };
     } catch (err) {
-      return { content: [{ type: 'text', text: `Error reading file: ${err.message}` }] };
+      return { isError: true, content: [{ type: 'text', text: err.message }] };
     }
   }
 );
@@ -349,47 +304,19 @@ server.tool(
   'memoir_consolidate',
   'Analyze all AI tool memories for duplicates, stale files, contradictions, and bloat. Returns a consolidation report with actionable suggestions. Use this to help users keep their AI memory clean.',
   {
-    smart: z.boolean().optional().describe('Use AI (Gemini Flash) for deeper analysis — finds semantic duplicates, contradictions, and merge candidates. Requires GEMINI_API_KEY.'),
+    smart: z.boolean().optional().describe('Compatibility option. This MCP tool performs local analysis only; use memoir consolidate --smart in the CLI for external model analysis.'),
   },
   async ({ smart }) => {
-    // Collect all memory files
     const allFiles = [];
+    for (const file of await readStoredMemories()) {
+      if (visibleMemory(parseFrontmatter(file.content).fields)) allFiles.push({
+        ...file, size: file.content.length, mtime: Date.parse(parseFrontmatter(file.content).fields.updated) || 0,
+      });
+    }
     for (const adapter of adapters) {
-      const files = [];
-      if (adapter.customExtract) {
-        for (const file of adapter.files) {
-          const filePath = path.join(adapter.source, file);
-          if (await fs.pathExists(filePath)) {
-            try {
-              const content = await fs.readFile(filePath, 'utf8');
-              const stat = await fs.stat(filePath);
-              files.push({ path: file, fullPath: filePath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
-            } catch {}
-          }
-        }
-      } else if (await fs.pathExists(adapter.source)) {
-        const walk = async (dir, prefix = '') => {
-          let entries;
-          try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name);
-            const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
-            if (entry.isDirectory()) {
-              if (adapter.filter(fullPath)) await walk(fullPath, relPath);
-            } else if (/\.(md|json|yml|yaml)$/.test(entry.name)) {
-              if (adapter.filter(fullPath)) {
-                try {
-                  const content = await fs.readFile(fullPath, 'utf8');
-                  const stat = await fs.stat(fullPath);
-                  files.push({ path: relPath, fullPath, content, tool: adapter.name, icon: adapter.icon, mtime: stat.mtimeMs, size: content.length });
-                } catch {}
-              }
-            }
-          }
-        };
-        await walk(adapter.source);
+      for (const doc of await readMemoryFiles(adapter)) {
+        if (visibleMemory(doc)) allFiles.push({ ...doc, size: doc.content.length, mtime: doc.mtimeMs });
       }
-      allFiles.push(...files);
     }
 
     if (allFiles.length === 0) {
@@ -480,7 +407,7 @@ async function refreshPinnedBlock() {
 
 server.tool(
   'memoir_set_goal',
-  'Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Pinned into CLAUDE.md so future sessions see it.',
+  'Set the current goal for this session. Use when the user states what they want to work on, or when a clear focus emerges. Available through the scoped session and resume tools.',
   { text: z.string().describe('The goal, one short sentence') },
   async ({ text }) => {
     const state = await addGoal(text);
@@ -559,12 +486,12 @@ server.tool(
   'Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided.',
   {},
   async () => {
-    const state = await readSession();
+    const state = sessionView(await readSession());
     const machine = await getMachineId();
     const goals = state.current.goals.map(g => `- ${g.text}`).join('\n') || '(none)';
     const nexts = state.current.next_actions.map(n => `- [ ] ${n.text}`).join('\n') || '(none)';
     const questions = state.current.open_questions.map(q => `- ${q.text}`).join('\n') || '(none)';
-    const decisions = state.current.decisions.slice(0, 5).map(d => {
+    const decisions = state.current.decisions.filter(d => visibleMemory(d)).slice(0, 5).map(d => {
       let line = `- ${d.text}`;
       if (d.why) line += ` — *${d.why}*`;
       return line;
@@ -636,10 +563,16 @@ server.tool(
   'memoir_forget',
   'Forget a recorded decision — permanently hides it from the pinned block, memoir_why, and every synced machine (an absolute tombstone; there is no un-forget). Use when the user says a decision is wrong, obsolete, or was captured by mistake, or when a secret leaked into a decision. Refuses to act if the text matches more than one decision — call again with a more specific string. Pass purge=true to also redact the text in place (for secrets).',
   {
-    text: z.string().describe('The decision text, or a substring unique to it'),
+    text: z.string().describe('A canonical memory ID, or decision text/substr uniquely identifying a decision'),
     purge: z.boolean().optional().describe('Also redact the text/why/rejected in place, keeping only a hash. For leaked secrets. Default false.'),
   },
   async ({ text, purge }) => {
+    if (/^[a-f0-9]{64}$/.test(text)) {
+      try {
+        const result = await forgetStoredMemory(text, { purge: !!purge });
+        return { content: [{ type: 'text', text: 'Forgotten memory ' + result.id + '. The deletion will sync on push. ' + (purge ? 'Local record and revision history purged; older remote backups and Git history are not erased.' : '') }] };
+      } catch (err) { return { isError: true, content: [{ type: 'text', text: err.message }] }; }
+    }
     const state = await readSession();
     const matches = matchDecisions(state, text);
     if (matches.length === 0) {
@@ -660,7 +593,17 @@ server.tool(
         try { await injectInto(target, rendered); } catch {}
       }
     } catch {}
-    return { content: [{ type: 'text', text: `${res.purged ? 'Forgotten and purged' : 'Forgotten'}: "${matches[0].text}". The tombstone propagates on the next push.` }] };
+    return { content: [{ type: 'text', text: res.purged ? 'Forgotten and purged locally. The tombstone propagates on the next push; historical backups still require removal.' : 'Forgotten. The tombstone propagates on the next push.' }] };
+  }
+);
+
+server.tool(
+  'memoir_resume',
+  'Build an actionable handoff for the current project: goal, next actions, decisions with sources, open questions, and checkout drift. Saved observations never imply that current tests pass.',
+  { project: z.string().optional().describe('Project directory; defaults to the configured working project.') },
+  async ({ project }) => {
+    const brief = await buildResumeBrief(project);
+    return { content: [{ type: 'text', text: formatResumeBrief(brief) }] };
   }
 );
 

@@ -1,3 +1,4 @@
+import { repositoryState } from '../memory/repository.js';
 // Session state: the canonical source of truth for "what are we working on"
 // across sessions and machines. Rendered into CLAUDE.md (and other tools) as a
 // pinned block at the top, guaranteed to load.
@@ -9,6 +10,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
+import { projectIdentity, visibleMemory } from '../memory/scope.js';
 import { withSessionLock } from './lock.js';
 import { SCHEMA_VERSION, migrateSessionData, emptySession } from './migrations.js';
 // NOTE: events/log.js imports getMachineId FROM this module — this is a
@@ -39,13 +41,13 @@ const MAX_NEXT = 8;
 // → 09-04) while the store sat at exactly 8. Parked items stay rendered and
 // completable; only when THIS list overflows is anything dropped, and that
 // emits an event.
-const MAX_PARKED = 20;
+const MAX_PARKED = Infinity;
 // Completion tombstones kept so merges can't resurrect finished actions.
 // Must outlive every stale copy that might still carry the item.
-const MAX_COMPLETED_TOMBSTONES = 50;
+const MAX_COMPLETED_TOMBSTONES = Infinity;
 const MAX_QUESTIONS = 5;
 const MAX_DECISIONS_RECENT = 10;
-const MAX_HISTORY = 30;
+const MAX_HISTORY = Infinity;
 
 // ── Decision identity ────────────────────────────────────────────
 //
@@ -68,9 +70,9 @@ export function decisionHash(text) {
 
 function decisionKey(item) {
   if (!item) return null;
-  if (item.text_hash) return `sha256:${item.text_hash}`;
+  if (item.text_hash) return 'sha256:' + item.text_hash + (item.project ? ':' + item.project : '');
   if (!item.text) return null;
-  return `sha256:${decisionHash(item.text)}`;
+  return 'sha256:' + decisionHash(item.text) + (item.project ? ':' + item.project : '');
 }
 
 // Cap decisions WITHOUT evicting tombstones. A plain `slice(0, cap)` after
@@ -80,7 +82,7 @@ function decisionKey(item) {
 // visible entries get separate budgets, same as unionByText below.
 function capDecisions(list = [], cap = MAX_DECISIONS_RECENT) {
   const visible = list.filter((d) => d && !d.hidden).slice(0, cap);
-  const tombstones = list.filter((d) => d && d.hidden).slice(0, cap);
+  const tombstones = list.filter((d) => d && d.hidden);
   return [...visible, ...tombstones];
 }
 
@@ -197,6 +199,7 @@ export async function readSession() {
 // critical section (see the mutators below and lock.js).
 export async function writeSession(state) {
   await fs.ensureDir(CONFIG_DIR);
+  partitionWorkingState(state);
   state.version = SCHEMA_VERSION;
   state.updated_at = new Date().toISOString();
   const tmp = `${SESSION_PATH}.tmp-${process.pid}`;
@@ -229,16 +232,18 @@ export async function addGoal(text) {
     const machineId = await touchMachine(state);
     const key = decisionIdentity(text);
     // Re-setting an existing goal moves it to the front; it is not a duplicate.
-    state.current.goals = (state.current.goals || []).filter((g) => decisionIdentity(g?.text) !== key);
+    state.current.goals = (state.current.goals || []).filter((g) => decisionIdentity(g?.text) !== key || !visibleMemory(g));
     state.current.goals.unshift({
       text,
+      id: crypto.randomUUID(),
+      project: projectIdentity(),
       machine_id: machineId,
       set_on: new Date().toISOString(),
     });
     // The cap still applies (a pinned block with ten goals is no focus at
     // all) but a replaced goal is reported, never silently dropped.
     const replaced = state.current.goals.slice(MAX_GOALS);
-    state.current.goals = state.current.goals.slice(0, MAX_GOALS);
+
     await writeSession(state);
     await appendEvent('goal_set', { replaced: replaced.length }); // no PII/content — count-and-type only
     Object.defineProperty(state, 'replacedGoals', { value: replaced, enumerable: false });
@@ -252,15 +257,17 @@ export async function addNext(text) {
     const machineId = await touchMachine(state);
     // Dedupe by text (case-insensitive)
     const normalized = text.trim().toLowerCase();
-    const exists = state.current.next_actions.some(a => a.text.trim().toLowerCase() === normalized);
+    const exists = state.current.next_actions.some(a => a.text.trim().toLowerCase() === normalized && visibleMemory(a));
     let parked = [];
     if (!exists) {
       // Re-adding a parked item is "bring it back", not a duplicate.
       state.current.parked_actions = (state.current.parked_actions || [])
-        .filter((a) => a?.text?.trim().toLowerCase() !== normalized);
+        .filter((a) => a?.text?.trim().toLowerCase() !== normalized || !visibleMemory(a));
       state.current.next_actions.push({
         text,
-        machine_id: machineId,
+        id: crypto.randomUUID(),
+      project: projectIdentity(),
+      machine_id: machineId,
         added: new Date().toISOString(),
       });
       ({ live: state.current.next_actions, parked } = parkOverflow(state.current.next_actions));
@@ -302,14 +309,16 @@ export async function completeGoal(match) {
     const state = await readSession();
     await touchMachine(state);
     const normalized = String(match).trim().toLowerCase();
-    const idx = (state.current.goals || []).findIndex((g) => g?.text?.trim().toLowerCase().includes(normalized));
+    state.current.goals = [...(state.current.goals || []), ...(state.current.archived_goals || [])];
+    state.current.archived_goals = [];
+    const idx = state.current.goals.findIndex(g => visibleMemory(g) && g?.text?.trim().toLowerCase().includes(normalized));
     const completed = idx >= 0;
     if (completed) {
       const [removed] = state.current.goals.splice(idx, 1);
       const key = removed.text.trim().toLowerCase();
       state.current.completed_goals = [
-        { text: removed.text, done_at: new Date().toISOString() },
-        ...(state.current.completed_goals || []).filter((c) => c && c.text && c.text.trim().toLowerCase() !== key),
+        { text: removed.text, project: removed.project, done_at: new Date().toISOString() },
+        ...(state.current.completed_goals || []).filter((c) => c && c.text && decisionKey(c) !== decisionKey(removed)),
       ].slice(0, MAX_COMPLETED_TOMBSTONES);
     }
     await writeSession(state);
@@ -326,14 +335,14 @@ export async function completeNext(textOrIndex) {
     let idx = -1;
     let list = state.current.next_actions;
     if (typeof textOrIndex === 'number') {
-      idx = textOrIndex;
+      idx = list.map((item, index) => ({ item, index })).filter(x => visibleMemory(x.item))[textOrIndex]?.index ?? -1;
     } else {
       const normalized = String(textOrIndex).trim().toLowerCase();
-      idx = list.findIndex(a => a.text.trim().toLowerCase().includes(normalized));
+      idx = list.findIndex(a => visibleMemory(a) && a.text.trim().toLowerCase().includes(normalized));
       if (idx < 0) {
         // Parked items are still real next-actions — finishing one must work.
         list = state.current.parked_actions || [];
-        idx = list.findIndex(a => a?.text?.trim().toLowerCase().includes(normalized));
+        idx = list.findIndex(a => visibleMemory(a) && a?.text?.trim().toLowerCase().includes(normalized));
       }
     }
     const completed = idx >= 0;
@@ -347,9 +356,9 @@ export async function completeNext(textOrIndex) {
       const [removed] = list.splice(idx, 1);
       const key = removed.text.trim().toLowerCase();
       state.current.completed_actions = [
-        { text: removed.text, done_at: new Date().toISOString() },
+        { text: removed.text, project: removed.project, done_at: new Date().toISOString() },
         ...(state.current.completed_actions || []).filter(
-          c => c && c.text && c.text.trim().toLowerCase() !== key
+          c => c && c.text && decisionKey(c) !== decisionKey(removed)
         ),
       ].slice(0, MAX_COMPLETED_TOMBSTONES);
     }
@@ -366,6 +375,8 @@ export async function addNote(text, opts = {}) {
     const state = await readSession();
     const machineId = await touchMachine(state);
     const decision = {
+      id: crypto.randomUUID(),
+      project: projectIdentity(opts.project),
       text,
       machine_id: machineId,
       date: new Date().toISOString(),
@@ -373,7 +384,6 @@ export async function addNote(text, opts = {}) {
     if (opts.why) decision.why = opts.why;
     if (opts.rejected) decision.rejected = opts.rejected;
     state.current.decisions.unshift(decision);
-    state.current.decisions = capDecisions(state.current.decisions);
     await writeSession(state);
     // Count/booleans only — never the decision text itself.
     await appendEvent('decision_captured', { has_why: !!opts.why, has_rejected: !!opts.rejected });
@@ -389,7 +399,7 @@ export async function addNote(text, opts = {}) {
 export function matchDecisions(state, query) {
   const q = decisionIdentity(query);
   if (!q) return [];
-  const decisions = (state.current?.decisions || []).filter((d) => d && d.text && !d.hidden);
+  const decisions = allDecisions(state).filter((d) => d && d.text && visibleMemory(d));
   const exact = decisions.filter((d) => decisionIdentity(d.text) === q);
   if (exact.length) return exact;
   return decisions.filter((d) =>
@@ -416,8 +426,10 @@ export async function hideDecision(text, { purge = false } = {}) {
     const state = await readSession();
     await touchMachine(state);
     const key = decisionIdentity(text);
+    state.current.decisions = allDecisions(state);
+    state.current.archived_decisions = [];
     const idx = (state.current.decisions || []).findIndex(
-      (d) => d && d.text && !d.hidden && decisionIdentity(d.text) === key
+      (d) => d && d.text && visibleMemory(d) && decisionIdentity(d.text) === key
     );
     if (idx < 0) return { state, hidden: false };
 
@@ -431,7 +443,6 @@ export async function hideDecision(text, { purge = false } = {}) {
       delete tomb.rejected;
     }
     state.current.decisions[idx] = tomb;
-    state.current.decisions = capDecisions(state.current.decisions);
     await writeSession(state);
     await appendEvent('decision_hidden', { purged: !!purge });
     return { state, hidden: true, purged: !!purge };
@@ -444,10 +455,12 @@ export async function addQuestion(text) {
     const machineId = await touchMachine(state);
     state.current.open_questions.push({
       text,
+      id: crypto.randomUUID(),
+      project: projectIdentity(),
       machine_id: machineId,
       asked: new Date().toISOString(),
     });
-    state.current.open_questions = state.current.open_questions.slice(-MAX_QUESTIONS);
+
     await writeSession(state);
     return state;
   });
@@ -455,17 +468,22 @@ export async function addQuestion(text) {
 
 // Roll up the current state into a history entry. Use at session end / push.
 // Does not clear `current` — these are "the working set," not per-session scratch.
-export async function recordSessionEnd({ summary, filesTouched = [], durationMin = null, sessionId = null } = {}) {
+export async function recordSessionEnd({ summary, filesTouched = [], durationMin = null, sessionId = null, project } = {}) {
   return withSessionLock(SESSION_LOCK_PATH, async () => {
     const state = await readSession();
     const machineId = await touchMachine(state);
     const entry = {
       date: new Date().toISOString(),
       machine_id: machineId,
+      project: projectIdentity(project),
       summary: summary || '',
       files_touched: filesTouched.slice(0, 20),
       duration_min: durationMin,
     };
+    const repo = repositoryState(project || process.env.MEMOIR_PROJECT_ROOT || process.cwd());
+    entry.repo_head = repo.head;
+    entry.branch = repo.branch;
+    entry.working_tree_dirty = repo.dirty;
     if (sessionId) entry.session_id = sessionId;
     // Autopush fires after every response, so one long session used to fill
     // all five "Recent sessions" rows with itself. Same session → update its
@@ -497,7 +515,8 @@ export function mergeSessions(local, remote) {
     updated_at: latest(local.updated_at, remote.updated_at),
     machines: { ...remote.machines, ...local.machines }, // local wins for same machine
     current: {
-      goals: unionByText(local.current?.goals, remote.current?.goals, 'set_on', MAX_GOALS),
+      goals: unionByText([...(local.current?.goals || []), ...(local.current?.archived_goals || [])], [...(remote.current?.goals || []), ...(remote.current?.archived_goals || [])], 'set_on', Infinity),
+      archived_goals: [],
       // Live + parked from both sides pooled, then re-split below: the
       // MAX_NEXT newest are live, the rest parked. A capped union here used
       // to evict the oldest on merge just as silently as addNext did.
@@ -506,8 +525,10 @@ export function mergeSessions(local, remote) {
         [...(remote.current?.next_actions || []), ...(remote.current?.parked_actions || [])],
         'added', Infinity),
       parked_actions: [],
-      open_questions: unionByText(local.current?.open_questions, remote.current?.open_questions, 'asked', MAX_QUESTIONS),
-      decisions: unionByText(local.current?.decisions, remote.current?.decisions, 'date', MAX_DECISIONS_RECENT),
+      open_questions: unionByText([...(local.current?.open_questions || []), ...(local.current?.archived_questions || [])], [...(remote.current?.open_questions || []), ...(remote.current?.archived_questions || [])], 'asked', Infinity),
+      archived_questions: [],
+      decisions: unionByText(allDecisions(local), allDecisions(remote), 'date', Infinity),
+      archived_decisions: [],
     },
     history: mergeHistory(local.history, remote.history),
   };
@@ -520,7 +541,7 @@ export function mergeSessions(local, remote) {
   // without them and wrote that back locally, undoing two goal retirements
   // and a parked item. Local wins over remote for unknown keys because an
   // old build cannot merge what it cannot read.
-  const KNOWN_CURRENT = new Set(['goals', 'next_actions', 'parked_actions', 'open_questions', 'decisions', 'completed_actions', 'completed_goals']);
+  const KNOWN_CURRENT = new Set(['goals', 'next_actions', 'parked_actions', 'open_questions', 'decisions', 'archived_decisions', 'archived_goals', 'archived_questions', 'completed_actions', 'completed_goals']);
   for (const src of [remote.current || {}, local.current || {}]) {
     for (const [k, v] of Object.entries(src)) {
       if (!KNOWN_CURRENT.has(k)) merged.current[k] = v;
@@ -531,7 +552,7 @@ export function mergeSessions(local, remote) {
   const goalTombstones = unionTombstones(local.current?.completed_goals, remote.current?.completed_goals);
   merged.current.completed_goals = goalTombstones;
   merged.current.goals = merged.current.goals.filter((g) => {
-    const t = goalTombstones.find((c) => c.text.trim().toLowerCase() === g.text.trim().toLowerCase());
+    const t = goalTombstones.find((c) => decisionKey(c) === decisionKey(g));
     return !t || new Date(g.set_on || 0) > new Date(t.done_at);
   });
 
@@ -549,7 +570,7 @@ export function mergeSessions(local, remote) {
   merged.current.completed_actions = tombstones;
   merged.current.next_actions = merged.current.next_actions.filter(a => {
     const t = tombstones.find(
-      c => c.text.trim().toLowerCase() === a.text.trim().toLowerCase()
+      c => decisionKey(c) === decisionKey(a)
     );
     return !t || new Date(a.added || 0) > new Date(t.done_at);
   });
@@ -568,6 +589,7 @@ export function mergeSessions(local, remote) {
     }
   }
 
+  partitionWorkingState(merged);
   return merged;
 }
 
@@ -585,6 +607,13 @@ function unionByText(a = [], b = [], dateField, cap) {
     if (!existing || new Date(item[dateField] || 0) > new Date(existing[dateField] || 0)) {
       byText.set(key, item);
     }
+  }
+
+  const stones = [...a, ...b].filter(i => i?.hidden);
+  for (const [key, item] of byText) {
+    if (item.project || item.hidden) continue;
+    const hash = item.text_hash || decisionHash(item.text);
+    if (stones.some(t => t.project && (t.text_hash || decisionHash(t.text)) === hash)) byText.delete(key);
   }
 
   // A tombstone is STICKY: once any machine marks an entry hidden, the merged
@@ -620,7 +649,7 @@ function unionByText(a = [], b = [], dateField, cap) {
   const all = Array.from(byText.values())
     .sort((x, y) => new Date(y[dateField] || 0) - new Date(x[dateField] || 0));
   const visible = all.filter((i) => !i.hidden).slice(0, cap === Infinity ? undefined : cap);
-  const tombstones = all.filter((i) => i.hidden).slice(0, cap === Infinity ? undefined : cap);
+  const tombstones = all.filter((i) => i.hidden);
   return [...visible, ...tombstones];
 }
 
@@ -628,7 +657,7 @@ function unionTombstones(a = [], b = []) {
   const byText = new Map();
   for (const item of [...(a || []), ...(b || [])]) {
     if (!item || !item.text || !item.done_at) continue;
-    const key = item.text.trim().toLowerCase();
+    const key = decisionKey(item);
     const existing = byText.get(key);
     if (!existing || new Date(item.done_at) > new Date(existing.done_at)) {
       byText.set(key, item);
@@ -676,3 +705,20 @@ export const paths = {
   machineId: MACHINE_ID_PATH,
   sessionLock: SESSION_LOCK_PATH,
 };
+
+export function allDecisions(state) {
+  return [...(state?.current?.decisions || []), ...(state?.current?.archived_decisions || [])];
+}
+
+function partitionWorkingState(state) {
+  state.current ||= {};
+  for (const [live, archive, date, cap] of [
+    ['decisions', 'archived_decisions', 'date', MAX_DECISIONS_RECENT],
+    ['goals', 'archived_goals', 'set_on', MAX_GOALS],
+    ['open_questions', 'archived_questions', 'asked', MAX_QUESTIONS],
+  ]) {
+    const all = unionByText(state.current[live], state.current[archive], date, Infinity);
+    state.current[live] = capDecisions(all, cap);
+    state.current[archive] = all.filter(item => !item.hidden).slice(cap);
+  }
+}

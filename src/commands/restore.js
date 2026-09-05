@@ -6,13 +6,14 @@ import ora from 'ora';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
 import inquirer from 'inquirer';
+import { readSafeFile, writeSafeFile, relativeFile } from '../security/files.js';
 import { getConfig, autoSetup } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
 import { detectLocalHomeKey } from '../adapters/restore.js';
 import { restoreWorkspace } from '../workspace/tracker.js';
 import { getSession } from '../cloud/auth.js';
-import { unbundleToDir } from '../cloud/storage.js';
+import { unbundleToDir, readBoundedResponse } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
 import { withSessionLock } from '../session/lock.js';
@@ -34,7 +35,7 @@ export async function restoreCommand(options = {}) {
     const setupSpinner = ora({ text: chalk.gray('Setting up memoir automatically...'), spinner: 'dots' }).start();
     config = await autoSetup();
     if (config) {
-      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo}`));
+      setupSpinner.succeed(chalk.green('Auto-configured') + chalk.gray(` → ${config.gitRepo || config.localPath}`));
     } else {
       setupSpinner.fail(chalk.red('Could not detect GitHub username'));
       console.log('\n' + boxen(
@@ -75,8 +76,9 @@ export async function restoreCommand(options = {}) {
 
       // Verify passphrase first
       const verifyPath = path.join(stagingDir, 'verify.enc');
-      let passphrase;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      let passphrase = process.env.MEMOIR_PASSPHRASE;
+      if (!passphrase && !process.stdin.isTTY) throw new Error('Set MEMOIR_PASSPHRASE to restore this encrypted backup.');
+      for (let attempt = 0; !passphrase && attempt < 3; attempt++) {
         const { pass } = await inquirer.prompt([{
           type: 'password',
           name: 'pass',
@@ -97,8 +99,7 @@ export async function restoreCommand(options = {}) {
       }
 
       if (!passphrase) {
-        console.log(chalk.red('\n  Too many failed attempts.'));
-        return;
+        throw new Error('Too many failed passphrase attempts');
       }
 
       spinner.start(chalk.gray('Decrypting...'));
@@ -116,7 +117,7 @@ export async function restoreCommand(options = {}) {
         await fs.copy(decryptedDir, stagingDir, { overwrite: true });
       } catch (err) {
         spinner.fail(chalk.red('Decryption failed: ') + err.message);
-        return;
+        throw err;
       } finally {
         await fs.remove(decryptedDir);
       }
@@ -135,8 +136,9 @@ export async function restoreCommand(options = {}) {
         // raw JSON.parse, so an old-schema file from a lagging machine gets
         // migrated up (or a too-new one safely degraded) BEFORE mergeSessions
         // ever touches it. Symmetric with the push-side fix in push.js.
-        const rawRemote = JSON.parse(await fs.readFile(remoteSessionPath, 'utf8'));
-        const { state: remote } = migrateSessionData(rawRemote);
+        const rawRemote = JSON.parse((await readSafeFile(stagingDir, 'session.json')).toString('utf8'));
+        const { state: remote, future } = migrateSessionData(rawRemote);
+        if (future) throw new Error('Backup uses a newer session schema. Upgrade Memoir first.');
         // Read+merge+write inside ONE lock, like every state.js mutator.
         // Reading outside the lock and locking only the write is a
         // check-then-act: a concurrent MCP memoir_note landing in the window
@@ -159,8 +161,8 @@ export async function restoreCommand(options = {}) {
         sessionMerged = true;
         sessionNewMachine = Object.keys(merged.machines || {}).length > beforeMachines;
       }
-    } catch {
-      // Best-effort — don't fail the restore over this
+    } catch (err) {
+      throw new Error('Session restore failed: ' + err.message);
     }
 
     if (sessionMerged) {
@@ -182,7 +184,7 @@ export async function restoreCommand(options = {}) {
         if (await fs.pathExists(handoffDir)) {
           const latestPath = path.join(handoffDir, 'latest.md');
           if (await fs.pathExists(latestPath)) {
-            handoffContent = await fs.readFile(latestPath, 'utf8');
+            handoffContent = (await readSafeFile(handoffDir, 'latest.md')).toString('utf8');
           } else {
             // Find newest handoff
             const files = (await fs.readdir(handoffDir))
@@ -190,7 +192,7 @@ export async function restoreCommand(options = {}) {
               .sort()
               .reverse();
             if (files.length > 0) {
-              handoffContent = await fs.readFile(path.join(handoffDir, files[0]), 'utf8');
+              handoffContent = (await readSafeFile(handoffDir, files[0])).toString('utf8');
             }
           }
         }
@@ -199,26 +201,10 @@ export async function restoreCommand(options = {}) {
           // Save locally
           const localHandoffDir = path.join(home, '.config', 'memoir', 'handoffs');
           await fs.ensureDir(localHandoffDir);
-          await fs.writeFile(path.join(localHandoffDir, 'latest.md'), handoffContent);
+          await writeSafeFile(localHandoffDir, 'latest.md', handoffContent);
 
-          // Inject into Claude's home-level memory so it's always loaded
-          // Use detection (reads what Claude actually created) with corrected fallback
-          const claudeDir = path.join(home, '.claude');
-          if (await fs.pathExists(claudeDir)) {
-            let homeKey = detectLocalHomeKey(claudeDir);
-            if (!homeKey) {
-              // Fallback: compute key matching Claude's actual encoding
-              if (process.platform === 'win32') {
-                homeKey = home.replace(/\\/g, '-').replace(/:/g, '-');
-              } else {
-                homeKey = '-' + home.replace(/^\//, '').replace(/\//g, '-');
-              }
-            }
-            const claudeMemDir = path.join(claudeDir, 'projects', homeKey, 'memory');
-            await fs.ensureDir(claudeMemDir);
-            await fs.writeFile(path.join(claudeMemDir, 'handoff.md'), handoffContent);
-            handoffInjected = true;
-          }
+          // Historical handoffs stay in the local archive. Project resume uses
+          // scoped session records; never inject an unscoped transcript globally.
 
           // Extract info for display — handles both old and new handoff formats
           const fromMatch = handoffContent.match(/\*\*From:\*\*\s*(.+)/) || handoffContent.match(/from \*\*(.+?)\*\*/);
@@ -239,7 +225,7 @@ export async function restoreCommand(options = {}) {
     let workspaceResults = null;
     try {
       spinner.start(chalk.gray('Checking workspace...'));
-      workspaceResults = await restoreWorkspace(stagingDir, spinner, autoYes);
+      if (options.workspace === true) workspaceResults = await restoreWorkspace(stagingDir, spinner, autoYes);
       spinner.stop();
 
       if (workspaceResults) {
@@ -264,8 +250,8 @@ export async function restoreCommand(options = {}) {
           restored = true;
         }
       }
-    } catch {
-      // Workspace restore is best-effort
+    } catch (err) {
+      throw new Error('Workspace restore failed: ' + err.message);
     }
 
     if (restored) {
@@ -305,13 +291,14 @@ export async function restoreCommand(options = {}) {
 
   } catch (error) {
     spinner.fail(chalk.red('Restore failed: ') + error.message);
+    throw error;
   } finally {
     await fs.remove(stagingDir);
   }
 }
 
 async function restoreFromShare(options) {
-  const shareToken = options.from;
+  const shareToken = encodeURIComponent(options.from);
 
   console.log();
   const spinner = ora({ text: chalk.gray('Fetching share link...'), spinner: 'dots' }).start();
@@ -389,7 +376,7 @@ async function restoreFromShare(options) {
       ? { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY }
       : { 'apikey': SUPABASE_ANON_KEY };
 
-    const dlRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${shareLink.backup_id}`, {
+    const dlRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${relativeFile(shareLink.backup_id).split('/').map(encodeURIComponent).join('/')}`, {
       headers: authHeaders,
     });
 
@@ -397,7 +384,7 @@ async function restoreFromShare(options) {
       throw new Error(`Download failed: ${await dlRes.text()}`);
     }
 
-    const gzipped = Buffer.from(await dlRes.arrayBuffer());
+    const gzipped = await readBoundedResponse(dlRes);
     await unbundleToDir(gzipped, stagingDir);
 
     // Decrypt — backup is always encrypted for shares
@@ -411,8 +398,9 @@ async function restoreFromShare(options) {
 
     // Verify passphrase
     const verifyPath = path.join(stagingDir, 'verify.enc');
-    let passphrase;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let passphrase = process.env.MEMOIR_PASSPHRASE;
+    if (!passphrase && !process.stdin.isTTY) throw new Error('Set MEMOIR_PASSPHRASE to restore this share');
+    for (let attempt = 0; !passphrase && attempt < 3; attempt++) {
       const { pass } = await inquirer.prompt([{
         type: 'password',
         name: 'pass',
@@ -433,8 +421,7 @@ async function restoreFromShare(options) {
     }
 
     if (!passphrase) {
-      console.log(chalk.red('\n  Too many failed attempts.'));
-      return;
+      throw new Error('Too many failed passphrase attempts');
     }
 
     spinner.start(chalk.gray('Decrypting...'));
@@ -453,7 +440,7 @@ async function restoreFromShare(options) {
       restored = await restoreMemories(decryptedDir, spinner, onlyFilter, autoYes);
     } catch (err) {
       spinner.fail(chalk.red('Decryption failed: ') + err.message);
-      return;
+      throw err;
     } finally {
       await fs.remove(decryptedDir);
     }
@@ -491,6 +478,7 @@ async function restoreFromShare(options) {
 
   } catch (error) {
     spinner.fail(chalk.red('Restore from share failed: ') + error.message);
+    throw error;
   } finally {
     await fs.remove(stagingDir);
   }
