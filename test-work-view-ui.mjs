@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import { randomUUID } from 'node:crypto';
 
 class Node {
-  constructor(tag, doc) { this.tagName=tag; this.doc=doc; this.children=[]; this.listeners={}; this.dataset={}; this.value=''; this.hidden=false; this.disabled=false; this.attributes={}; this.ownText=''; }
+  constructor(tag, doc) { this.tagName=tag; this.doc=doc; this.children=[]; this.listeners={}; this.dataset={}; this.style={}; this.value=''; this.hidden=false; this.disabled=false; this.attributes={}; this.ownText=''; }
   get textContent(){return this.ownText+this.children.map(n=>n.textContent).join('');}
   set textContent(text){this.ownText=String(text); this.children=[];}
   append(...nodes){for(const node of nodes){node.parent=this; this.children.push(node);}}
@@ -20,7 +20,7 @@ class Node {
   showModal(){this.open=true;}
   close(){this.open=false; queueMicrotask(()=>this.emit('close'));}
   descendants(){return this.children.flatMap(n=>[n,...n.descendants()]);}
-  querySelector(selector){return this.descendants().find(n=>selector==='button'?n.tagName==='button':selector==='.card'?n.className?.split(' ').includes('card'):selector==='[data-record-id]'?n.dataset.recordId:false);}
+  querySelector(selector){return this.descendants().find(n=>selector==='button'?n.tagName==='button':selector==='.card-actions button'?n.tagName==='button'&&n.parent?.className?.split(' ').includes('card-actions'):selector==='.card'?n.className?.split(' ').includes('card'):selector==='[data-record-id]'?n.dataset.recordId:false);}
 }
 const source=await fs.readFile(new URL('./src/work/ui/app.js',import.meta.url),'utf8');
 const html=await fs.readFile(new URL('./src/work/ui/index.html',import.meta.url),'utf8');
@@ -35,6 +35,7 @@ async function browser({storageFails=false,load=true}={}){
  nodes.get('kind').value='answer'; nodes.get('status').value='open';
  doc.getElementById=id=>nodes.get(id);
  doc.createElement=tag=>new Node(tag,doc);
+ doc.createElementNS=(_namespace,tag)=>new Node(tag,doc);
  doc.querySelectorAll=selector=>[...nodes.values()].flatMap(n=>n.descendants()).filter(n=>selector==='[data-record-id]'&&n.dataset.recordId);
  const requests=[], timers=new Map(); let timerId=0;
  const sessionStorage={getItem(){if(storageFails)throw Error('Storage unavailable');return 'synthetic-token';},setItem(){if(storageFails)throw Error('Storage unavailable');}};
@@ -45,7 +46,7 @@ async function browser({storageFails=false,load=true}={}){
  const findButton=text=>nodes.get('content').descendants().find(n=>n.tagName==='button'&&n.textContent===text);
  const respond=async(index,state)=>{requests[index].resolve(state);await tick();};
  if(load) await respond(0,snapshot());
- return {nodes,doc,requests,current,findButton,respond,expire:()=>[...timers.values()].forEach(fn=>fn())};
+ return {nodes,doc,requests,current,findButton,respond,buildMap:context.buildProjectMap,expire:()=>[...timers.values()].forEach(fn=>fn())};
 }
 const cases=[]; const test=(name,fn)=>cases.push({name,fn});
 test('late refresh cannot replace a successful correction with stale data',async()=>{
@@ -112,7 +113,81 @@ test('a new record with a lost acknowledgement can be reviewed and corrected',as
  assert.equal(b.nodes.get('comparison').hidden,false);await b.nodes.get('keep-draft').click();
  const correction=b.nodes.get('edit-form').emit('submit');const input=JSON.parse(b.requests[3].options.body);
  assert.equal(input.id,id);assert.equal(input.expected_revision,2);
- await b.respond(3,result);await correction;
+  await b.respond(3,result);await correction;
+});
+test('overview prioritizes open work and stale checks; summary opens the complete list',async()=>{
+ const b=await browser({load:false}),s=snapshot();
+ const base=s.records[0];
+ s.records.push({...base,id:'next.open',kind:'next',text:'Open action',answer:undefined,status:'open'}, {...base,id:'next.done',kind:'next',text:'Completed action',answer:undefined,status:'done',revision:9});
+ s.checks=[{id:'check.fresh',title:'Matching files',freshness:'inputs-match',reasons:[],inputs:{},recorded_at:base.recorded_at,revision:8}, {id:'check.stale',title:'Changed files',freshness:'stale',reasons:['Changed input: app.js'],inputs:{},recorded_at:base.recorded_at,revision:2}];
+ await b.respond(0,s);
+ assert.match(b.current(),/Open action/);assert.doesNotMatch(b.current(),/Completed action/);
+ assert.ok(b.current().indexOf('Changed files')<b.current().indexOf('Matching files'));
+ const summary=b.nodes.get('summary');assert.match(summary.textContent,/1Open actions/);assert.match(summary.textContent,/1Checks to review/);
+ await summary.children[0].click();assert.match(b.current(),/Completed action/);assert.ok(b.current().indexOf('Open action')<b.current().indexOf('Completed action'));
+});
+test('long entries can be expanded without changing the saved record',async()=>{
+ const b=await browser({load:false}),s=snapshot(1,'A long saved answer. '.repeat(30));await b.respond(0,s);
+ const more=b.findButton('Read full entry');assert.equal(more.attributes['aria-expanded'],'false');await more.click();
+ assert.equal(more.textContent,'Show less');assert.equal(more.attributes['aria-expanded'],'true');assert.equal(b.requests.length,1);
+ await more.click();assert.equal(more.attributes['aria-expanded'],'false');assert.match(b.current(),/A long saved answer/);
+});
+test('map labels shared words as suggestions and exact record references as recorded links',async()=>{
+ const b=await browser(),s=snapshot();s.records=[
+  {...s.records[0],id:'decision.database',kind:'decision',text:'Postgres schema migration allocator',answer:undefined},
+  {...s.records[0],id:'next.database',kind:'next',text:'Postgres schema migration allocator rollout',answer:undefined},
+  {...s.records[0],id:'next.reference',kind:'next',text:'Follow decision.database.',answer:undefined}
+ ];
+ const graph=b.buildMap(s);const edge=(a,c)=>graph.edges.find(e=>e.source==='record:'+a&&e.target==='record:'+c||e.target==='record:'+a&&e.source==='record:'+c);
+ assert.equal(edge('decision.database','next.database').type,'suggested');assert.match(edge('decision.database','next.database').label,/not a saved relationship/);
+ assert.equal(edge('decision.database','next.reference').type,'recorded');
+ s.records[2].text='Follow decision.database.extended';assert.notEqual(b.buildMap(s).edges.find(e=>e.source==='record:decision.database'&&e.target==='record:next.reference')?.type,'recorded');
+ // Dates and build numbers alone do not establish a shared topic.
+ s.records=s.records.slice(0,2).map(item=>({...item,text:'2026 1000 2000 recorded settings',source:undefined}));
+ assert.equal(b.buildMap(s).edges.filter(e=>e.type==='suggested').length,0);
+});
+test('map file links describe declared inputs without claiming they verify a decision',async()=>{
+ const b=await browser(),s=snapshot();s.records[0].text='Review src/work/view.js';s.checks=[{id:'check.view',title:'View checks',inputs:{'src/work/view.js':'hash'},revision:2}];
+ const edge=b.buildMap(s).edges.find(e=>e.source!=='project');assert.equal(edge.type,'recorded');assert.match(edge.label,/does not verify/);
+ assert.equal(b.buildMap(s,{query:'src/work/view.js',kind:'check'}).matches[0].item.id,'check.view');
+ s.records[0].text='Review src/work/view.js.backup';assert.equal(b.buildMap(s).edges.filter(e=>e.source!=='project'&&e.type==='recorded').length,0);
+});
+test('map bounds large projects, searches older entries and excludes removed history',async()=>{
+ const b=await browser(),s=snapshot();const original=s.records[0];s.records=Array.from({length:150},(_,i)=>({...original,id:'answer.'+i,revision:i+1,text:i===0?'Rare oldest marker':'Ordinary entry '+i,answer:'A synthetic answer'}));s.removed=[{item:{...original,id:'answer.removed',text:'Removed item'}}];s.history.push({...original,id:'answer.history'});
+ assert.equal(b.buildMap(s).nodes.length,120);const searched=b.buildMap(s,{query:'Rare oldest marker'});assert.equal(searched.matches.length,1);assert.equal(searched.matches[0].item.id,'answer.0');assert.equal(searched.total,150);
+ assert.ok(!searched.nodes.some(n=>n.item.id==='answer.removed'||n.item.id==='answer.history'));
+ s.records[0].kind='goal';assert.equal(b.buildMap(s,{kind:'goal'}).matches[0].item.id,'answer.0');
+});
+test('map navigation and record editing share the same current record',async()=>{
+ const b=await browser();const node=b.nodes.get('map-canvas').children.find(n=>n.dataset.nodeKey==='record:answer.fixture');await node.click();
+ assert.match(b.nodes.get('map-inspector').textContent,/Original answer/);
+ const correct=b.nodes.get('map-inspector').descendants().find(n=>n.tagName==='button'&&n.textContent==='Correct');await correct.click();assert.equal(b.nodes.get('answer').value,'Original answer');
+ await b.nodes.get('cancel').click();await tick();await b.nodes.get('show-records').click();assert.equal(b.nodes.get('map-workspace').hidden,true);assert.equal(b.nodes.get('records-workspace').hidden,false);
+ assert.equal(b.requests.length,1);
+});
+test('map category filtering keeps focus on a connected filter control',async()=>{
+ const b=await browser();const filter=b.nodes.get('map-filters').children.find(n=>n.dataset.kind==='answer');filter.focus();await filter.click();
+ assert.equal(b.doc.activeElement.isConnected,true);assert.equal(b.doc.activeElement.dataset.kind,'answer');assert.equal(b.doc.activeElement.attributes['aria-pressed'],'true');
+});
+test('opening map context focuses its heading and returning focuses the project',async()=>{
+ const b=await browser();await b.nodes.get('map-canvas').children.find(n=>n.dataset.nodeKey==='record:answer.fixture').click();
+ assert.equal(b.doc.activeElement.tagName,'h2');assert.equal(b.doc.activeElement.textContent,'Fixture');
+ await b.nodes.get('map-inspector').children.find(n=>n.tagName==='button').click();assert.equal(b.doc.activeElement.dataset.nodeKey,'project');assert.equal(b.doc.activeElement.isConnected,true);
+});
+test('Records and Map both find checks by covered files and records by source',async()=>{
+ const b=await browser({load:false}),s=snapshot();s.checks=[{id:'check.fixture',title:'Covered document',inputs:{'docs/guide.md':'hash'},freshness:'inputs-match',reasons:[],revision:2,recorded_at:s.records[0].recorded_at}];s.records[0].source='Dedicated source marker';await b.respond(0,s);
+ await b.nodes.get('show-records').click();await b.nodes.get('navigation').children.find(n=>n.textContent==='Checks1').click();b.nodes.get('search').value='docs/guide.md';await b.nodes.get('search').emit('input');
+ assert.match(b.current(),/Covered document/);assert.equal(b.buildMap(s,{query:'docs/guide.md'}).matches[0].item.id,'check.fixture');
+ await b.nodes.get('navigation').children.find(n=>n.textContent==='Answers1').click();b.nodes.get('search').value='Dedicated source marker';await b.nodes.get('search').emit('input');assert.match(b.current(),/Original answer/);
+});
+test('saving new context from the map selects the saved entry and keeps focus visible',async()=>{
+ const b=await browser();const add=b.nodes.get('map-inspector').children.find(n=>n.textContent==='+ Add project context');add.focus();await add.click();b.nodes.get('text').value='New map question with extended context. '.repeat(8);b.nodes.get('answer').value='Saved through map';
+ const save=b.nodes.get('edit-form').emit('submit');const s=snapshot(2);const submitted=JSON.parse(b.requests[1].options.body);s.records.push({...s.records[0],id:submitted.id,text:submitted.fields.text,answer:submitted.fields.answer});s.history=[...s.records];await b.respond(1,s);await save;await tick();
+ assert.match(b.nodes.get('map-inspector').textContent,/Saved through map/);assert.equal(b.doc.activeElement.isConnected,true);assert.equal(b.doc.activeElement.textContent,'Correct');
+});
+test('map renders hostile markup as literal text and does not import removed or history-only payloads',async()=>{
+ const b=await browser({load:false}),s=snapshot();s.records[0].text='<img src=x onerror=alert(1)> & <svg onload=alert(2)>';s.records[0].answer='Treat as text';s.removed=[{item:{...s.records[0],id:'answer.removed',text:'Hidden payload'}}];s.history.push({...s.records[0],id:'answer.history',text:'History-only payload'});await b.respond(0,s);
+ await b.nodes.get('map-canvas').children.find(n=>n.dataset.nodeKey==='record:answer.fixture').click();const panel=b.nodes.get('map-inspector');assert.match(panel.textContent,/<img src=x onerror=alert\(1\)>/);assert.ok(!panel.descendants().some(n=>['img','svg','script'].includes(n.tagName)));assert.doesNotMatch(b.nodes.get('map-canvas').textContent,/Hidden payload|History-only payload/);
 });
 let failures=0;
 for(const {name,fn} of cases){try{await fn();console.log('PASS '+name);}catch(error){failures++;console.error('FAIL '+name+'\n'+error.message);}}

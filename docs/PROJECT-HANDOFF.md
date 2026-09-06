@@ -18,6 +18,35 @@ This documents the local project handoff in `src/work/` and `bin/memoir-work.js`
 
 ## See and correct what Memoir remembers
 
+Memoir remains a CLI and tool integration. This optional browser companion reads
+the same project record; it is not a separate memory service. You can keep using
+the CLI, Codex or Cursor without opening the page.
+
+The default **Map** view connects the current branch's project entries. Select a
+node to read its full text, source and history, and inspect connected entries.
+Solid lines show project membership, explicit record references, or a named file
+that a check declares as input. A file link does not prove the entry's claims.
+Dashed lines suggest shared topics using matching words; each suggestion explains
+its words and is not saved as a relationship. This prototype does not infer
+causes, automatically determine affected work, or use personal memory.
+
+Search and category filters narrow the map. It draws up to ten entries at once
+and computes connections within up to 120 entries, prioritizing matches and the
+selected entry. Search covers all active entries, including older ones, but the
+visible map and connection list are not exhaustive. No text leaves the browser
+to generate these connections.
+
+**Records** retains the overview and category lists for editing. The overview
+prioritizes open actions and checks that need review. Long entries expand with
+**Read full entry**; completed actions remain under **Next actions**. Both views
+use the same correction controls and project record.
+
+Selecting a map entry opens its details beside the map in wide windows and below
+it in narrow windows. Keyboard focus follows the selected context. Saving from
+the map selects the saved entry. Both views search covered file paths as well as
+record text and sources. See [the project map trial](PROJECT-MAP-TRIAL.md) for
+tested behavior and the limits of suggested connections.
+
 Run `memoir work view` in your project (or `node bin/memoir.js work view`
 from a source checkout), or ask the agent
 “Open my Memoir project view.” The browser shows the current branch's answers,
