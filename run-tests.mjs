@@ -57,6 +57,10 @@ if (preExisting) {
 }
 
 const suites = [
+  { name: 'project view recovery (UI harness)', cmd: 'node', args: ['test-work-view-ui.mjs'] },
+  { name: 'local project view (integration)', cmd: 'node', args: ['test-work-view.mjs'] },
+  { name: 'project handoff adversarial (integration)', cmd: 'node', args: ['test-work-adversarial.mjs'] },
+  { name: 'project handoff (integration)', cmd: 'node', args: ['test-work-handoff.mjs'] },
   { name: 'audit reliability (integration)', cmd: 'node', args: ['test-audit-reliability.mjs'] },
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
   { name: 'session (unit)', cmd: 'node', args: ['test-session.mjs'] },

@@ -227,7 +227,13 @@ export { bundleDir, unbundleToDir };
 export async function deleteBackup(backup, session) {
   ownedStoragePath(backup, session);
   const headers = { Authorization: 'Bearer ' + session.access_token, apikey: SUPABASE_ANON_KEY };
-  const object = await fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET + '/' + backup.storage_path, { method: 'DELETE', headers });
+  // Storage removes exact object paths through the bucket endpoint. A DELETE
+  // to the download URL is rejected by the hosted API.
+  const object = await fetch(SUPABASE_URL + '/storage/v1/object/' + STORAGE_BUCKET, {
+    method: 'DELETE',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes: [backup.storage_path] }),
+  });
   if (!object.ok && object.status !== 404) throw new Error('Backup object deletion failed; metadata retained');
   const row = await fetch(SUPABASE_URL + '/rest/v1/backups?id=eq.' + encodeURIComponent(backup.id), { method: 'DELETE', headers });
   if (!row.ok) throw new Error('Backup metadata deletion failed');

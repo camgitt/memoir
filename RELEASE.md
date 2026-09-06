@@ -27,5 +27,6 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
 6. **Verify** — `npm view memoir-cli version` matches `git describe --tags`.
 
 The published tarball is an allowlist (`files` in package.json: `bin/`, `src/`,
-README, LICENSE). Anything outside those — tests, marketing docs, the
-`mcp-publisher` binary — never ships. Add new runtime paths to `files`.
+README, LICENSE, docs/, supabase/migrations/ and evals/). Tests at the
+repository root, local project memory, generated client settings and the
+`mcp-publisher` binary do not ship. Add new runtime paths to `files`.

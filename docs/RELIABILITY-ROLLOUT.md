@@ -1,6 +1,6 @@
 # Reliability rollout and recovery
 
-This is a review candidate, not a deployed release. Preserve a protected, recoverable copy of existing backups before upgrading.
+Upgrade guidance for version 3.14.0. The Memoir hosted database migration and account-isolation checks completed on September 6, 2026; see [deployment evidence](RELEASE-3.14-VALIDATION.md). Package availability is established by the npm registry and release workflow, separately from database deployment. Preserve a protected, recoverable copy of existing backups before upgrading.
 
 ## Compatibility
 
@@ -9,7 +9,7 @@ This is a review candidate, not a deployed release. Preserve a protected, recove
 | Legacy local/Git encrypted manifest | Yes | No |
 | Path-bound manifest version 2 | Yes | Yes |
 | Legacy account-ID-keyed/gzip cloud | Yes, with warning | No |
-| User-passphrase cloud MEMOIRC2 | Yes | After backend migration |
+| User-passphrase cloud MEMOIRC2 | Yes | Hosted migration deployed; self-hosted services must migrate |
 | Supported old session schema | Migrated; future imports rejected | Archives/metadata retained |
 | Legacy workspace tar | Manual inspection only | No |
 | Workspace file manifest version 2 | Separate recovery folder | Explicit --workspace |
@@ -46,7 +46,7 @@ Random vault-key wrapping, enrollment, cross-device rotation, hardware-backed st
 - The package owner configures npm's trusted publisher for `camgitt/memoir`, workflow `publish.yml`. The old publication auth failure is not fixed by this source branch.
 - Select and synchronize the release version across package.json, lockfile, and server.json. Publish only the reviewed commit/tag, then repeat the smoke check against the registry artifact.
 
-No database deployment, npm version bump, package publication, or independent security certification is implied.
+The release gates above also apply to future deployments. The linked validation report records what was actually observed for this release. No independent security certification is implied.
 
 ## Operational limits
 

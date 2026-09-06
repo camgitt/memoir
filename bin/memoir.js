@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// Delegate project work before legacy command dispatch and telemetry hooks.
+if (process.argv[2] === 'work') {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('./memoir-work.js', import.meta.url)), ...process.argv.slice(3)], { stdio: 'inherit' });
+  process.exit(result.status ?? 1);
+}
 import { cloudMigrateCommand } from '../src/commands/cloud.js';
 import { setupCommand } from '../src/integrations/setup.js';
 import { program } from 'commander';

@@ -18,7 +18,7 @@ const env = {
 };
 for (const key of ['SystemRoot','TEMP','TMP']) if (process.env[key]) env[key] = process.env[key];
 const run = (command, args, cwd = repository) => execFileSync(command, args, { cwd, env, encoding: 'utf8', timeout: 180000, stdio: ['ignore','pipe','pipe'] });
-let client;
+let client, viewer;
 try {
   await fs.mkdir(project, { recursive: true });
   await fs.mkdir(install, { recursive: true });
@@ -55,8 +55,33 @@ try {
   cli(['restore']);
   assert.match(cli(['recall','package-smoke-recovery-marker']),/verified snapshots/);
   assert.match(cli(['resume']),/package-continuity-decision/);
-  console.log(JSON.stringify({status:'passed',version,artifact:packed.filename,checks:['tarball install','included rollout docs','CLI version','three-client setup','MCP remember','MCP note','restart recall','two encrypted pushes','restore canonical records','restore session','scoped resume']},null,2));
+  // The project-only route must work from the installed tarball too, while
+  // keeping the older personal-memory server and settings intact.
+  cli(['work', '--project', project, 'setup']);
+  cli(['work', '--project', project, 'record', '--json', JSON.stringify({id:'answer.packed',kind:'answer',text:'Delivery?',answer:'Local review',source:'Package test'})]);
+  await fs.writeFile(path.join(project,'check.cjs'),'process.exit(0);\n');
+  const receipt = JSON.parse(cli(['work','--project',project,'check','packed','--title','Installed check','--files','check.cjs','--',process.execPath,'check.cjs']));
+  assert.equal(receipt.exit_code,0);
+  client = new Client({name:'package-work-smoke',version:'1.0.0'});
+  await client.connect(new StdioClientTransport({command:process.execPath,args:[path.join(pkg,'src/work/server.js')],env,stderr:'pipe'}));
+  const handoff = await client.callTool({name:'memoir_work_resume',arguments:{}});
+  assert.notEqual(handoff.isError,true);
+  assert.match(handoff.content[0].text,/Local review/);
+  assert.match(handoff.content[0].text,/PASSED; declared inputs still match/);
+  assert.doesNotMatch(handoff.content[0].text,/package-continuity-decision|package-smoke-recovery-marker/);
+  await client.close(); client = null;
+  assert.match(cli(['work','view','--help']),/no-open/);
+  const { startWorkView } = await import(pathToFileURL(path.join(pkg,'src/work/view.js')));
+  viewer = await startWorkView(project);
+  const capability = new URLSearchParams(new URL(viewer.url).hash.slice(1)).get('token');
+  assert.equal((await fetch(viewer.origin+'/api/state')).status,401);
+  const viewState = await (await fetch(viewer.origin+'/api/state',{headers:{Authorization:'Bearer '+capability}})).json();
+  assert.equal(viewState.records.find(r=>r.id==='answer.packed').answer,'Local review');
+  for (const asset of ['/','/app.js','/style.css']) assert.equal((await fetch(viewer.origin+asset)).status,200);
+  await viewer.close(); viewer = null;
+  console.log(JSON.stringify({status:'passed',version,artifact:packed.filename,checks:['tarball install','included rollout docs','CLI version','three-client setup','MCP remember','MCP note','restart recall','two encrypted pushes','restore canonical records','restore session','scoped resume','project-only setup','installed work command','executed check receipt','project MCP resume without personal memory','installed view command and assets','authenticated project view']},null,2));
 } finally {
   if (client) await client.close();
+  if (viewer) await viewer.close();
   await fs.rm(scratch,{recursive:true,force:true});
 }

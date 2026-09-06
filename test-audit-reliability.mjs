@@ -341,7 +341,12 @@ try {
       if (target.includes('/storage/')) {
         const key = target.slice(target.indexOf('/migration-user/') + 1);
         if (method === 'POST') { objects.set(key, options.body); uploads++; return { ok: true }; }
-        if (method === 'DELETE') { objects.delete(key); deletes++; return { ok: true }; }
+        if (method === 'DELETE') {
+          assert.ok(target.endsWith('/storage/v1/object/memoir-backups'));
+          const { prefixes } = JSON.parse(options.body);
+          assert.equal(prefixes.length, 1);
+          objects.delete(prefixes[0]); deletes++; return { ok: true };
+        }
         return { ok: true, arrayBuffer: async () => corrupt && key !== old.storage_path ? Buffer.from('corrupt') : objects.get(key) };
       }
       if (method === 'POST') { const row = JSON.parse(options.body); rows.unshift(row); return { ok: true, json: async () => [row] }; }

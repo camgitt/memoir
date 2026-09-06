@@ -88,6 +88,7 @@
     "gradient-string": "^3.0.0",
     "inquirer": "^9.2.15",
     "ora": "^7.0.1",
-    "smol-toml": "^1.8.0"
+    "smol-toml": "^1.8.0",
+    "zod": "4.5.4"
   }
 }

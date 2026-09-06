@@ -4,9 +4,54 @@ Portable, project-scoped memory and session handoffs for coding agents.
 
 Memoir keeps decisions, rationale, goals, and next actions in readable local files. An MCP server lets an agent save and retrieve that context. Optional local, Git, and cloud backups move it between machines.
 
-This branch contains the changes described in [the remediation record](docs/AUDIT-REMEDIATION.md). Older npm installations do not receive them until a release is published.
+The reliability changes are described in [the remediation record](docs/AUDIT-REMEDIATION.md). Review the [upgrade and recovery guide](docs/RELIABILITY-ROLLOUT.md) before upgrading clients that share encrypted backups.
 
-## Start in a project
+## Continue between Codex and Cursor on this computer
+
+This branch adds a separate, project-only handoff. It carries answered questions,
+decisions, next actions and receipts from checks actually run through Memoir. It
+does not import personal memory or transcripts.
+
+The project handoff and browser view require version 3.14.0 or later:
+
+```sh
+npm install -g memoir-cli@3.14.0
+cd /path/to/your/project
+memoir work setup
+memoir work resume
+memoir work view
+```
+
+For source development, install dependencies and replace `memoir` with
+`node bin/memoir.js` from the Memoir checkout.
+
+Open **this same folder and branch** in Codex or Cursor and say **“Continue this
+project.”** The managed instructions use the project MCP connection, or the
+included CLI fallback when the connection is unavailable. Existing settings and
+approval policies are preserved. Agent adherence is still required; ordinary
+terminal checks are not captured automatically.
+
+The **project view** opens in your browser on this computer. Search saved
+answers, see why a check needs repeating, correct a decision, or remove it from
+the next handoff. Removed records can be restored; earlier versions stay in local
+history. Keep the view's terminal open while using it, and press Ctrl+C to stop.
+You can also ask your agent **“Open my Memoir project view.”** See the
+[local view validation](docs/PROJECT-VIEW-VALIDATION.md) for actual browser tests
+and the limits of the fresh-session continuity results. Subsequent
+[debugging fixes and recovery tests](docs/PROJECT-VIEW-DEBUG.md) cover slow saves,
+interrupted responses and configuration preservation.
+
+Checks run through `memoir work check` using the client's normal terminal
+permissions. The MCP memory connection deliberately cannot execute commands.
+See the [adversarial audit and remaining trust limits](docs/HANDOFF-SECURITY-AUDIT.md).
+
+The project ledger stays in ignored `.memoir/` files. This workflow does not
+sync those files through GitHub or bridge different checkouts. See the
+[setup and everyday guide](docs/PROJECT-HANDOFF.md) for commands, corrections,
+privacy boundaries and when a check needs to run again. The feature runs locally even when installed from npm; publishing the package
+does not upload your project ledger.
+
+## Existing memory and backup workflow
 
 Node.js 18 or later is required.
 
@@ -73,7 +118,7 @@ memoir cloud migrate
 memoir cloud migrate --apply
 ```
 
-The writer requires the database migration in [the rollout guide](docs/RELIABILITY-ROLLOUT.md). Without it, version allocation fails before upload. This source change has not deployed that migration.
+The writer requires the database migration in [the rollout guide](docs/RELIABILITY-ROLLOUT.md). Without it, version allocation fails before upload. The Memoir hosted service received this migration on September 6, 2026; see the [deployment checks](docs/RELEASE-3.14-VALIDATION.md). Self-hosted services must apply it before enabling new writes.
 
 `cloud migrate` displays a plan. `--apply` downloads each old backup, creates a user-passphrase replacement, downloads and byte-checks it, then removes the old object. Interrupted migration can reuse its replacement. Keep the secret available on every recovering device; there is no lost-passphrase recovery service.
 
