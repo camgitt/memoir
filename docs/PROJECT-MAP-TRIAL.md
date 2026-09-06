@@ -63,7 +63,7 @@ longer overlap the map, and no horizontal overflow was observed. Wide windows
 retain a side panel. This is a focused layout/keyboard check, not a full
 accessibility audit.
 
-The UI regression suite now contains 21 scenarios, including map focus, saving,
+At this initial trial, the UI regression suite contained 21 scenarios, including map focus, saving,
 consistent search, exact versus suggested links, older-entry search, and literal
 rendering of synthetic hostile markup. The existing 14 API/security groups cover
 authentication, cross-origin access, stale edits, removal/restore, secret/scope
@@ -78,7 +78,7 @@ production penetration test or a fresh Cursor round trip.
   words such as “user”, “evidence” and “handoff”; the labels explain the match but
   cannot make it useful. Evaluate suggestions against human-labeled relevant
   pairs before treating the map as an intelligent project model.
-- The graph shows ten entries and computes relationships within at most 120.
+- The graph computes relationships within at most 120 entries.
   Search covers all active entries, but connections are not exhaustive.
 - There is no saved relationship editor, automatic impact analysis, natural
   language retrieval, or measured reduction in time/repeated work from the map.
@@ -87,3 +87,21 @@ production penetration test or a fresh Cursor round trip.
 
 The trial used local, uncommitted changes. No publication, server deployment,
 new account setup or personal-memory import was needed to perform it.
+
+## Follow-up: reduce graph clutter
+
+The user found the graph messy after this trial. The observed overview contained
+24 lines and 11 nodes. The revised view shows six entries around the project,
+with six straight membership lines and no lines between the surrounding entries.
+Selecting an entry moves it to the center and shows only its direct neighbors,
+with at most six links. Labels have larger type and a two-line limit; full text
+remains in the inspector. Suggested links are now off by default and explicitly
+enabled with **Suggested links**. The graph and inspector apply the same filter.
+
+The actual browser showed six lines and seven nodes in the new overview. A check
+with eight recorded connections displayed six; selecting an answer with no
+recorded references showed zero links, then six dashed links after enabling
+suggestions. At 390px, the seven node boxes did not overlap and the page had no
+horizontal overflow. Two new regression cases cover the overview limit and
+direct-neighbor filtering with opt-in suggestions, bringing the UI suite to 23
+scenarios. The underlying keyword-matching quality is unchanged by this cleanup.

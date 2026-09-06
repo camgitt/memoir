@@ -6,7 +6,7 @@ let token = fragment.get('token');
 try { if (token) sessionStorage.setItem('memoir-view-token', token); else token = sessionStorage.getItem('memoir-view-token'); } catch {}
 if (fragment.has('token')) history.replaceState(null, '', '/');
 let state, selected = 'overview', editing, latestEdit, editorOpener, busy = false, stateRequest = 0, renderAfterEditor = false;
-let viewMode = 'map', focusKey = 'project', mapKind = 'all';
+let viewMode = 'map', focusKey = 'project', mapKind = 'all', showSuggestions = false;
 const labels = { overview: 'Overview', next: 'Next actions', answer: 'Answers', decision: 'Decisions', check: 'Checks', goal: 'Goals', removed: 'Removed' };
 const descriptions = { overview: 'What matters for your next session.', answer: 'Already answered. Ready to carry forward.', decision: 'What you decided, with the reasons behind it.', check: 'Completed checks and the changes that need another look.', next: 'Open work first. Completed actions stay in the record.', goal: 'What this project is working toward.', removed: 'Hidden from the handoff. You can restore records here.' };
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
@@ -46,6 +46,27 @@ function buildProjectMap(data, { query = '', focus = 'project', kind = 'all' } =
   }
   return {nodes,edges,total:all.length,matches:nodes.filter(matches),matchingTotal:all.filter(matches).length};
 }
+function mapNeighborhood(model, focus, suggestions = false, overview = false) {
+  const linked = focus ? model.edges.filter(edge => edge.source !== 'project' && edge.target !== 'project' &&
+    (edge.source === focus.key || edge.target === focus.key) && (suggestions || edge.type === 'recorded'))
+    .sort((a,b) => (a.type === 'suggested') - (b.type === 'suggested') || (b.score || 0) - (a.score || 0)) : [];
+  let ranked = focus ? linked.map(edge => model.nodes.find(node => node.key === (edge.source === focus.key ? edge.target : edge.source))) : [...model.matches];
+  if (!focus && overview) {
+    const picked = [];
+    for (const kind of ['goal','next','answer','decision','check']) {
+      const entry = ranked.find(node => node.kind === kind && (kind !== 'next' || node.item.status !== 'done'));
+      if (entry) picked.push(entry);
+    }
+    ranked = [...picked,...ranked.filter(node => !picked.includes(node))];
+  }
+  const shown = ranked.slice(0,6), visibleKeys = new Set(shown.map(node => node.key));
+  const edges = focus ? linked.filter(edge => visibleKeys.has(edge.source) || visibleKeys.has(edge.target)) :
+    model.edges.filter(edge => edge.source === 'project' && visibleKeys.has(edge.target));
+  return {ranked,shown,edges,linked};
+}
+function selectMapNode(key) {
+  focusKey=key; mapKind='all'; $('map-search').value=''; renderMap(true);
+}
 function renderMap(restoreFocus = false) {
   if (!state) return;
   $('workspace-name').textContent=state.project_name;
@@ -53,44 +74,37 @@ function renderMap(restoreFocus = false) {
   if (focusKey!=='project'&&!model.nodes.some(node=>node.key===focusKey)) focusKey='project';
   const focus=model.nodes.find(node=>node.key===focusKey);
   $('map-workspace').dataset.focused=String(!!focus);
-  const linked=model.edges.filter(edge=>edge.source===focusKey||edge.target===focusKey).sort((a,b)=>(a.type==='suggested')-(b.type==='suggested')||(b.score||0)-(a.score||0));
-  const adjacent=new Set(linked.flatMap(edge=>[edge.source,edge.target]));
-  const eligible=model.matches.filter(node=>mapKind==='all'||node.kind===mapKind);
-  // A small legible neighborhood, with all matching records available in the
-  // inspector. The graph is not an exhaustive view of the whole ledger.
-  let ranked=[...eligible].sort((a,b)=>Number(b.key===focusKey)-Number(a.key===focusKey)||Number(adjacent.has(b.key))-Number(adjacent.has(a.key)));
-  if (focusKey==='project'&&!$('map-search').value.trim()&&mapKind==='all') {
-    const picked=[];for(const kind of ['goal','next','answer','decision','check']) picked.push(...ranked.filter(node=>node.kind===kind&&(kind!=='next'||node.item.status!=='done')).slice(0,kind==='goal'?1:2));
-    ranked=[...picked,...ranked.filter(node=>!picked.includes(node))];
-  }
-  const shown=ranked.slice(0,10), visibleKeys=new Set(['project',...shown.map(node=>node.key)]);
-  $('map-count').textContent=shown.length+' of '+model.matchingTotal+' entries'+(model.total>120?' · recent context; search to find older entries':'');
+  const {ranked,shown,edges,linked}=mapNeighborhood(model,focus,showSuggestions,!$('map-search').value.trim()&&mapKind==='all');
+  $('map-count').textContent=focus ? shown.length+' of '+ranked.length+' connections · '+focus.label :
+    shown.length+' of '+model.matchingTotal+' entries'+(model.total>120?' · search to find older entries':'');
+  $('map-suggestions').setAttribute('aria-pressed',String(showSuggestions));
+  $('map-suggested-legend').hidden=!showSuggestions;
   $('map-filters').replaceChildren();
   for(const [kind,name] of [['all','Everything'],['next','Next actions'],['decision','Decisions'],['answer','Answers'],['check','Evidence'],['goal','Goals']]) {
     const node=button(name,()=>{mapKind=kind;focusKey='project';renderMap();[...$('map-filters').children].find(entry=>entry.dataset.kind===kind)?.focus({preventScroll:true});},'map-filter');node.dataset.kind=kind;node.setAttribute('aria-pressed',String(mapKind===kind));$('map-filters').append(node);
   }
   const canvas=$('map-canvas');canvas.replaceChildren();
-  const positions=[[18,19],[46,10],[77,17],[85,46],[75,79],[46,88],[18,77],[13,48],[45,29],[47,69]];
-  const points=new Map([['project',[48,49]],...shown.map((node,index)=>[node.key,positions[index]])]);
+  const positions=[[22,18],[78,18],[19,47],[81,47],[22,77],[78,77]];
+  const center=focus||{key:'project',kind:'project',label:state.project_name};
+  const points=new Map([[center.key,[50,47]],...shown.map((node,index)=>[node.key,positions[index]])]);
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 1000 640');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');svg.setAttribute('class','map-lines');
-  const visibleEdges=model.edges.filter(edge=>visibleKeys.has(edge.source)&&visibleKeys.has(edge.target));
-  const suggestions=visibleEdges.filter(edge=>edge.type==='suggested').sort((a,b)=>(Number(b.source===focusKey||b.target===focusKey)-Number(a.source===focusKey||a.target===focusKey))||b.score-a.score).slice(0,10);
-  for(const edge of [...visibleEdges.filter(edge=>edge.type==='recorded'),...suggestions]) {
+  for(const edge of edges) {
     const a=points.get(edge.source),b=points.get(edge.target),line=document.createElementNS('http://www.w3.org/2000/svg','path');
-    line.setAttribute('d',`M ${a[0]*10} ${a[1]*6.4} Q ${(a[0]+b[0])*5+20} ${(a[1]+b[1])*3.2-22} ${b[0]*10} ${b[1]*6.4}`);
+    line.setAttribute('d',`M ${a[0]*10} ${a[1]*6.4} L ${b[0]*10} ${b[1]*6.4}`);
     line.setAttribute('class','map-line '+edge.type+((edge.source===focusKey||edge.target===focusKey)&&focusKey!=='project'?' focused':''));svg.append(line);
   }
   canvas.append(svg);
   let focusedButton;
-  for(const node of [{key:'project',kind:'project',label:state.project_name},...shown]) {
+  for(const node of [center,...shown]) {
     const active=node.key===focusKey;
-    const entry=button('',()=>{focusKey=node.key;renderMap(true);},'map-node'+(active?' selected':'')+(focusKey!=='project'&&!adjacent.has(node.key)&&node.key!=='project'?' subdued':''));
+    const entry=button('',()=>selectMapNode(node.key),'map-node'+(active?' selected':''));
+    entry.dataset.center=String(node.key===center.key);
     entry.dataset.kind=node.kind;entry.dataset.nodeKey=node.key;entry.style.left=points.get(node.key)[0]+'%';entry.style.top=points.get(node.key)[1]+'%';entry.setAttribute('aria-pressed',String(active));entry.setAttribute('aria-label',(node.kind==='project'?'Project':labels[node.kind])+': '+(node.item?.text||node.item?.title||node.label));
     const dot=el('span',undefined,'node-dot');dot.setAttribute('aria-hidden','true');
     entry.append(dot,el('span',node.label,'node-label'),el('span',node.kind==='project'?model.total+' entries':node.kind==='check'?(node.item.freshness==='inputs-match'?'Inputs match':'Needs review'):node.kind==='next'?(node.item.status==='done'?'Completed':'Next action'):labels[node.kind],'node-kind'));
     canvas.append(entry);if(active)focusedButton=entry;
   }
-  if(!shown.length)canvas.append(el('p',$('map-search').value?'No matching entries. Try another term.':'No entries in this category yet.','map-empty'));
+  if(!shown.length)canvas.append(el('p',focus?(showSuggestions?'No connected entries found.':'No recorded connections yet. Try Suggested links.'):$('map-search').value?'No matching entries. Try another term.':'No entries in this category yet.','map-empty'));
   const panel=$('map-inspector');panel.replaceChildren();
   if(focus)panel.append(button('← Back to project',()=>{focusKey='project';renderMap(true);},'inspector-back'));
   const panelTitle=el('h2',focus?focus.label:state.project_name);panelTitle.tabIndex=-1;
@@ -98,13 +112,14 @@ function renderMap(restoreFocus = false) {
   if(focus) {
     const card=focus.kind==='check'?checkCard(focus.item):recordCard(focus.item);card.className+=' expanded';panel.append(card);
     const connections=el('div',undefined,'inspector-connections');connections.append(el('h3','Connected context'));
-    const relevant=linked.filter(edge=>edge.source!=='project'&&edge.target!=='project').slice(0,8);
-    if(!relevant.length)connections.append(el('p','No direct references or strong shared topics found. This entry still belongs to the project.','connection-note'));
+    const relevant=linked.slice(0,6);
+    if(!relevant.length)connections.append(el('p',showSuggestions?'No recorded references or shared topics found.':'No recorded references found. Suggested links can reveal possible shared topics.','connection-note'));
     for(const edge of relevant) {
       const other=model.nodes.find(node=>node.key===(edge.source===focusKey?edge.target:edge.source));
-      const row=button('',()=>{focusKey=other.key;mapKind='all';$('map-search').value='';renderMap(true);},'connection-row');
+      const row=button('',()=>selectMapNode(other.key),'connection-row');
       row.append(el('span',edge.type==='recorded'?'RECORDED LINK':'SUGGESTED LINK','connection-type '+edge.type),el('strong',other.label),el('span',edge.label,'connection-reason'));connections.append(row);
     }
+    if(linked.length>6)connections.append(el('p','Showing 6 of '+linked.length+' connections. Search for another entry to explore more.','connection-note'));
     panel.append(connections);
   } else {
     const goal=state.records.filter(item=>item.kind==='goal').sort((a,b)=>b.revision-a.revision)[0];
@@ -112,7 +127,7 @@ function renderMap(restoreFocus = false) {
     panel.append(el('p','Select an entry to read the full context and see why it is connected.','inspector-hint'));
     panel.append(button('+ Add project context',()=>edit(), 'map-add'));
     const index=el('div',undefined,'inspector-index');index.append(el('h3',$('map-search').value?'Search results':mapKind==='all'?'Explore the threads':labels[mapKind]));
-    for(const node of ranked.slice(0,24)) {const row=button('',()=>{focusKey=node.key;renderMap(true);},'index-entry');row.dataset.kind=node.kind;row.setAttribute('aria-label',labels[node.kind]+': '+node.label);row.append(el('i'),el('span',node.label),el('span','↗'));index.append(row);}
+    for(const node of ranked.slice(0,24)) {const row=button('',()=>selectMapNode(node.key),'index-entry');row.dataset.kind=node.kind;row.setAttribute('aria-label',labels[node.kind]+': '+node.label);row.append(el('i'),el('span',node.label),el('span','↗'));index.append(row);}
     if(ranked.length>24)index.append(el('p','Search to narrow '+ranked.length+' matching entries.','connection-note'));
     panel.append(index);
   }
@@ -354,6 +369,7 @@ $('editor').addEventListener('cancel', event => { if (editing?.saving) event.pre
 $('kind').addEventListener('change', kindFields); $('cancel').addEventListener('click', () => $('editor').close()); $('cancel-top').addEventListener('click', () => $('editor').close());
 $('add').addEventListener('click', () => edit()); $('refresh').addEventListener('click', refresh); $('search').addEventListener('input', render);
 $('show-map').addEventListener('click',()=>setView('map'));$('show-records').addEventListener('click',()=>setView('records'));
+$('map-suggestions').addEventListener('click',()=>{showSuggestions=!showSuggestions;renderMap();});
 $('map-search').addEventListener('input',()=>{focusKey='project';renderMap();});$('map-reset').addEventListener('click',()=>{focusKey='project';mapKind='all';$('map-search').value='';renderMap();});$('map-refresh').addEventListener('click',refresh);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !$('editor').open && !busy) refresh(); });
 refresh();

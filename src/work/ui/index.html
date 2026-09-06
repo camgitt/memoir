@@ -6,12 +6,12 @@
 <header class="workspace-bar"><a class="workspace-brand" href="/" aria-label="Memoir project home"><span aria-hidden="true">m</span> memoir</a><span class="workspace-divider">/</span><span id="workspace-name">Project</span><div class="view-switch" aria-label="Project view"><button id="show-map" type="button" aria-pressed="true">Map</button><button id="show-records" type="button" aria-pressed="false">Records</button></div><span class="workspace-local"><i></i> Local workspace</span></header>
 <section id="map-workspace" role="main" aria-label="Project knowledge map">
   <div class="map-heading"><div><p class="map-eyebrow">YOUR PROJECT, CONNECTED</p><h1 id="map-title" tabindex="-1">Follow the context.</h1><p>Explore the decisions, evidence and work behind this project.</p></div><label class="map-search-label"><span class="sr-only">Find something in the project map</span><input id="map-search" type="search" placeholder="Find a thread…" autocomplete="off"></label></div>
-  <div class="map-filters" id="map-filters" aria-label="Map categories"></div>
+  <div class="map-controls"><div class="map-filters" id="map-filters" aria-label="Map categories"></div><button id="map-suggestions" type="button" aria-pressed="false">Suggested links</button></div>
   <div class="map-layout">
-    <div class="map-surface"><div class="canvas-caption"><span id="map-count">Opening project memory</span><button id="map-refresh" type="button">Refresh ↻</button></div><div id="map-canvas" class="map-canvas" aria-label="Connected project entries"></div><div class="map-bottom"><div class="map-legend"><span><i class="line-solid"></i> Recorded</span><span><i class="line-dashed"></i> Suggested</span></div><button id="map-reset" type="button">Reset focus ↗</button></div></div>
+    <div class="map-surface"><div class="canvas-caption"><span id="map-count">Opening project memory</span><button id="map-refresh" type="button">Refresh ↻</button></div><div id="map-canvas" class="map-canvas" aria-label="Connected project entries"></div><div class="map-bottom"><div class="map-legend"><span><i class="line-solid"></i> Recorded</span><span id="map-suggested-legend" hidden><i class="line-dashed"></i> Suggested</span></div><button id="map-reset" type="button">Reset focus ↗</button></div></div>
     <aside id="map-inspector" class="map-inspector" aria-live="polite" aria-label="Selected context"></aside>
   </div>
-  <div class="map-footnote"><span>Solid links show project membership or explicit references. Dashed links suggest shared topics.</span><span>Same memory as your CLI. Nothing uploaded.</span></div>
+  <div class="map-footnote"><span>Select an entry to focus on its recorded connections. Suggested links are optional word matches.</span><span>Same memory as your CLI. Nothing uploaded.</span></div>
   <div id="map-notice" role="status" aria-live="polite"></div>
 </section>
 <div id="records-workspace" hidden>

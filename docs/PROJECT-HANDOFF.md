@@ -26,12 +26,16 @@ The default **Map** view connects the current branch's project entries. Select a
 node to read its full text, source and history, and inspect connected entries.
 Solid lines show project membership, explicit record references, or a named file
 that a check declares as input. A file link does not prove the entry's claims.
-Dashed lines suggest shared topics using matching words; each suggestion explains
-its words and is not saved as a relationship. This prototype does not infer
+Suggested links are off by default. Enable **Suggested links** to include possible
+shared topics around a selected entry; dashed lines distinguish these word
+matches from recorded references. Each suggestion explains its words and is not
+saved as a relationship. This prototype does not infer
 causes, automatically determine affected work, or use personal memory.
 
-Search and category filters narrow the map. It draws up to ten entries at once
-and computes connections within up to 120 entries, prioritizing matches and the
+Search and category filters narrow the map. The overview shows up to six entries
+around the project; selecting an entry centers it and shows up to six direct
+neighbors, with recorded references first. Lines connect only to that center.
+It computes connections within up to 120 entries, prioritizing matches and the
 selected entry. Search covers all active entries, including older ones, but the
 visible map and connection list are not exhaustive. No text leaves the browser
 to generate these connections.

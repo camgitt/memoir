@@ -189,6 +189,23 @@ test('map renders hostile markup as literal text and does not import removed or 
  const b=await browser({load:false}),s=snapshot();s.records[0].text='<img src=x onerror=alert(1)> & <svg onload=alert(2)>';s.records[0].answer='Treat as text';s.removed=[{item:{...s.records[0],id:'answer.removed',text:'Hidden payload'}}];s.history.push({...s.records[0],id:'answer.history',text:'History-only payload'});await b.respond(0,s);
  await b.nodes.get('map-canvas').children.find(n=>n.dataset.nodeKey==='record:answer.fixture').click();const panel=b.nodes.get('map-inspector');assert.match(panel.textContent,/<img src=x onerror=alert\(1\)>/);assert.ok(!panel.descendants().some(n=>['img','svg','script'].includes(n.tagName)));assert.doesNotMatch(b.nodes.get('map-canvas').textContent,/Hidden payload|History-only payload/);
 });
+test('map overview has at most six spokes and no entry-to-entry clutter',async()=>{
+ const b=await browser({load:false}),s=snapshot();const base=s.records[0];s.records=Array.from({length:18},(_,i)=>({...base,id:'decision.'+i,kind:'decision',revision:i+1,text:'Postgres schema migration allocator '+i,answer:undefined}));await b.respond(0,s);
+ const canvas=b.nodes.get('map-canvas');const paths=canvas.children.find(n=>n.tagName==='svg').children;
+ assert.equal(paths.length,6);assert.equal(canvas.children.filter(n=>n.dataset.nodeKey).length,7);assert.ok(paths.every(n=>!n.attributes.class.includes('suggested')));assert.match(b.nodes.get('map-count').textContent,/6 of 18 entries/);
+});
+test('focused map includes only direct neighbors and suggestions require an explicit toggle',async()=>{
+ const b=await browser({load:false}),s=snapshot();const base=s.records[0];s.records=[
+  {...base,id:'decision.database',kind:'decision',text:'Postgres schema migration allocator',answer:undefined},
+  {...base,id:'next.reference',kind:'next',text:'Follow decision.database.',answer:undefined},
+  {...base,id:'next.topic',kind:'next',text:'Postgres schema migration allocator rollout',answer:undefined},
+  {...base,id:'next.unrelated',kind:'next',text:'Prepare illustration assets',answer:undefined}
+ ];await b.respond(0,s);await b.nodes.get('map-canvas').children.find(n=>n.dataset.nodeKey==='record:decision.database').click();
+ const keys=()=>b.nodes.get('map-canvas').children.filter(n=>n.dataset.nodeKey).map(n=>n.dataset.nodeKey);
+ assert.deepEqual(keys(),['record:decision.database','record:next.reference']);assert.doesNotMatch(b.nodes.get('map-inspector').textContent,/SUGGESTED LINK/);
+ await b.nodes.get('map-suggestions').click();assert.equal(b.nodes.get('map-suggestions').attributes['aria-pressed'],'true');assert.ok(keys().includes('record:next.topic'));assert.ok(!keys().includes('record:next.unrelated'));assert.match(b.nodes.get('map-inspector').textContent,/SUGGESTED LINK/);
+ await b.nodes.get('map-suggestions').click();assert.deepEqual(keys(),['record:decision.database','record:next.reference']);assert.equal(b.requests.length,1);
+});
 let failures=0;
 for(const {name,fn} of cases){try{await fn();console.log('PASS '+name);}catch(error){failures++;console.error('FAIL '+name+'\n'+error.message);}}
 console.log(`${cases.length-failures}/${cases.length} UI recovery scenarios passed`);process.exitCode=failures?1:0;
