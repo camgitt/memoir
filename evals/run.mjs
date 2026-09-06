@@ -43,10 +43,13 @@ try {
     const started = performance.now();
     const output = await searchMemories(test.query, { project: projects[test.project || 'alpha'], limit: 5, budget: 1800 });
     const milliseconds = performance.now() - started;
+    const reference = await searchMemories(test.query, { project: projects[test.project || 'alpha'], limit: 5, budget: 1800, engine: 'scan' });
     const retrieved = output.results.map(r => ids.get(r.id)).filter(Boolean);
     const substring = raw.filter(doc => test.query.trim() && doc.content.toLowerCase().includes(test.query.toLowerCase()))
       .slice(0, 5).map(doc => ids.get(path.basename(doc.path, '.md')));
     rows.push({ name: test.name, expected: test.expected, forbidden: test.forbidden || [], retrieved, substring, milliseconds,
+      scan_reference: reference.results.map(r => ids.get(r.id)).filter(Boolean),
+      matches_scan_output: JSON.stringify(output) === JSON.stringify(reference),
       passage_characters: output.results.reduce((sum, r) => sum + r.passage.length, 0) });
   }
   const metrics = field => {
@@ -69,6 +72,9 @@ try {
     runtime: process.version, platform: process.platform, architecture: process.arch,
     records: fixture.records.length, cases: rows.length,
     memoir: metrics('retrieved'),
+    scoped_scan_reference: metrics('scan_reference'),
+    indexed_scan_agreement_cases: rows.filter(r => r.matches_scan_output).length,
+    scan_reference_limit: 'Exhaustive scoring using the same source reader, visibility rules, and ranking formula. Measures index equivalence, not competitive quality. Use retrieval-performance.mjs for latency.',
     unscoped_substring_control: metrics('substring'),
     control_limit: 'Simple substring control, not the previous released ranking engine or a competing product',
     latency_ms: { median: latencies[Math.floor(latencies.length / 2)], p95: latencies[Math.ceil(latencies.length * .95)-1] },
@@ -77,5 +83,5 @@ try {
   const json = JSON.stringify(report, null, 2) + '\n';
   if (process.argv[2]) await fs.outputFile(path.resolve(process.argv[2]), json);
   console.log(json);
-  if (report.memoir.forbidden_results || report.memoir.recall_at_5 < 1 || report.memoir.correct_abstentions !== report.memoir.abstention_cases) process.exitCode = 1;
+  if (report.memoir.forbidden_results || report.memoir.recall_at_5 < 1 || report.memoir.correct_abstentions !== report.memoir.abstention_cases || report.indexed_scan_agreement_cases !== rows.length) process.exitCode = 1;
 } finally { await fs.remove(scratch); }

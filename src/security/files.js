@@ -57,6 +57,35 @@ export async function readSafeFile(root, relative, { maxBytes = MAX_FILE_BYTES }
   } finally { await fs.close(fd); }
 }
 
+// One inventory refresh may inspect thousands of files sharing the same
+// parents. Validate each parent once within this short-lived context, while
+// always lstat'ing the leaf. This is a metadata optimization only: content
+// reads still use readSafeFile, and search revalidates returned sources with
+// safePath. Never retain this context across queries or use it for writes.
+export async function createReadInventory(root) {
+  const base = await fs.realpath(root);
+  const parents = new Map();
+  const parent = dir => {
+    if (!parents.has(dir)) parents.set(dir, (async () => {
+      if (dir !== base) await parent(path.dirname(dir));
+      const st = await fs.lstat(dir);
+      if (!st.isDirectory() || st.isSymbolicLink()) throw new Error('Memory parent is not a regular directory');
+    })());
+    return parents.get(dir);
+  };
+  return {
+    root: base,
+    async stat(relative) {
+      const rel = relativeFile(relative);
+      const full = path.join(base, rel);
+      await parent(path.dirname(full));
+      const stat = await fs.lstat(full);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_FILE_BYTES) throw new Error('Memory file is not regular or exceeds the size limit');
+      return { full, stat, relative: rel };
+    },
+  };
+}
+
 export async function writeSafeFile(root, relative, content) {
   const full = await safePath(root, relative, { createParents: true });
   const tmp = path.join(path.dirname(full), '.memoir-write-' + crypto.randomUUID());

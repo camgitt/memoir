@@ -2,6 +2,8 @@
 
 Audit base: `037e7be7afbee85dde53a1a512125510417b8bd7` (source 3.13.3). This document describes the review branch. It does not mark the original multi-week roadmap complete.
 
+The initial remediation measurements below describe `bf30217`. The subsequent [incremental retrieval index](RETRIEVAL-INDEX.md) adds canonical parse caching, scoped postings, per-query inventory checks, final source validation, and immediate project-file discovery. Its tests and larger matched performance comparison are separate from those original measurements.
+
 ## Findings and evidence
 
 | Audit | Implemented in this branch | Remaining boundary |
@@ -18,14 +20,14 @@ Audit base: `037e7be7afbee85dde53a1a512125510417b8bd7` (source 3.13.3). This doc
 | A10 Scope | Canonical project/shared metadata; filter before retrieval; neutral global instructions | Unlabelled legacy files shared; profiles are not isolated stores |
 | A11 Save/recall | Canonical cross-tool store, direct session retrieval, ID-based expansion | Other clients' native memory is still import/export, not complete native continuity |
 | A12 Setup | Claude/Codex/Cursor project config, preservation, real MCP server handshake | Real client trust/installation acceptance not automated here |
-| A13 Retrieval | Unicode/CJK, IDF weights, lifecycle filtering, source lines, passage budget, evaluation fixture | No FTS/semantic index, held-out comparative benchmark, or SOTA claim |
+| A13 Retrieval | Unicode/CJK, IDF weights, lifecycle filtering, source lines, passage budget, incremental lexical index, scoped exhaustive reference | No disk-backed FTS/semantic index, held-out coding-utility benchmark, or SOTA claim |
 | A14 Capture/consolidation | Scoped capture, unverified records, local consolidation archive/undo, bounded model request | Outcome-backed lessons and measured capture precision remain |
 | A15 Workspace | Explicit selected-project file snapshot; secret omissions; hashes; separate recovery directory; disable old tar extraction | Omitted files/Git history require separate backup; detection is heuristic |
 | A16 Release | Reviewable source candidate and installed-artifact smoke workflow | npm trusted publisher, version selection, publication, registry smoke |
 | A17 Dependencies/tests | Dependency refresh, zero audit advisories at verification, adversarial suite, expanded CI matrix | Hosted matrix results must be checked before release |
 | A18 Error/telemetry/cloud | Argument-array Git calls, propagated failures, success-labelled events, atomic version SQL | Production tenant policies, conditional cloud commit/retention races, task-outcome telemetry |
 
-## Local evidence
+## Initial remediation evidence (bf30217)
 
 Local verification passed 19/19 suites and the installed-tarball smoke workflow. The audit integration suite contains 26 groups and covers portable paths, symlinks, incomplete encryption, ciphertext swaps, cloud traversal, user-held cloud keys, locks, durable history/deletion, MCP boundaries, cross-tool recall, project isolation, Unicode, collision-safe exports, partial Git updates, repeated encryption, Git main/master selection and removal of plaintext from the current encrypted tree, purge versus stale history, client configuration, resume drift, verified migration, workspace recovery, and consolidation undo.
 
@@ -47,7 +49,7 @@ Batching independent checks reduced the initial safety-patch warm median at 10,0
 2. Validate real client acceptance and hosted cloud migration/tenant policies; configure publication and test the registry artifact.
 3. Build an operation journal and conditional cloud commit/retention protocol; finish project aliases and legacy scope migration.
 4. Freeze held-out coding-continuity tasks and a larger multilingual retrieval corpus. Compare the released version, lexical controls, and relevant systems under equal context/cost.
-5. Add a rebuildable index and optional semantic candidates only where that evaluation justifies them.
+5. Extend the process-local lexical index with persistence or optional semantic candidates only where evaluation justifies them; measure memory and cold-start costs as well as warm latency.
 6. Add evidence-backed reusable lessons, real first-use/returning-use measurements, and independent security/recovery review.
 
 The original roadmap's comparative quality, adoption, and independent-review gates require evidence from real users and external systems. They cannot be completed by passing synthetic repository tests.

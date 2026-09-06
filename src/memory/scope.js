@@ -29,17 +29,30 @@ export function projectIdentity(project = process.env.MEMOIR_PROJECT_ROOT || pro
   return id;
 }
 
-export function visibleMemory(item, { project = process.env.MEMOIR_PROJECT_ROOT || process.cwd(), allProjects = false, now = Date.now() } = {}) {
-  if (!item || item.hidden === true || item.hidden === 'true' || item.deleted === true || ['deleted', 'hidden', 'superseded'].includes(item.status) || item.superseded_by) return false;
-  if (item.valid_from && Date.parse(item.valid_from) > now) return false;
-  if (item.valid_until && Date.parse(item.valid_until) <= now) return false;
-  if (!allProjects && item.claudeProjectKey) {
-    const current = path.resolve(project.replace(/^~/, os.homedir())).replace(/[\\/:]/g, '-');
-    const shared = os.homedir().replace(/[\\/:]/g, '-');
-    if (item.claudeProjectKey !== current && item.claudeProjectKey !== shared) return false;
-  }
-  if (allProjects || !item.project || item.project === 'shared') return true;
-  return projectIdentity(String(item.project)) === projectIdentity(project);
+// Resolve project paths once per query, not once for every stored record.
+// A new predicate is created on each query so time-based validity is current.
+export function memoryVisibility({ project = process.env.MEMOIR_PROJECT_ROOT || process.cwd(), allProjects = false, now = Date.now() } = {}) {
+  let activeId, currentKey, sharedKey;
+  const identities = new Map();
+  return item => {
+    if (!item || item.hidden === true || item.hidden === 'true' || item.deleted === true || ['deleted', 'hidden', 'superseded'].includes(item.status) || item.superseded_by) return false;
+    if (item.valid_from && Date.parse(item.valid_from) > now) return false;
+    if (item.valid_until && Date.parse(item.valid_until) <= now) return false;
+    if (!allProjects && item.claudeProjectKey) {
+      currentKey ??= path.resolve(project.replace(/^~/, os.homedir())).replace(/[\\/:]/g, '-');
+      sharedKey ??= os.homedir().replace(/[\\/:]/g, '-');
+      if (item.claudeProjectKey !== currentKey && item.claudeProjectKey !== sharedKey) return false;
+    }
+    if (allProjects || !item.project || item.project === 'shared') return true;
+    activeId ??= projectIdentity(project);
+    const key = String(item.project);
+    if (!identities.has(key)) identities.set(key, projectIdentity(key));
+    return identities.get(key) === activeId;
+  };
+}
+
+export function visibleMemory(item, options = {}) {
+  return memoryVisibility(options)(item);
 }
 
 export function sessionView(state, options = {}) {

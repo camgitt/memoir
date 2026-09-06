@@ -37,6 +37,7 @@
     "prepublishOnly": "node scripts/check-clean-for-publish.mjs && npm test",
     "version": "node -e \"const f=require('fs');const p=require('./package.json');const s=JSON.parse(f.readFileSync('server.json','utf8'));s.version=p.version;s.packages.forEach(x=>x.version=p.version);f.writeFileSync('server.json',JSON.stringify(s,null,2)+'\\n')\" && git add server.json",
     "eval": "node evals/run.mjs",
+    "bench:retrieval": "node evals/retrieval-performance.mjs",
     "test:packed": "node scripts/test-packed.mjs"
   },
   "keywords": [

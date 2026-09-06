@@ -8,7 +8,7 @@
 - **Stack:** Node.js CLI + Supabase (auth, storage, PostgreSQL)
 
 ## What it does
-CLI + MCP server that gives AI tools persistent memory. Your AI can search, read, and save memories across sessions, tools, and machines. Supports 11 tools: Claude Code, Cursor, Windsurf, Gemini, Copilot, Codex, ChatGPT, Aider, Zed, Cline, Continue.dev.
+CLI + MCP server for project-scoped memory and coding-session handoffs. It has import/export adapters for 11 tools. The review branch configures Claude Code, Codex, and Cursor with an SDK handshake; actual client acceptance and hosted rollout remain release gates. See README.md and docs/RELIABILITY-ROLLOUT.md for the precise boundaries.
 
 ## Architecture
 - **CLI commands:** push, restore, snapshot, resume, migrate, diff, profile, doctor, share, upgrade, consolidate, login (--signup), forgot-password, recall, forget, validate, why, note/goal/next/done/ask
@@ -35,7 +35,7 @@ CLI + MCP server that gives AI tools persistent memory. Your AI can search, read
 - Has pricing page, waitlist (Supabase), SEO, OG image, blog posts
 
 ## Current status
-- Core product solid; 3.12.0 = retrieval rewrite (passages not headers), memoir forget, capture guards, retention fix
+- Review candidate: audit reliability fixes plus incremental scoped lexical retrieval. See docs/AUDIT-REMEDIATION.md and docs/RETRIEVAL-INDEX.md; passing regression tests is not a production rollout or a SOTA claim.
 - Pricing page + waitlist live on memoir.sh
 - Stripe checkout wired — Pro is purchasable via `memoir upgrade` (hits `stripe-checkout` Supabase function, opens browser). Live-mode end-to-end not yet verified.
 - Session continuity + consolidate shipped (cross-session goal/decision handoff, memory cleanup)

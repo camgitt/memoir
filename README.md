@@ -32,6 +32,7 @@ For source development, use `npm ci`, then `node bin/memoir.js setup`. The gener
 - `memoir_note` records a scoped decision and rationale. Older decisions are archived when the working summary fills.
 - `memoir_remember` writes a canonical Markdown record. Open its returned ID with `memoir_read`, `tool: "memoir"`, `filepath: "<id>.md"`.
 - `memoir_recall` searches the active project plus shared records and returns matching passages, paths, line evidence, and IDs where available.
+- Recall reuses an incremental lexical index while checking source changes and scope on each query. New project instructions are discovered without a timed cache delay. See [retrieval behavior and benchmarks](docs/RETRIEVAL-INDEX.md).
 - `memoir_resume` returns the goal, next actions, questions, and decisions, and compares the saved commit with the checkout. Old observations never imply current tests pass.
 - `memoir_forget` accepts a decision match or canonical ID. Hidden records are excluded from recall/session views; `purge: true` also removes current canonical text and local revision history.
 

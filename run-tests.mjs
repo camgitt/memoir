@@ -71,6 +71,7 @@ const suites = [
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
   { name: 'recall (unit)', cmd: 'node', args: ['test-recall.mjs'] },
+  { name: 'retrieval index (integration)', cmd: 'node', args: ['test-retrieval-index.mjs'] },
   { name: 'event-log (unit)', cmd: 'node', args: ['test-event-log.mjs'] },
   { name: 'parking-and-sync (unit)', cmd: 'node', args: ['test-parking-and-sync.mjs'] },
   { name: 'events-summary (unit)', cmd: 'node', args: ['test-events-summary.mjs'] },
