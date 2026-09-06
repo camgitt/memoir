@@ -29,6 +29,8 @@ Project ledgers, personal memory, local client configuration, deployment credent
 
 External settings must be checked again when changed. Passing source tests does not prove npm publishing permission, client MCP approval or hosted policies remain unchanged. Receipt input hashes also become stale when the package manifests change for a release.
 
+CI also exposed an intermittent Git error-classification bug: `403` inside a generated path or timestamp was mistaken for an HTTP authorization failure. The classifier now requires an HTTP diagnostic, with regressions covering both the false match and a real HTTP 403.
+
 ## Publication
 
 The existing GitHub publisher was failing authentication before this release. npm requires security-key verification to inspect and repair the trusted-publisher settings. Source and server readiness alone must not be described as a published npm version. The completed workflow and registry version are the publication evidence.

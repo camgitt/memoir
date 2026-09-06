@@ -122,7 +122,8 @@ export function classifyGitError(err) {
   const text = `${err?.message || ''}\n${err?.stderr || ''}`.toLowerCase();
   if (err?.code === 'ETIMEDOUT' || err?.signal === 'SIGTERM' || /timed? ?out/.test(text)) return 'timeout';
   if (/non-fast-forward|fetch first|\[rejected\]/.test(text)) return 'non_fast_forward';
-  if (/authentication failed|could not read username|could not read password|permission denied|terminal prompts disabled|invalid credentials|403/.test(text)) return 'auth';
+  // Match HTTP diagnostics, not a coincidental 403 in a path or timestamp.
+  if (/authentication failed|could not read username|could not read password|permission denied|terminal prompts disabled|invalid credentials|requested url returned error: 403\b|http(?:\/[\d.]+)?(?: error| status(?: code)?)?[: ]+403\b/.test(text)) return 'auth';
   if (/could not resolve host|unable to access|connection (?:refused|reset|timed)|network is unreachable|early eof|remote end hung up/.test(text)) return 'network';
   if (/repository not found|does not appear to be a git repository|does not exist|no such file/.test(text)) return 'not_found';
   if (/invalid characters/.test(text)) return 'bad_url';
