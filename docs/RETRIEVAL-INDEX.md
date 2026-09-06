@@ -2,6 +2,8 @@
 
 Memoir uses a process-local inverted index to find lexical candidates and reuse field-token matches. Markdown and session records remain the source of truth. The index is rebuilt from those sources when the process starts or the search cache is cleared; it is not another copy to back up or synchronize.
 
+See [matched measurements and the memory tradeoff](RETRIEVAL-RESULTS.md) for the checked implementation.
+
 The index preserves the existing field weights, conservative English normalization, bidirectional prefix matching, Unicode/CJK tokens, coverage multiplier, scoped IDF, passage extraction, and result budget. It adds no embedding model, remote call, native binary, or runtime dependency. This is a performance and consistency change, not a new semantic-retrieval algorithm or evidence of better task completion.
 
 ## Read path
