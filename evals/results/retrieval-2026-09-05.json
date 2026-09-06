@@ -1,0 +1,5333 @@
+{
+  "label": "Matched synthetic retrieval performance, not competitive SOTA or coding utility",
+  "date": "2026-09-05",
+  "baseline_commit": "bf3021748a4f0f405f1787b31f307e46ac965f7e",
+  "implementation_commit": "a5af53e11e4beb9022e065f7a219ccf309df4d7d",
+  "implementation_hashes_verified": true,
+  "note": "The raw reports record the Git HEAD at measurement time; source file hashes identify the then-uncommitted implementation and were verified against implementation_commit. Runs were sequential on the same machine.",
+  "comparison": [
+    {
+      "kind": "adapter",
+      "records": 1000,
+      "warm_samples_each": 120,
+      "before_cold_ms": 254.32912499999998,
+      "after_cold_ms": 184.41775,
+      "before_median_ms": 53.58604099999957,
+      "after_median_ms": 8.369459000000006,
+      "before_p95_ms": 57.932249999999954,
+      "after_p95_ms": 9.974790999999982,
+      "median_speedup": 6.402569270008913
+    },
+    {
+      "kind": "adapter",
+      "records": 10000,
+      "warm_samples_each": 120,
+      "before_cold_ms": 1799.9608750000007,
+      "after_cold_ms": 1344.8704999999998,
+      "before_median_ms": 516.7825420000008,
+      "after_median_ms": 77.28200000000015,
+      "before_p95_ms": 545.570040999999,
+      "after_p95_ms": 109.74020799999926,
+      "median_speedup": 6.686971636344813
+    },
+    {
+      "kind": "canonical",
+      "records": 1000,
+      "warm_samples_each": 120,
+      "before_cold_ms": 417.166791,
+      "after_cold_ms": 146.13170799999898,
+      "before_median_ms": 359.1545420000002,
+      "after_median_ms": 9.94379200000003,
+      "before_p95_ms": 367.96662500000093,
+      "after_p95_ms": 11.213708999999653,
+      "median_speedup": 36.118468889936466
+    },
+    {
+      "kind": "canonical",
+      "records": 10000,
+      "warm_samples_each": 120,
+      "before_cold_ms": null,
+      "after_cold_ms": 1515.5525830000006,
+      "before_median_ms": null,
+      "after_median_ms": 92.34620899999936,
+      "before_p95_ms": null,
+      "after_p95_ms": 124.83795800000007,
+      "median_speedup": null
+    }
+  ],
+  "memory_probe": {
+    "baseline": {
+      "protocol": "Fresh process, adapter corpus of 10000 records, 24 warm queries, forced GC at process beforeExit after benchmark cleanup; cache/index remain reachable. Separate from latency sample runs.",
+      "after_gc": {
+        "rss": 326320128,
+        "heapTotal": 185171968,
+        "heapUsed": 100165840,
+        "external": 3893454,
+        "arrayBuffers": 1361687
+      }
+    },
+    "indexed": {
+      "protocol": "Fresh process, adapter corpus of 10000 records, 24 warm queries, forced GC at process beforeExit after benchmark cleanup; cache/index remain reachable. Separate from latency sample runs.",
+      "after_gc": {
+        "rss": 405012480,
+        "heapTotal": 262406144,
+        "heapUsed": 171797656,
+        "external": 3900945,
+        "arrayBuffers": 209147
+      }
+    }
+  },
+  "raw_reports": {
+    "baseline_adapter": {
+      "label": "Synthetic retrieval latency; not a coding utility or SOTA evaluation",
+      "fixture_version": "coding-retrieval-v1",
+      "harness_sha256": "0e74b721a4cbbff91b1ae89bbba305e0e7e172f7af789edbafba29aced5d2ef2",
+      "source_commit": "bf3021748a4f0f405f1787b31f307e46ac965f7e",
+      "source_file_sha256": {
+        "src/memory/search.js": "39e58dd740d6389bb2726a46b170a799c2917654e0c2706a52a1334a972e0291",
+        "src/memory/scope.js": "3c004320b0c6cc1349b460a42d88a2194a5aacba818799494b8d1f2d1f443d43",
+        "src/memory/lexical-index.js": null,
+        "src/security/files.js": "49a7bfca90827497185df32156dab858885f8a7e8c06c9bf3fe71a216fb4c203"
+      },
+      "measured_at": "2026-09-06T00:46:20.428Z",
+      "node": "v26.7.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "protocol": "In-process public search API, including filesystem discovery/validation, parsing, ranking, and passage generation. One cold query then a fixed mixed query cycle. OS file cache is not flushed. RSS is process-wide. Sources are synthetic. File hashes identify the measured implementation even if the checkout has uncommitted edits.",
+      "results": [
+        {
+          "kind": "adapter",
+          "records": 1000,
+          "bytes": 1017773,
+          "fixture_sha256": "56428aac1d213d328347886ebe90f650bbd6305371072af1754c02d9c3d3f8f5",
+          "cold_ms": 254.32912499999998,
+          "warm_samples": 120,
+          "warm_median_ms": 53.58604099999957,
+          "warm_p95_ms": 57.932249999999954,
+          "rss_bytes": 175783936,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 254.32912499999998,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 55.653291999999965,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 62.424082999999996,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 57.81054199999994,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 55.45404199999996,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 55.57316700000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 58.46554100000003,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 57.971041000000014,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 55.70129199999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 58.659333999999944,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 55.568250000000035,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 54.751667,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 57.932249999999954,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 57.081957999999986,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 57.631124999999884,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 57.152417000000014,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 57.63395799999989,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 56.06966699999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 55.82041699999991,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 55.31679200000008,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 55.71758399999999,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 60.132416999999805,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 53.43770900000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 54.86008300000003,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 54.114250000000084,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 56.56041600000003,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 54.87783300000001,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 55.09491700000012,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 54.21075000000019,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 53.083458000000064,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 54.11124999999993,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 52.99849999999992,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 52.69179200000008,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 56.22724999999991,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 51.577124999999796,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 52.16908400000011,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 51.39570900000035,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.22724999999991,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 52.21875,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 52.22474999999986,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 53.11474999999973,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 52.14683399999967,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 54.17054199999984,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 54.22591700000021,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 52.450374999999894,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 55.509207999999944,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 51.16420900000003,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 51.522457999999915,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 50.76845900000035,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 54.5161250000001,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 54.097375000000284,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 52.24591599999985,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 53.34270900000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 55.07554200000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 52.479333000000224,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 53.00716599999987,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 54.28987499999994,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 58.1122919999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 52.43766700000015,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 51.2002080000002,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 52.523499999999785,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.53379199999972,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 52.669374999999945,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 52.683500000000095,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 53.04091700000026,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 54.4991670000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 53.96637499999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 53.10962500000005,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 54.14979200000016,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 55.53608299999996,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 51.34641600000032,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 50.900125000000116,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 51.12745799999993,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.272791999999754,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 53.63966700000037,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 53.60237500000039,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 54.0721250000006,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 53.3940419999999,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 53.56445800000074,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 54.36316699999952,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 52.61108300000069,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 56.77812500000073,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 50.67662500000006,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 50.64308400000027,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 52.733000000000175,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.06883299999936,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 52.4618330000003,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 54.31666700000005,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 52.75933299999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 53.8637920000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 54.392917000000125,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 54.0063339999997,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 54.2509170000003,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 56.470541000000594,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 50.2875839999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 50.33112500000061,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 51.74983299999985,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.882166999999754,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 52.534999999999854,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 52.572000000000116,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 53.652333,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 55.077666999999565,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 54.7205840000006,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 52.58091599999989,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 52.51533300000028,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 54.86979100000008,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 51.52425000000039,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 51.49712499999987,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 51.831458000000566,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 53.238000000000284,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 54.52125000000069,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 52.71279200000026,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 53.58604099999957,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 52.33729200000016,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 52.78925000000072,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 52.199374999999236,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 53.461709000000155,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 54.2313750000003,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 51.14983299999949,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 49.87037500000042,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 53.218958000000384,
+              "total": 1000,
+              "results": 5
+            }
+          ]
+        },
+        {
+          "kind": "adapter",
+          "records": 10000,
+          "bytes": 10197773,
+          "fixture_sha256": "e8296497d18e846f3df7e722d4a70e09b5b28a235d9dbbf0b4ef553c28afb125",
+          "cold_ms": 1799.9608750000007,
+          "warm_samples": 120,
+          "warm_median_ms": 516.7825420000008,
+          "warm_p95_ms": 545.570040999999,
+          "rss_bytes": 282525696,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 1799.9608750000007,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 529.4059159999997,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 530.560207999999,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 521.7111249999998,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 531.3483340000002,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 519.4582500000015,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 525.1686659999996,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 537.4869159999998,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 534.5997910000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 558.4199170000011,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 509.53695900000093,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 502.6271660000002,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 514.0028330000005,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 526.5154999999995,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 525.8255839999983,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 530.0773749999971,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 527.7540000000008,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 524.9730840000011,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 531.1524590000008,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 528.1000409999979,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 559.4966669999994,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 568.288708,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 507.7612079999999,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 505.7587500000009,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 508.60266599999886,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 530.6749999999993,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 526.0111660000002,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 534.5136660000026,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 534.9719170000026,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 531.7492089999978,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 524.239916999999,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 531.4728749999995,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 530.4225000000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 550.478916,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 503.5592089999991,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 497.9837499999994,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 515.674167000001,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 524.6282500000016,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 523.2736250000016,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 527.484916999998,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 527.4906670000018,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 524.42425,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 519.9201250000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 525.575332999997,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 523.1837919999998,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 545.570040999999,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 501.01216600000043,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 496.16466599999694,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 505.026374999994,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 521.9895000000033,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 520.5945409999986,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 513.4009579999984,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 523.0635420000035,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 518.9708749999991,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 519.8211670000019,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 523.1513750000013,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 538.1607919999951,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 544.2148749999978,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 494.99883299999783,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 494.93649999999616,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 498.71658300000126,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 519.2147079999995,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 514.9124169999996,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 520.6008340000044,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 517.3917500000025,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 517.6917499999981,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 516.254832999999,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 511.7598750000034,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 515.6025000000009,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 536.0665410000001,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 493.67733299999963,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 487.5152920000037,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 500.1162089999998,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 511.95595799999865,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 511.9496250000011,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 513.4627910000054,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 516.5337080000027,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 515.5672090000007,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 514.0161660000012,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 514.9680829999998,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 516.5107080000016,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 552.856749999999,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 490.89679199999955,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 495.4916249999951,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 494.81866699999955,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 516.3697919999977,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 510.4502500000017,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 524.0263750000013,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 509.14933400000155,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 517.6543339999989,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 507.65708299999824,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 510.54095800000505,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 516.7825420000008,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 542.7205420000028,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 503.419541999996,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 493.7520000000004,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 490.6846250000017,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 509.8709999999992,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 513.3141669999968,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 521.924417000002,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 508.41887499999575,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 515.5103329999984,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 511.2123750000028,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 518.9072090000045,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 514.2384579999998,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 543.1093329999931,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 492.92620799999713,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 487.4697079999969,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 497.8543329999957,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 513.7077079999945,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 513.2659170000115,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 520.8823330000014,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 524.8496670000022,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 515.0425840000098,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 514.2896250000049,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 512.5582910000085,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 511.66691700000956,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 549.1317080000008,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 491.9635830000043,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 489.0847919999942,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 501.33870800001023,
+              "total": 10000,
+              "results": 5
+            }
+          ]
+        }
+      ]
+    },
+    "baseline_canonical": {
+      "label": "Synthetic retrieval latency; not a coding utility or SOTA evaluation",
+      "fixture_version": "coding-retrieval-v1",
+      "harness_sha256": "0e74b721a4cbbff91b1ae89bbba305e0e7e172f7af789edbafba29aced5d2ef2",
+      "source_commit": "bf3021748a4f0f405f1787b31f307e46ac965f7e",
+      "source_file_sha256": {
+        "src/memory/search.js": "39e58dd740d6389bb2726a46b170a799c2917654e0c2706a52a1334a972e0291",
+        "src/memory/scope.js": "3c004320b0c6cc1349b460a42d88a2194a5aacba818799494b8d1f2d1f443d43",
+        "src/memory/lexical-index.js": null,
+        "src/security/files.js": "49a7bfca90827497185df32156dab858885f8a7e8c06c9bf3fe71a216fb4c203"
+      },
+      "measured_at": "2026-09-06T00:47:04.380Z",
+      "node": "v26.7.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "protocol": "In-process public search API, including filesystem discovery/validation, parsing, ranking, and passage generation. One cold query then a fixed mixed query cycle. OS file cache is not flushed. RSS is process-wide. Sources are synthetic. File hashes identify the measured implementation even if the checkout has uncommitted edits.",
+      "results": [
+        {
+          "kind": "canonical",
+          "records": 1000,
+          "bytes": 1017773,
+          "fixture_sha256": "6d7ff8d90727f198cbe32397ee672fc616a10b8b7a0f9c56ae82d63f32d8fd8b",
+          "cold_ms": 417.166791,
+          "warm_samples": 120,
+          "warm_median_ms": 359.1545420000002,
+          "warm_p95_ms": 367.96662500000093,
+          "rss_bytes": 197885952,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 417.166791,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 364.742709,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 361.02933299999995,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 354.8047499999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 359.49633300000005,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 355.605458,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 362.9175,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 365.48454200000015,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 367.8719579999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 366.5394580000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 364.0276249999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 359.79570800000056,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 376.12466700000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 369.28708300000017,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 366.19383300000027,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 362.25970899999993,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 365.8442500000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 360.30783299999985,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 363.1110840000001,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 358.7322919999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 359.5307500000008,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 374.20854099999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 357.3120830000007,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 350.97170899999946,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 349.743625000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 359.77766599999995,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 358.90916599999946,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 357.73012500000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 352.9161670000012,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 357.63166699999965,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 359.410249999999,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 366.17945899999904,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 359.39658299999974,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 366.82179200000064,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 365.2323749999996,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 364.3386250000003,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 363.6661669999994,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 367.6949999999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 360.78166600000077,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 357.6080839999995,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 359.4033330000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 359.5551660000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 358.6257089999999,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 360.53183399999944,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 362.7711249999993,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 359.77266600000075,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 354.4382919999989,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 357.14908300000025,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 356.7724999999991,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 358.5175829999971,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 359.8814590000002,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 357.6007499999978,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 359.1545420000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 356.0866249999999,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 358.6962500000009,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 355.8302909999984,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 355.7669160000005,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 355.11141599999974,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 353.5687080000025,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 359.90616699999737,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 364.9951250000013,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 361.0412499999984,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 364.2000420000004,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 361.7384999999995,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 362.30574999999953,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 364.99162499999875,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 364.4015830000026,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 365.6432079999977,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 359.10983300000225,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 364.5812920000026,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 357.46308300000237,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 358.79695899999933,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 357.75287500000195,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 383.74204100000134,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 357.0264580000003,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 356.9006670000017,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 356.8313330000019,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 355.401167,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 354.9381659999999,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 358.12125000000015,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 355.8763749999998,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 361.6156250000022,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 353.4101670000018,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 351.1377089999987,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 353.87004199999865,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 354.2980830000015,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 361.8537499999984,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 365.0967079999973,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 361.4782500000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 361.12141599999813,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 358.90424999999595,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 360.0158749999973,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 361.713708999996,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 367.96662500000093,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 357.4340830000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 359.3759580000042,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 358.608917000005,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 358.4485830000049,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 364.69633299999987,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 356.89766699999745,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 361.2571670000034,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 354.28529100000014,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 358.2911660000027,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 352.93533300000126,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 359.59483300000284,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 357.1219590000037,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 351.0688750000045,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 348.8654999999999,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 354.1667910000033,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 355.731749999999,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 357.5486250000031,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 351.9500409999964,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 351.1935830000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 355.22095799999806,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 349.34599999999773,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 368.3876670000027,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 358.6946250000037,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 371.50291700000525,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 357.8096250000017,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 358.40629199999967,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 357.52579200000037,
+              "total": 1000,
+              "results": 5
+            }
+          ]
+        }
+      ]
+    },
+    "indexed": {
+      "label": "Synthetic retrieval latency; not a coding utility or SOTA evaluation",
+      "fixture_version": "coding-retrieval-v1",
+      "harness_sha256": "0e74b721a4cbbff91b1ae89bbba305e0e7e172f7af789edbafba29aced5d2ef2",
+      "source_commit": "bf3021748a4f0f405f1787b31f307e46ac965f7e",
+      "source_file_sha256": {
+        "src/memory/search.js": "8a7b7350e8699c45e03b32f6551d38b07b8224766d8b8fa72b3768eeef2dab41",
+        "src/memory/scope.js": "c4ffb4405bf380cc93cd1f020d144c9736d7180611466d4ca772ce47bf485eb6",
+        "src/memory/lexical-index.js": "a91773837914119a9978745895b784bbefac2f67f6feed7f99835b7ce39dbe13",
+        "src/security/files.js": "71948e7da176098c8ab83722858370bd49c49cd0dcabf6e96967a5ce1a1a553e"
+      },
+      "measured_at": "2026-09-06T00:47:32.123Z",
+      "node": "v26.7.0",
+      "platform": "darwin",
+      "arch": "arm64",
+      "cpu": "Apple M4 Pro",
+      "protocol": "In-process public search API, including filesystem discovery/validation, parsing, ranking, and passage generation. One cold query then a fixed mixed query cycle. OS file cache is not flushed. RSS is process-wide. Sources are synthetic. File hashes identify the measured implementation even if the checkout has uncommitted edits.",
+      "results": [
+        {
+          "kind": "adapter",
+          "records": 1000,
+          "bytes": 1017773,
+          "fixture_sha256": "56428aac1d213d328347886ebe90f650bbd6305371072af1754c02d9c3d3f8f5",
+          "cold_ms": 184.41775,
+          "warm_samples": 120,
+          "warm_median_ms": 8.369459000000006,
+          "warm_p95_ms": 9.974790999999982,
+          "rss_bytes": 171573248,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 184.41775,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 11.787624999999991,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 11.771915999999976,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 11.518917000000044,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.444165999999996,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.644207999999992,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.830332999999996,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 10.097916999999995,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.14100000000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 10.377334000000019,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 8.178625000000011,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 6.394167000000039,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.345875000000035,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 9.337208000000032,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.014542000000006,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 9.519874999999956,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.151584000000014,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.339458000000036,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.11229099999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 8.59658300000001,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.606791999999984,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 10.231957999999963,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 8.150624999999991,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.876374999999996,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.913416999999981,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.923708999999974,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.77212499999996,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 9.049290999999926,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.505791999999929,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.611500000000092,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.584249999999997,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 8.167290999999977,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.541917000000012,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.82545899999991,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 8.428999999999974,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.871374999999944,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.211500000000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.221332999999959,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.894457999999986,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.77699999999993,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.604082999999946,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.389250000000061,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.207625000000007,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 8.043291999999951,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.407916999999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.798457999999982,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 8.07504199999994,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.902417000000014,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.458459000000062,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.480583999999908,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.501708000000008,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.799959000000058,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.062374999999975,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.736292000000049,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.767250000000104,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 8.205874999999992,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.722416000000067,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.974790999999982,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 8.248082999999951,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 6.063166999999908,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.486667000000011,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.216791999999941,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.532625000000053,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.56737499999997,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.199082999999973,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.217249999999922,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.394000000000005,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 7.928708000000029,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.621792000000028,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.596000000000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 7.86708299999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.673375000000078,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.496833000000038,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.302666999999929,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.376457999999957,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.369459000000006,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.842249999999922,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.160041999999976,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.264332999999965,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 7.995874999999955,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.33583299999998,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.645874999999933,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 7.7725829999999405,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.731583999999998,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.257875000000013,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 8.157000000000039,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.114041000000043,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.23370900000009,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.449541999999951,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.114917000000105,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.106082999999899,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 7.979625000000169,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.299125000000004,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.785292000000027,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 7.910290999999916,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.92712500000016,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.310833000000002,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 7.883249999999862,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.114707999999837,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.278708000000051,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.07049999999981,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.183667000000014,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 7.945958000000019,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 7.7565830000000915,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.24587500000007,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.379374999999982,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 7.669375000000173,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.84495899999979,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.183125000000018,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 7.969957999999906,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 8.0775000000001,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 8.441790999999967,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 8.082582999999886,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 8.143166999999949,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 8.194958000000042,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 7.87195799999995,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 8.237292000000025,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 9.360082999999804,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 7.908750000000055,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 5.524583000000121,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 8.367500000000064,
+              "total": 1000,
+              "results": 5
+            }
+          ]
+        },
+        {
+          "kind": "adapter",
+          "records": 10000,
+          "bytes": 10197773,
+          "fixture_sha256": "e8296497d18e846f3df7e722d4a70e09b5b28a235d9dbbf0b4ef553c28afb125",
+          "cold_ms": 1344.8704999999998,
+          "warm_samples": 120,
+          "warm_median_ms": 77.28200000000015,
+          "warm_p95_ms": 109.74020799999926,
+          "rss_bytes": 717242368,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 1344.8704999999998,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 80.37820800000009,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 76.78995899999973,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 78.65654199999972,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 77.64599999999973,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 78.1721249999996,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 77.25791700000036,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.41279099999974,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 74.69958399999996,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 90.98912500000006,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 72.5949999999998,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 58.28804199999968,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 121.20579199999975,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 80.51058299999977,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 75.16591599999992,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 76.90016699999978,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 75.77300000000014,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 77.70104199999969,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 76.52520800000002,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 77.91045800000029,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.96391700000004,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 91.2026249999999,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 70.5242500000004,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 58.12945799999943,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 109.01324999999997,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 77.77658299999985,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 77.13100000000031,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 79.5438750000003,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 77.14933299999939,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 79.41049999999996,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 76.75354199999947,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.2685419999998,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.5835420000003,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 90.57591700000012,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 73.66608300000007,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 58.76416700000027,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 110.05833299999995,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 77.47233299999971,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 75.86675000000014,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 79.12629199999992,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 77.83549999999923,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 78.60450000000037,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 75.07395799999995,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.0226249999996,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 75.41412500000024,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 91.05112499999996,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 72.90754199999992,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 58.94383300000027,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 111.90937500000018,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 78.76124999999956,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 77.57012499999928,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 78.02958300000046,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 76.51491600000008,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 77.5811249999997,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 78.078708,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.94954200000029,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 78.04624999999942,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 90.90991600000052,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 71.68233400000008,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 57.1713749999999,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 108.46904100000029,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 77.37487500000043,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 78.38950000000023,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 78.81962500000009,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 77.28200000000015,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 76.33300000000054,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 75.13308300000062,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 75.61079199999949,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.64025000000038,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 91.90450000000055,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 73.76533299999937,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 57.39470900000015,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 109.93370800000048,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 75.70283300000119,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 77.35566599999947,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 79.75387500000033,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 77.60733299999993,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 76.91712499999994,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 75.76862500000061,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.39595799999915,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.49645799999962,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 90.39624999999978,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 71.78520800000115,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 57.37745800000084,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 109.74020799999926,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 78.36012500000106,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 79.35833300000013,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 79.26037499999984,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 76.36204200000066,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 77.3403330000001,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 76.69883300000038,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 76.59229100000084,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.88812499999949,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 89.6232089999994,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 71.40166700000009,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 57.28204100000039,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 112.43937499999993,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 77.77300000000105,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 79.46220899999935,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 78.43695800000023,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 75.74141700000109,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 77.98604200000045,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 75.19225000000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 74.50525000000016,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.08224999999948,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 91.20612500000061,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 72.43916600000011,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 57.68825000000106,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 111.54483299999993,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 79.1502500000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 78.80687500000022,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 79.18937499999993,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 76.42725000000064,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 77.7150840000013,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 78.25745800000004,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 77.15616600000067,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 76.85508300000038,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 90.99291600000106,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 73.10299999999916,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 58.01625000000058,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 109.01700000000164,
+              "total": 10000,
+              "results": 5
+            }
+          ]
+        },
+        {
+          "kind": "canonical",
+          "records": 1000,
+          "bytes": 1017773,
+          "fixture_sha256": "6d7ff8d90727f198cbe32397ee672fc616a10b8b7a0f9c56ae82d63f32d8fd8b",
+          "cold_ms": 146.13170799999898,
+          "warm_samples": 120,
+          "warm_median_ms": 9.94379200000003,
+          "warm_p95_ms": 11.213708999999653,
+          "rss_bytes": 764444672,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 146.13170799999898,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.518000000000029,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 10.477458000001207,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.41241699999955,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.94379200000003,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.38012499999968,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.68420800000058,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.780749999999898,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.99658399999862,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.476708000000144,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.204083000000537,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.634791999998924,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.422957999999198,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.434499999999389,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.82116700000006,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.704334000000017,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.36120800000026,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.847917000000962,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 10.042250000000422,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.279791999999361,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 10.61475000000064,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.44000000000051,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.650792000000365,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.102249999999913,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.67608300000029,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.061917000000903,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 10.81054199999926,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.874250000000757,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.262833000000683,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.322833999998693,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.536375000001499,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.813791999999012,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.649792000000161,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.562334000000192,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.270791999999346,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 8.071082999998907,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.755583000000115,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.547167000000627,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.616041999999652,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.378709000000526,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.008749999999054,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.738499999999476,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 10.03295799999978,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.51116600000023,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.999916999999186,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.194582999998602,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.658707999999024,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.153500000000349,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.872041999999055,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 9.742083000001003,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.953333000001294,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.421875,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.59625000000051,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.316417000000001,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.660791999998764,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.98187499999949,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.597959000000628,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.453832999999577,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.094999999999345,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.593958000001294,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.513624999999593,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.076666999999361,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.755000000001019,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.560542000001078,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.25262500000099,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.850166000000172,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 10.147874999998749,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.452291999999943,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.96666600000026,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 10.930583999999726,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 10.227917000000161,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.21929099999943,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.954374999999345,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 9.562541000001147,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.870458000001236,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.38550000000032,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 9.62316600000122,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.133958999998868,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.593249999999898,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.90625,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.515500000001339,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.519083000001046,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.14154100000087,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.420791000000463,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.458667000000787,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 10.014832999999271,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.458709000000454,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.455291999998735,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.056916999999885,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.10516700000153,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 10.051792000000205,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.359874999998283,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.98541699999987,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.505291999999827,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.805374999999913,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.200749999999971,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 10.408458000001701,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 9.765625,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 10.213957999998456,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.692957999999635,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.301708000000872,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 10.59491700000035,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.896958999999697,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.976457999999184,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 9.777166999998371,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 11.213708999999653,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.35491600000023,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.598416999999245,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 9.697667000000365,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 9.884374999999636,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 9.371958000001541,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 10.912707999999839,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 10.299584000000323,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 9.805000000000291,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 9.936292000000321,
+              "total": 1000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 9.76458300000013,
+              "total": 1000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 10.341042000000016,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 10.94762499999888,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 9.589249999999083,
+              "total": 1000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 7.052542000001267,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 10.019959000001109,
+              "total": 1000,
+              "results": 5
+            }
+          ]
+        },
+        {
+          "kind": "canonical",
+          "records": 10000,
+          "bytes": 10197773,
+          "fixture_sha256": "4e07c34cbf1e058d0702f3f505f1a288b14495b9799a85e4e6594b2a15996f87",
+          "cold_ms": 1515.5525830000006,
+          "warm_samples": 120,
+          "warm_median_ms": 92.34620899999936,
+          "warm_p95_ms": 124.83795800000007,
+          "rss_bytes": 518848512,
+          "queries": [
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 1515.5525830000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 93.94254100000035,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 92.26254100000006,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 94.38554199999999,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.34620899999936,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 94.93862499999886,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 92.1717499999977,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 91.7374579999996,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 90.10804199999984,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 104.0616250000021,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 87.38166700000147,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 71.47962499999994,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 123.16791700000249,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 91.95262500000172,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 90.35625000000073,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 93.34858299999905,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 91.77383299999929,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 93.21620800000164,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 93.71087500000067,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 91.98649999999907,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 90.48604200000045,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 104.62791699999798,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 86.14920899999925,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 70.72341700000106,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 123.42291700000351,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 93.18883300000016,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 92.2732079999987,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 95.5580000000009,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.39700000000084,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.8291250000002,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 90.66575000000012,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 93.30179100000169,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 95.453125,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 108.68041699999958,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 84.0926249999975,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 69.57895800000188,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 122.65929200000028,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 92.57566600000064,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 90.96366599999965,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 95.60333299999911,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 91.81004200000098,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 91.45112499999959,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 91.65350000000035,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 90.37554200000159,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 89.9216669999987,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 104.30549999999857,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 86.20770899999843,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 71.00379199999952,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 123.3847919999971,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 92.57804100000067,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 92.15895799999998,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 94.04545800000051,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 91.27812500000073,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.56779199999801,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 90.72120899999936,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 91.13520900000003,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 90.59612500000003,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 102.82904200000121,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 86.15333300000202,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 70.90058399999907,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 125.82762499999808,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 91.58466699999917,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 89.23395800000071,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 91.84420899999895,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 90.47283299999981,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.82695899999817,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 91.9789579999997,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 91.11549999999988,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 90.79499999999825,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 105.54000000000087,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 86.50254100000166,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 70.83899999999994,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 126.0219999999972,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 92.6820000000007,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 92.98362500000076,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 93.38375000000087,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.28754099999787,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.51654200000121,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 91.20000000000073,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 92.4409169999999,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 91.07366600000023,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 113.59304200000042,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 85.14325000000099,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 68.99754200000098,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 147.52620899999965,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 94.14387499999793,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 93.63254200000301,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 98.1807919999992,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.27787499999977,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.48237499999959,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 91.24354099999982,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 91.40595799999937,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 92.35137499999837,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 104.91037499999948,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 88.4819580000003,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 136.74962500000038,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 146.68283399999927,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 91.64050000000134,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 89.85862500000076,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 92.82166599999982,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.1270829999994,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 92.68258299999798,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 91.59874999999738,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 90.53895900000134,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 91.99912499999846,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 104.70658399999957,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 86.3248339999991,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 70.96025000000009,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 124.83795800000007,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "amberkingfisher recovery",
+              "ms": 94.48529200000121,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "migration reader",
+              "ms": 92.55674999999974,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "transaction idempotency",
+              "ms": 94.72454199999993,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rejected timer",
+              "ms": 92.78374999999869,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "rollback disposable",
+              "ms": 93.73408399999971,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "session token",
+              "ms": 92.88970899999913,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "verification evidence",
+              "ms": 92.68020800000158,
+              "total": 10000,
+              "results": 3
+            },
+            {
+              "query": "migration v\u00e9rifi",
+              "ms": 93.07745799999975,
+              "total": 10000,
+              "results": 4
+            },
+            {
+              "query": "\u6570\u636e\u5e93\u8fc1\u79fb",
+              "ms": 106.25820799999929,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "\u8a8d\u8a3c",
+              "ms": 88.79425000000265,
+              "total": 10000,
+              "results": 5
+            },
+            {
+              "query": "zzunknownnothing",
+              "ms": 75.1696669999983,
+              "total": 0,
+              "results": 0
+            },
+            {
+              "query": "component42",
+              "ms": 160.62654199999815,
+              "total": 10000,
+              "results": 5
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "validation": {
+    "local_test_suites": 20,
+    "retrieval_regression_groups": 12,
+    "audit_regression_groups": 26,
+    "development_cases": 16,
+    "indexed_scan_agreement": 16,
+    "packed_workflow_checks": 11,
+    "dependency_advisories": 0,
+    "ci": "Tracked on PR #13; this measurement report records local checks before pushing the candidate."
+  },
+  "limitations": [
+    "Fixed synthetic mixed-query cycle with 120 warm samples per compared corpus.",
+    "In-process API timings, not MCP round-trip or completed coding tasks.",
+    "No previous-candidate baseline at 10000 canonical records.",
+    "Cold runs do not flush the OS file cache.",
+    "Process-local index uses additional RAM; not a disk-backed FTS index.",
+    "No external system benchmark or held-out user study has been run."
+  ]
+}

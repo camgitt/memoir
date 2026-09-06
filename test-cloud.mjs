@@ -63,9 +63,11 @@ function installFetchStub(backups) {
     if (method === 'GET' && u.includes('/rest/v1/backups')) {
       return { ok: true, json: async () => backups };
     }
-    if (method === 'DELETE' && u.startsWith(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/`)) {
-      const p = u.slice(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/`.length);
-      deleted.storage.push(p);
+    if (method === 'DELETE' && u === `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}`) {
+      const { prefixes } = JSON.parse(options.body);
+      assert(options.headers['Content-Type'] === 'application/json', 'Storage deletion uses the JSON API');
+      assert(Array.isArray(prefixes) && prefixes.length === 1, 'Storage deletion names one exact object');
+      deleted.storage.push(...prefixes);
       return { ok: true, text: async () => '' };
     }
     if (method === 'DELETE' && u.includes('/rest/v1/backups?id=eq.')) {

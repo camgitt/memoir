@@ -1,3 +1,8 @@
+import { restoreStoredMemories, stageMemories } from '../memory/store.js';
+import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
+import { withSessionLock } from '../session/lock.js';
+import { writeSafeFile, readSafeFile } from '../security/files.js';
+import { migrateSessionData } from '../session/migrations.js';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -18,7 +23,7 @@ export async function cloudPushCommand(options = {}) {
       chalk.white('Run ') + chalk.cyan('memoir login') + chalk.white(' first.'),
       { padding: 1, borderStyle: 'round', borderColor: 'red' }
     ) + '\n');
-    return;
+    throw new Error('Cloud login required');
   }
 
   const sub = await getSubscription(session);
@@ -48,10 +53,14 @@ export async function cloudPushCommand(options = {}) {
     const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
     const foundAny = await extractMemories(stagingDir, spinner, onlyFilter);
 
-    if (!foundAny) {
+    if (!foundAny && !await fs.pathExists(sessionPaths.session)) {
       spinner.fail(chalk.yellow('No AI tools found to back up.'));
       return;
     }
+
+    await mergeCloudHistory(await listBackups(session), session);
+    await stageMemories(stagingDir);
+    await writeSafeFile(stagingDir, 'session.json', JSON.stringify(await readSession(), null, 2));
 
     // Collect tool results for metadata
     const toolResults = [];
@@ -89,6 +98,7 @@ export async function cloudPushCommand(options = {}) {
 
   } catch (error) {
     spinner.fail(chalk.red('Cloud push failed: ') + error.message);
+    throw error;
   } finally {
     await fs.remove(stagingDir);
   }
@@ -102,12 +112,13 @@ export async function cloudRestoreCommand(options = {}) {
       chalk.white('Run ') + chalk.cyan('memoir login') + chalk.white(' first.'),
       { padding: 1, borderStyle: 'round', borderColor: 'red' }
     ) + '\n');
-    return;
+    throw new Error('Cloud login required');
   }
 
   console.log();
   const spinner = ora({ text: chalk.gray('Fetching from memoir cloud...'), spinner: 'dots' }).start();
 
+  let stagingDir;
   try {
     const backups = await listBackups(session);
 
@@ -132,7 +143,7 @@ export async function cloudRestoreCommand(options = {}) {
 
     spinner.text = chalk.gray(`Downloading version ${backup.version}...`);
 
-    const stagingDir = path.join(os.tmpdir(), `memoir-cloud-restore-${Date.now()}`);
+    stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-cloud-restore-'));
     await fs.ensureDir(stagingDir);
 
     const fileCount = await downloadBackup(backup, stagingDir, session);
@@ -144,7 +155,15 @@ export async function cloudRestoreCommand(options = {}) {
     const onlyFilter = options.only ? options.only.split(',').map(t => t.trim().toLowerCase()) : null;
     const autoYes = options.yes || false;
 
+    if (!options.version) await mergeCloudHistory(backups, session);
     const restored = await restoreMemories(stagingDir, spinner, onlyFilter, autoYes);
+    if (await fs.pathExists(path.join(stagingDir, 'session.json'))) {
+      const remote = migrateSessionData(JSON.parse((await readSafeFile(stagingDir, 'session.json')).toString()));
+      if (remote.future) throw new Error('Backup uses a newer session schema. Upgrade first.');
+      await withSessionLock(sessionPaths.sessionLock, async () => {
+        await writeSession(mergeSessions(await readSession(), remote.state));
+      });
+    }
 
     spinner.stop();
 
@@ -169,5 +188,37 @@ export async function cloudRestoreCommand(options = {}) {
 
   } catch (error) {
     spinner.fail(chalk.red('Cloud restore failed: ') + error.message);
+    throw error;
+  } finally {
+    if (stagingDir) await fs.remove(stagingDir);
+  }
+}
+
+export async function cloudMigrateCommand(options = {}) {
+  const session = await getSession();
+  if (!session) throw new Error('Log in before migrating cloud backups.');
+  const { migrateCloudBackups } = await import('../cloud/storage.js');
+  const result = await migrateCloudBackups(session, { apply: options.apply === true });
+  console.log(JSON.stringify(result, null, 2));
+  if (!options.apply && result.planned) console.log('This plan replaces legacy backups using your user-held passphrase. Run memoir cloud migrate --apply to verify each replacement before removing its legacy copy.');
+}
+
+// Merge retained versions oldest-first. Version allocation is atomic, while
+// client uploads are independent; unioning retained states preserves peers.
+async function mergeCloudHistory(backups, session) {
+  for (const backup of [...backups].reverse()) {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-cloud-merge-'));
+    try {
+      await downloadBackup(backup, dir, session);
+      let remote;
+      if (await fs.pathExists(path.join(dir, 'session.json'))) {
+        remote = migrateSessionData(JSON.parse((await readSafeFile(dir, 'session.json')).toString()));
+        if (remote.future) throw new Error('Cloud history uses a newer session schema');
+      }
+      await restoreStoredMemories(dir);
+      if (remote) await withSessionLock(sessionPaths.sessionLock, async () => {
+        await writeSession(mergeSessions(await readSession(), remote.state));
+      });
+    } finally { await fs.remove(dir); }
   }
 }

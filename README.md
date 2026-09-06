@@ -1,182 +1,173 @@
-<div align="center">
+# Memoir
 
-# memoir
+Portable, project-scoped memory and session handoffs for coding agents.
 
-**Sync AI memory across every tool and every machine — end-to-end encrypted. Free.**
+Memoir keeps decisions, rationale, goals, and next actions in readable local files. An MCP server lets an agent save and retrieve that context. Optional local, Git, and cloud backups move it between machines.
 
-[![npm version](https://img.shields.io/npm/v/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
-[![npm downloads](https://img.shields.io/npm/dm/memoir-cli.svg?style=flat-square&color=7c6ef0)](https://npmjs.org/package/memoir-cli)
-[![GitHub stars](https://img.shields.io/github/stars/camgitt/memoir?style=flat-square&color=7c6ef0)](https://github.com/camgitt/memoir/stargazers)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+The reliability changes are described in [the remediation record](docs/AUDIT-REMEDIATION.md). Review the [upgrade and recovery guide](docs/RELIABILITY-ROLLOUT.md) before upgrading clients that share encrypted backups.
 
-</div>
+## Continue between Codex and Cursor on this computer
 
-```bash
-npx memoir-cli
+This branch adds a separate, project-only handoff. It carries answered questions,
+decisions, next actions and receipts from checks actually run through Memoir. It
+does not import personal memory or transcripts.
+
+The project handoff and browser view require version 3.14.0 or later:
+
+```sh
+npm install -g memoir-cli@3.14.0
+cd /path/to/your/project
+memoir work setup
+memoir work resume
+memoir work view
 ```
 
-One command. No install, no config, no API keys. Claude Code on your Mac, Cursor on your laptop, Copilot at the office — **one memory follows you** across every tool and every machine. Cloud sync is end-to-end encrypted with a key only you hold — memoir's servers can't read what you sync.
+For source development, install dependencies and replace `memoir` with
+`node bin/memoir.js` from the Memoir checkout.
 
----
+Open **this same folder and branch** in Codex or Cursor and say **“Continue this
+project.”** The managed instructions use the project MCP connection, or the
+included CLI fallback when the connection is unavailable. Existing settings and
+approval policies are preserved. Agent adherence is still required; ordinary
+terminal checks are not captured automatically.
 
-## What it does
+The **project view** opens in your browser on this computer. Search saved
+answers, see why a check needs repeating, correct a decision, or remove it from
+the next handoff. Removed records can be restored; earlier versions stay in local
+history. Keep the view's terminal open while using it, and press Ctrl+C to stop.
+You can also ask your agent **“Open my Memoir project view.”** See the
+[local view validation](docs/PROJECT-VIEW-VALIDATION.md) for actual browser tests
+and the limits of the fresh-session continuity results. Subsequent
+[debugging fixes and recovery tests](docs/PROJECT-VIEW-DEBUG.md) cover slow saves,
+interrupted responses and configuration preservation.
 
-Your coding tools are starting to remember you — Claude Code, Cursor, and Copilot all ship built-in memory now. But that memory is **trapped: one tool, one machine, one vendor's format.** Switch from Cursor to Claude Code, or open a different laptop, and your AI is a stranger again.
+Checks run through `memoir work check` using the client's normal terminal
+permissions. The MCP memory connection deliberately cannot execute commands.
+See the [adversarial audit and remaining trust limits](docs/HANDOFF-SECURITY-AUDIT.md).
 
-memoir is the [MCP memory server](https://modelcontextprotocol.io) that breaks it out. **One memory, shared across every tool and synced to every machine — E2E-encrypted in the cloud, plain readable markdown on your disk.** Your AI searches, saves, and recalls context automatically, everywhere you work.
+The project ledger stays in ignored `.memoir/` files. This workflow does not
+sync those files through GitHub or bridge different checkouts. See the
+[setup and everyday guide](docs/PROJECT-HANDOFF.md) for commands, corrections,
+privacy boundaries and when a check needs to run again. The feature runs locally even when installed from npm; publishing the package
+does not upload your project ledger.
 
-It's built on an **open, published format** — [the memoir format, v0.1.1](docs/SPEC.md) — so your AI's accumulated context is never trapped in this tool either. Six entry types, normative merge semantics, JSON Schemas, and a validator (`npx memoir-cli validate`). Any tool can implement it; [critique welcome](https://github.com/camgitt/memoir/issues).
+## Existing memory and backup workflow
 
-```
-you: how does auth work in this project?
+Node.js 18 or later is required.
 
-  memoir_recall("auth setup architecture")
-  Found 3 memories matching "auth setup architecture":
-
-  ── 1. Claude CLI / memory/reference_auth_flow.md ──
-     reference · How authentication works — JWT + refresh, middleware location, state choice
-     Server components must call getUser(), never getSession(). The session
-     cookie name is derived from the Supabase URL host, so previews differ.
-     ⋯
-     Chose Zustand over Redux for auth state (decided March 12).
-
-claude: Based on your previous sessions: this project uses JWT auth
-  with refresh tokens, the middleware is in src/middleware/auth.ts,
-  and you chose Zustand over Redux for auth state (decided March 12).
-```
-
-No re-explaining. memoir remembered — and handed back the *passage*, not a file header.
-
-Recall ranks by how well a file covers **all** your words (aliases, names, and descriptions weigh more than prose), folds plurals/-ing/-ed, prefix-matches from 4 characters (`auth` → `authentication`), and caches parses so a long-lived session doesn't re-read your disk on every question. It does not do semantic matching — that's what `aliases:` in the frontmatter is for: the model that *saves* a memory writes down what else it might be called, and recall weights that field heaviest. Try it from the terminal: `memoir recall "what you'd ask"` shows exactly what your AI would see.
-
-## How it's different
-
-Native memory and the other memory tools each give you *part* of this. memoir is the only one that gives you all of it:
-
-| | Cross-tool | Cross-machine sync | Zero-knowledge encrypted |
-|---|:---:|:---:|:---:|
-| **memoir** | ✅ | ✅ **free** | ✅ |
-| Claude Code / Cursor native | ❌ one tool | ❌ one machine | ❌ |
-| claude-mem | ✅ | ❌ local only | ❌ |
-| basic-memory | ✅ | 💲 paid cloud | ❌ |
-| mem0 / OpenMemory | ✅ | 💲 paid cloud | ❌ |
-
-Native memory is locked to one tool on one machine. The others keep your memory in plaintext, or put cross-machine sync behind a paywall. memoir is the only one that does all three — every tool, every machine, encrypted under a key only you hold — for free. <sub>(Based on public docs, June 2026.)</sub>
-
-## Quick start
-
-```bash
-npx memoir-cli
+```sh
+npm install -g memoir-cli
+cd /path/to/project
+memoir setup --tool claude,codex,cursor
+memoir goal "Finish the account recovery flow"
+memoir note "Use single-use recovery codes" --why "Prevent replay"
+memoir next "Test expired recovery codes"
+memoir recall "recovery codes"
+memoir resume
 ```
 
-That's it. memoir detects your AI tools, configures MCP, and activates memory. No global install needed.
+`setup` preserves existing settings, writes a project MCP entry, and starts the Memoir server to check its tools. Restart the client and accept its project trust/MCP prompt. Server startup does not prove that a particular client version has accepted its configuration.
 
-Your AI gets 15 memory tools:
+For source development, use `npm ci`, then `node bin/memoir.js setup`. The generated entry uses absolute Node/server paths; review it after moving the installation. Existing different Memoir entries are preserved for review.
 
-| MCP Tool | What it does |
-|----------|-------------|
-| `memoir_recall` | Search across all your AI memories — returns matched passages, ranked by coverage |
-| `memoir_remember` | Save context for future sessions (pass `aliases` so it's findable under other names) |
-| `memoir_list` | Browse all memory files by tool |
-| `memoir_read` | Read a specific memory in full |
-| `memoir_consolidate` | Analyze memories for duplicates, staleness, and bloat |
-| `memoir_status` | See which AI tools are detected |
-| `memoir_profiles` | Switch between work/personal |
-| `memoir_set_goal` | Set the current session goal (pinned into CLAUDE.md) |
-| `memoir_add_next` | Add a next action to the current session |
-| `memoir_complete_next` | Mark a next action as done |
-| `memoir_note` | Record a decision with its rationale |
-| `memoir_ask` | Capture an open question for later |
-| `memoir_session` | Show goals, next actions, decisions, and recent sessions |
-| `memoir_why` | Look up why a past decision was made |
-| `memoir_forget` | Retract a decision — permanent tombstone on every machine; `purge` redacts the text |
+`memoir activate` adds managed usage instructions and sets up detected supported clients. `memoir resume --inject --to codex` adds a managed handoff to the project's `AGENTS.md`, preserving other content.
 
-## Why memoir
+## Memory and continuity
 
-Your AI forgets everything between sessions. You re-explain your codebase, your conventions, your decisions — every time.
+- `memoir_note` records a scoped decision and rationale. Older decisions are archived when the working summary fills.
+- `memoir_remember` writes a canonical Markdown record. Open its returned ID with `memoir_read`, `tool: "memoir"`, `filepath: "<id>.md"`.
+- `memoir_recall` searches the active project plus shared records and returns matching passages, paths, line evidence, and IDs where available.
+- Recall reuses an incremental lexical index while checking source changes and scope on each query. New project instructions are discovered without a timed cache delay. See [retrieval behavior and benchmarks](docs/RETRIEVAL-INDEX.md).
+- `memoir_resume` returns the goal, next actions, questions, and decisions, and compares the saved commit with the checkout. Old observations never imply current tests pass.
+- `memoir_forget` accepts a decision match or canonical ID. Hidden records are excluded from recall/session views; `purge: true` also removes current canonical text and local revision history.
 
-memoir fixes that. Tell Claude something once and Cursor knows it too — your memory syncs between tools, backs up to the cloud, and restores on any machine. When it piles up, `memoir consolidate` cleans house: finds duplicates, flags stale context, and can use AI to merge and prune.
+Canonical memory lives in `~/.config/memoir/memories/` and session state in `~/.config/memoir/session.json`. These source files are plaintext on the device. Backup encryption does not encrypt them.
 
-**11 tools supported:** Claude Code, Cursor, Windsurf, Gemini CLI, GitHub Copilot, OpenAI Codex, ChatGPT, Aider, Zed, Cline, Continue.dev.
+New memories use `MEMOIR_PROJECT_ROOT` or the working directory. Use explicit `scope: "shared"` for general preferences. Git identity recognizes common SSH/HTTPS remote spellings; local identity is home-relative. Renames, unusual remote aliases, or different directory layouts may need explicit scope selection. Profiles select backup destinations; they are not independent security tenants.
 
-## Sync across machines
+Legacy records without scope metadata are shared, except recognized Claude project directories. Review and label imported history before relying on strict isolation. Scope is an organizational boundary, not authentication against an agent already permitted to read the filesystem.
 
-```bash
-memoir push       # back up AI memory + workspace + session
-memoir restore -y # restore on any machine
+## Backup and recovery
+
+First use creates a **local** configuration. It does not create a GitHub repository or upload automatically. Use `memoir init` to choose another destination and encryption.
+
+```sh
+memoir push
+memoir restore
+memoir push --only claude,codex
+memoir restore --only codex
 ```
 
-Push syncs AI memory, cursorrules, session context, workspace (git repos + uncommitted work), and project configs. E2E encrypted with AES-256-GCM.
+Filtered pushes preserve other tool/machine files. Session and canonical records accompany tool filters for cross-tool continuity.
 
-## Translate between AI tools
+For encrypted local/Git backups, supply `MEMOIR_PASSPHRASE` through your environment/password manager or enter it interactively. Legacy six-character secrets remain readable; use a long, unique secret for new backups. Headless writes do not silently choose plaintext when encryption is unconfigured.
 
-```bash
-memoir migrate --from chatgpt --to claude
-# AI-powered — rewrites conventions, not copy-paste
+Snapshots authenticate the manifest and every file. Missing blobs, corrupt contents, unsafe paths, symlinks, and oversized input fail recovery. Repeated encrypted pushes verify and merge the previous snapshot before replacement. Local encryption migration removes plaintext from the current destination after the switch; Git history and filesystem snapshots can retain older plaintext.
 
-memoir migrate --from chatgpt --to all
-# Translate to every tool at once
+Local pushes lock the complete read/merge/write operation. Git rejects conflicting remote updates without force-pushing; retry to read and merge the new state. Use a dedicated backup directory.
+
+### Cloud
+
+New cloud writes require a user-held secret of at least 12 characters in `MEMOIR_CLOUD_PASSPHRASE` (or `MEMOIR_PASSPHRASE`). It is not derived from account identity or sent in metadata.
+
+```sh
+memoir cloud push
+memoir cloud restore
+memoir cloud restore --version 3
+memoir cloud migrate
+memoir cloud migrate --apply
 ```
 
-## Consolidate memories
+The writer requires the database migration in [the rollout guide](docs/RELIABILITY-ROLLOUT.md). Without it, version allocation fails before upload. The Memoir hosted service received this migration on September 6, 2026; see the [deployment checks](docs/RELEASE-3.14-VALIDATION.md). Self-hosted services must apply it before enabling new writes.
 
-```bash
-memoir consolidate          # scan for duplicates, stale files, bloat
-memoir consolidate --smart  # AI-powered analysis (finds contradictions + merge candidates)
-memoir consolidate --apply  # interactively clean up
+`cloud migrate` displays a plan. `--apply` downloads each old backup, creates a user-passphrase replacement, downloads and byte-checks it, then removes the old object. Interrupted migration can reuse its replacement. Keep the secret available on every recovering device; there is no lost-passphrase recovery service.
+
+Legacy account-ID-keyed and unencrypted cloud backups remain readable with warnings. Their protection changes only when replaced. Random vault-key wrapping, device enrollment, hardware-backed storage, and independently reviewed key rotation remain future work.
+
+Latest cloud restore merges session/canonical state from retained versions, requiring additional downloads. Explicit version restore selects that snapshot. Cloud tests simulate the backend; production authorization and tenant isolation require separate validation.
+
+### Optional workspace files
+
+`memoir push --workspace` captures eligible files from the active project, including non-ignored untracked Git files. It does not archive the whole home directory.
+
+`memoir restore --workspace` verifies those files into a new folder under `~/memoir-restored/` for inspection. Existing checkouts are not patched. Commit information is recorded; this is a file snapshot, not a Git-history backup.
+
+Common secret filenames and detected patterns are omitted and listed in the manifest. Detection is heuristic. Old tar-based workspace archives are retained but no longer extracted automatically.
+
+## Supported surfaces
+
+| Surface | Capability | Verification boundary |
+|---|---|---|
+| Claude Code | Project MCP setup, Memoir tools, instruction import/export | JSON preservation and real server startup tested |
+| Codex | Project TOML MCP setup, Memoir tools, AGENTS.md import/export | TOML round trip and server startup tested |
+| Cursor | Project MCP setup, Memoir tools, rule import/export | JSON preservation and server startup tested |
+| Other existing adapters | Selected memory/config import/export | Adapter fixtures, not full native session continuity |
+| Generic MCP client | Memoir tool contract | Real stdio tests |
+
+Configuration references: [Claude Code](https://code.claude.com/docs/en/mcp), [Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [Cursor](https://prod.cursor.com/help/customization/mcp).
+
+## Search, privacy, and limits
+
+Search is local Unicode-aware lexical retrieval with field/document-frequency weights, aliases, filtering, and a passage budget. It is not semantic search and has no demonstrated state-of-the-art result.
+
+Memory is context, not permission to run commands or configure tools. Model-written records default to `unverified`. Automatic transcript capture is best effort and must not be treated as proof of successful work.
+
+`memoir consolidate` reports duplicates/stale files. Similarity alone cannot remove distinct content. Confirmed removals keep recovery copies; the printed `memoir consolidate --undo <id>` restores into an absent destination. `--smart` explicitly sends bounded excerpts to the Gemini API; choose its model with `MEMOIR_CONSOLIDATE_MODEL`.
+
+`push --redact` heuristically redacts staged text, not originals or historical backups. Without it, ordinary memory backups warn and preserve content. Set `DO_NOT_TRACK=1` to disable remote telemetry. Local events distinguish execution failure from success; they do not measure answer usefulness.
+
+Forgetting propagates on later sync between updated clients. Old clients, snapshots, and Git history can still contain deleted text. Purging every historical copy is separate. Native configuration restore is not atomic across multiple application directories.
+
+## Development
+
+```sh
+npm ci
+npm test
+node evals/run.mjs
+npm audit --omit=dev
+npm pack --ignore-scripts
 ```
 
-Over time, memories pile up across tools. Consolidate finds exact and near-duplicates, flags files untouched for 60+ days, and catches contradictions where you told Claude one thing and Cursor another. With `--smart`, Gemini Flash does a semantic pass and suggests intelligent merges.
+Tests use synthetic homes and local Git remotes. CI declares macOS/Linux/Windows with Node 18/20/22; shell suites skip Windows. See [remediation status](docs/AUDIT-REMEDIATION.md) and [release gates](docs/RELIABILITY-ROLLOUT.md) for verification limits.
 
-## Cloud sync
-
-```bash
-memoir login
-memoir cloud push      # encrypted cloud backup
-memoir cloud restore   # restore from any version
-memoir history         # view backup versions
-memoir share           # create encrypted shareable link
-```
-
-## All Commands
-
-| Command | What it does |
-|---------|-------------|
-| `memoir activate` | Enable auto-recall in this project |
-| `memoir deactivate` | Remove memoir from this project |
-| `memoir push` | Back up AI memory + workspace + session |
-| `memoir restore` | Restore everything on a new machine |
-| `memoir status` | Show detected AI tools |
-| `memoir migrate` | Translate memory between tools via AI |
-| `memoir snapshot` | Capture current coding session |
-| `memoir resume` | Pick up where you left off |
-| `memoir encrypt` | Toggle E2E encryption |
-| `memoir profile` | Manage profiles (personal/work) |
-| `memoir cloud push` | Back up to memoir cloud |
-| `memoir cloud restore` | Restore from memoir cloud |
-| `memoir share` | Create encrypted shareable link |
-| `memoir consolidate` | Find duplicates, stale memories, and bloat |
-| `memoir recall` | Search memory exactly the way your AI does — see what it would be handed |
-| `memoir why` | Look up decisions: what, why, what was rejected |
-| `memoir forget` | Retract a decision (`--purge` to redact a leaked secret in place); refuses if ambiguous |
-| `memoir validate` | Check session state + entry files against the format spec |
-| `memoir doctor` | Diagnose issues |
-| `memoir diff` | Show changes since last backup |
-| `memoir view` | Preview what's in your backup |
-| `memoir update` | Self-update to latest version |
-
-## Security
-
-- **E2E encryption** — AES-256-GCM with scrypt key derivation
-- **Secret scanning** — API keys, tokens, passwords auto-redacted before sync
-- **Local MCP server** — runs on your machine, no data sent externally
-- **Zero-knowledge cloud** — encrypted before upload
-
-## Links
-
-- **Website:** [memoir.sh](https://memoir.sh)
-- **npm:** [memoir-cli](https://npmjs.org/package/memoir-cli)
-- **Issues:** [GitHub Issues](https://github.com/camgitt/memoir/issues)
-- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
-
-MIT Licensed
+[MIT license](LICENSE)

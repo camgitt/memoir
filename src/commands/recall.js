@@ -15,7 +15,7 @@ export async function recallCommand(query, options = {}) {
   }
   const limit = Math.max(1, Math.min(50, parseInt(options.limit, 10) || 10));
   const t0 = Date.now();
-  const res = await searchMemories(q, { limit });
+  const res = await searchMemories(q, { limit, project: options.project });
   const ms = Date.now() - t0;
 
   if (options.json) {

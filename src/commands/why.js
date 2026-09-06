@@ -4,7 +4,8 @@
 
 import chalk from 'chalk';
 import boxen from 'boxen';
-import { readSession } from '../session/state.js';
+import { visibleMemory } from '../memory/scope.js';
+import { readSession, allDecisions } from '../session/state.js';
 
 function searchDecisions(decisions, query) {
   if (!query) return decisions;
@@ -31,7 +32,7 @@ export async function whyCommand(query) {
   // see scripts/cleanup-junk-decisions-2026-07.mjs. Excluded here so
   // tombstoned junk isn't fully discoverable via `memoir why` even after
   // being hidden from the pinned block.
-  const decisions = (state.current?.decisions || []).filter(d => !d?.hidden);
+  const decisions = allDecisions(state).filter(d => visibleMemory(d));
   const matches = searchDecisions(decisions, query);
 
   if (matches.length === 0) {
@@ -62,6 +63,6 @@ export async function whyCommand(query) {
 // filter as whyCommand above — kept independent rather than relying solely
 // on the caller, so this stays correct even if mcp.js's call chain changes.
 export function findDecisions(state, query) {
-  const decisions = (state.current?.decisions || []).filter(d => !d?.hidden);
+  const decisions = allDecisions(state).filter(d => visibleMemory(d));
   return searchDecisions(decisions, query);
 }

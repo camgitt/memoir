@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "key": "retry",
+      "text": "Retry failed recovery jobs with exponential backoff and a maximum of five attempts."
+    },
+    {
+      "key": "payments",
+      "text": "Payment webhooks require idempotency keys before changing account state."
+    },
+    {
+      "key": "database-a",
+      "text": "Project database choice is PostgreSQL; transactions protect recovery tokens."
+    },
+    {
+      "key": "database-b",
+      "project": "beta",
+      "text": "Project database choice is SQLite for the offline desktop client."
+    },
+    {
+      "key": "preference",
+      "project": "shared",
+      "text": "Prefer concise explanations with concrete examples."
+    },
+    {
+      "key": "alias",
+      "text": "The interface uses a vertical swipe feed.",
+      "aliases": [
+        "short video navigation"
+      ]
+    },
+    {
+      "key": "chinese",
+      "text": "数据库使用 PostgreSQL，备份每天运行。"
+    },
+    {
+      "key": "spanish",
+      "text": "La autenticación usa códigos de recuperación de un solo uso."
+    },
+    {
+      "key": "hidden",
+      "text": "hidden-canary-marker must never be recalled.",
+      "metadata": {
+        "hidden": true
+      }
+    },
+    {
+      "key": "expired",
+      "text": "expired-canary-marker used the old deployment endpoint.",
+      "metadata": {
+        "valid_until": "2020-01-01T00:00:00Z"
+      }
+    },
+    {
+      "key": "future",
+      "text": "future-canary-marker is not effective yet.",
+      "metadata": {
+        "valid_from": "2099-01-01T00:00:00Z"
+      }
+    },
+    {
+      "key": "superseded",
+      "text": "superseded-canary-marker is obsolete.",
+      "metadata": {
+        "superseded_by": "replacement"
+      }
+    },
+    {
+      "key": "negation",
+      "text": "Do not retry a consumed recovery token; issue a new token."
+    },
+    {
+      "key": "numeric",
+      "text": "Incident 42 affected retry workers; incident 43 affected webhooks."
+    }
+  ],
+  "cases": [
+    {
+      "name": "exact evidence",
+      "query": "idempotency",
+      "expected": [
+        "payments"
+      ]
+    },
+    {
+      "name": "multi-term evidence",
+      "query": "exponential backoff",
+      "expected": [
+        "retry"
+      ]
+    },
+    {
+      "name": "alpha scope",
+      "query": "database choice",
+      "expected": [
+        "database-a"
+      ],
+      "forbidden": [
+        "database-b"
+      ]
+    },
+    {
+      "name": "beta scope",
+      "project": "beta",
+      "query": "database choice",
+      "expected": [
+        "database-b"
+      ],
+      "forbidden": [
+        "database-a"
+      ]
+    },
+    {
+      "name": "shared preference",
+      "project": "beta",
+      "query": "concise explanations",
+      "expected": [
+        "preference"
+      ]
+    },
+    {
+      "name": "alias expansion",
+      "query": "short video navigation",
+      "expected": [
+        "alias"
+      ]
+    },
+    {
+      "name": "Chinese",
+      "query": "数据库",
+      "expected": [
+        "chinese"
+      ]
+    },
+    {
+      "name": "accented Spanish",
+      "query": "autenticación recuperación",
+      "expected": [
+        "spanish"
+      ]
+    },
+    {
+      "name": "hidden abstention",
+      "query": "hidden-canary-marker",
+      "expected": [],
+      "forbidden": [
+        "hidden"
+      ]
+    },
+    {
+      "name": "expired abstention",
+      "query": "expired-canary-marker",
+      "expected": [],
+      "forbidden": [
+        "expired"
+      ]
+    },
+    {
+      "name": "future abstention",
+      "query": "future-canary-marker",
+      "expected": [],
+      "forbidden": [
+        "future"
+      ]
+    },
+    {
+      "name": "superseded abstention",
+      "query": "superseded-canary-marker",
+      "expected": [],
+      "forbidden": [
+        "superseded"
+      ]
+    },
+    {
+      "name": "unknown abstention",
+      "query": "unrecorded-kubernetes-pod",
+      "expected": []
+    },
+    {
+      "name": "negation evidence",
+      "query": "not retry consumed token",
+      "expected": [
+        "negation"
+      ]
+    },
+    {
+      "name": "numeric evidence",
+      "query": "incident 42",
+      "expected": [
+        "numeric"
+      ]
+    },
+    {
+      "name": "empty abstention",
+      "query": "",
+      "expected": []
+    }
+  ]
+}

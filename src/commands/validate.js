@@ -45,6 +45,9 @@ const DATE_FIELDS = ['created', 'updated', 'date', 'set_on', 'added', 'done_at',
 
 function parseScalar(raw) {
   let v = String(raw).trim();
+  if (v.startsWith('"') && v.endsWith('"')) {
+    try { return JSON.parse(v); } catch {}
+  }
   if (
     (v.startsWith('"') && v.endsWith('"') && v.length >= 2) ||
     (v.startsWith("'") && v.endsWith("'") && v.length >= 2)

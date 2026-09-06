@@ -1,3 +1,4 @@
+import { sessionView } from '../memory/scope.js';
 // Render session state → pinned markdown block.
 // The block is wrapped in <!-- memoir:session-block v1 --> markers so inject.js
 // can find and replace it without touching anything else in CLAUDE.md.
@@ -25,6 +26,7 @@ export function isContentFreeSummary(summary) {
 
 export function renderSession(state) {
   if (!state) return renderEmpty();
+  state = sessionView(state);
 
   const lines = [BLOCK_START, '## 🎯 Continuing from where we left off', ''];
 

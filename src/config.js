@@ -115,48 +115,17 @@ export async function deleteProfile(name) {
   await saveConfig(raw);
 }
 
-// Zero-config auto-setup: detect GitHub user, create repo, save config, return it
+// First use stays local. Remote destinations require explicit configuration;
+// no account lookup, repository creation, or upload happens as a side effect.
 export async function autoSetup() {
-  // Try gh CLI first, then git config
-  let username = '';
-  try {
-    username = execFileSync('gh', ['api', 'user', '--jq', '.login'], { encoding: 'utf8', timeout: 5000 }).trim();
-  } catch {
-    try {
-      username = execFileSync('git', ['config', '--global', 'user.name'], { encoding: 'utf8' }).trim();
-    } catch {}
-  }
-
-  if (!username) return null; // Can't auto-setup without a username
-
-  const repo = 'ai-memory';
-  const gitRepo = `https://github.com/${username}/${repo}.git`;
-
-  // Try to create the repo if it doesn't exist (best-effort)
-  try {
-    execFileSync('gh', ['repo', 'view', `${username}/${repo}`], { stdio: 'ignore', timeout: 5000 });
-  } catch {
-    try {
-      execFileSync('gh', ['repo', 'create', `${username}/${repo}`, '--private', '--description', 'AI memory backup (memoir-cli)'], { stdio: 'ignore', timeout: 10000 });
-    } catch {
-      // If gh isn't available, user will need to create repo manually — that's fine, syncToGit will handle it
-    }
-  }
-
-  const config = {
-    version: 2,
-    activeProfile: 'default',
-    profiles: {
-      default: {
-        provider: 'git',
-        gitRepo,
-        encrypt: false // Skip encryption for zero-config — user can enable later with `memoir encrypt`
-      }
-    }
+  if (await fs.pathExists(CONFIG_FILE)) throw new Error('An existing configuration could not be resolved. Check the selected profile or repair the configuration; it was not overwritten.');
+  const profile = {
+    provider: 'local',
+    localPath: path.join(CONFIG_DIR, 'backups'),
+    encrypt: Boolean(process.env.MEMOIR_PASSPHRASE),
   };
-
-  await saveConfig(config);
-  return config.profiles.default;
+  await saveConfig({ version: 2, activeProfile: 'default', profiles: { default: profile } });
+  return profile;
 }
 
 export async function getGeminiApiKey() {

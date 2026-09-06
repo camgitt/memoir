@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
+import { cloneForSync, checkoutFromRemote } from './index.js';
 import { restoreMemories } from '../adapters/restore.js';
 
 export async function fetchFromLocal(config, stagingDir, spinner, onlyFilter = null, autoYes = false) {
@@ -18,6 +19,7 @@ export async function fetchFromLocal(config, stagingDir, spinner, onlyFilter = n
   spinner.text = `Fetching data from local directory: ${chalk.cyan(resolvedSource)}`;
   await fs.copy(resolvedSource, stagingDir);
 
+  if (await fs.pathExists(path.join(stagingDir, 'manifest.enc'))) return false;
   return await restoreMemories(stagingDir, spinner, onlyFilter, autoYes);
 }
 
@@ -28,10 +30,12 @@ export async function fetchFromGit(config, stagingDir, spinner, onlyFilter = nul
   spinner.text = `Cloning memory from Git remote: ${chalk.cyan(repoUrl)}`;
 
   try {
-    execFileSync('git', ['clone', '--depth', '1', repoUrl, '.'], { cwd: stagingDir, stdio: 'ignore' });
+    cloneForSync(repoUrl, stagingDir);
+    if (!checkoutFromRemote(stagingDir, '.')) throw new Error('Could not read backup main branch');
   } catch (err) {
     throw new Error('Failed to pull from git repository. Ensure your SSH keys are configured and the repository is accessible.');
   }
 
+  if (await fs.pathExists(path.join(stagingDir, 'manifest.enc'))) return false;
   return await restoreMemories(stagingDir, spinner, onlyFilter, autoYes);
 }

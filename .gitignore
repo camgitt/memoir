@@ -13,3 +13,10 @@ mcp-publisher
 
 # Private working notes — strategy/session reports, never published (repo is public)
 notes/
+
+# Memoir local project state and connections
+/.memoir/
+/.codex/config.toml
+/.cursor/mcp.json
+/.cursor/rules/memoir-work.mdc
+/supabase/.temp/

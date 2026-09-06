@@ -244,6 +244,8 @@ console.log(`\n${BOLD}${CYAN}git sync${RESET}\n`);
   assert(classifyGitError({ message: 'x', stderr: 'fatal: Authentication failed for https://…' }) === 'auth', 'classify: auth');
   assert(classifyGitError({ message: 'x', stderr: 'fatal: unable to access …: Could not resolve host: github.com' }) === 'network', 'classify: network');
   assert(classifyGitError({ message: 'x', stderr: 'fatal: repository not found' }) === 'not_found', 'classify: not_found');
+  assert(classifyGitError({ message: 'git clone /tmp/memoir-1788694034567', stderr: "fatal: repository '/tmp/memoir-1788694034567' does not exist" }) === 'not_found', 'classify: 403 in a path is not an HTTP authentication error');
+  assert(classifyGitError({ stderr: "fatal: unable to access 'https://example.invalid/repo': The requested URL returned error: 403" }) === 'auth', 'classify: an actual HTTP 403 remains auth');
 
   await fs.remove(bare);
 }

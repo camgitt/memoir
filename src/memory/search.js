@@ -16,8 +16,8 @@
 //   • light morphology: plural/-ing/-ed folding plus prefix matching from
 //     4 chars, so "auth" finds "authentication" and "deploys" finds
 //     "deploy" (a real stemmer over-merges; this is deliberately timid);
-//   • an mtime-keyed parse cache and a TTL'd project-file index, so a
-//     long-lived MCP process stops re-reading and re-walking the disk.
+//   • metadata-validated parse/directory caches and incremental postings,
+//     while edits, removals, scopes, and source paths are checked per query.
 //
 // What it does NOT do: semantic/concept matching. "tiktok" still won't
 // find a file that only ever says "vertical swipe feed". The honest,
@@ -29,6 +29,11 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { adapters } from '../adapters/index.js';
+import { memoryRoot } from './store.js';
+import { memoryVisibility, projectIdentity } from './scope.js';
+import { LexicalIndex } from './lexical-index.js';
+import { readSession, allDecisions } from '../session/state.js';
+import { readSafeFile, safePath, createReadInventory } from '../security/files.js';
 import { parseFrontmatter } from '../commands/validate.js';
 
 const home = os.homedir();
@@ -39,7 +44,7 @@ const STOPWORDS = new Set([
   'the', 'a', 'an', 'of', 'to', 'in', 'on', 'for', 'and', 'or', 'is', 'it',
   'this', 'that', 'what', 'how', 'do', 'does', 'did', 'we', 'i', 'my', 'our',
   'with', 'about', 'was', 'were', 'be', 'are', 'at', 'by', 'from', 'as',
-  'into', 'up', 'out', 'so', 'if', 'not', 'no', 'me', 'you', 'your', 'us',
+  'into', 'up', 'out', 'so', 'if', 'me', 'you', 'your', 'us',
   'why', 'when', 'where', 'which', 'who', 'can', 'should', 'would', 'could',
   'have', 'has', 'had', 'been', 'being', 'there', 'here', 'than', 'then',
 ]);
@@ -49,12 +54,18 @@ const STOPWORDS = new Set([
 const PREFIX_MIN = 4;
 
 export function tokenize(str) {
-  return String(str || '')
-    .toLowerCase()
-    .split(/[^a-z0-9_$./-]+/)
-    .flatMap((t) => t.split(/[./-]+/))
-    .map((t) => t.replace(/^[_$]+|[_$]+$/g, ''))
-    .filter((t) => t.length >= 2);
+  const chunks = String(str || '').normalize('NFKC').toLowerCase()
+    .split(/[^\p{L}\p{N}_$./-]+/u).flatMap(t => t.split(/[./-]+/))
+    .map(t => t.replace(/^[_$]+|[_$]+$/g, '')).filter(Boolean);
+  return chunks.flatMap(t => {
+    // CJK has no mandatory word separators. Index overlapping character
+    // bigrams as well as the complete token; retain single-character queries.
+    if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(t)) {
+      const chars = Array.from(t);
+      return [t, ...chars.slice(0, -1).map((c, i) => c + chars[i + 1])];
+    }
+    return t.length >= 2 || /^\p{N}$/u.test(t) ? [t] : [];
+  });
 }
 
 // Fold the commonest English inflections. Conservative on purpose: every
@@ -123,8 +134,9 @@ function fieldTokens(strings) {
  * run on every file, but cached by (path, mtime, size) in readMemoryFiles.
  */
 export function buildDoc({ path: relPath, content, tool, absPath, mtimeMs }) {
-  const isMarkdown = /\.(md|markdown)$/i.test(relPath);
-  const { fields, body } = isMarkdown ? parseFrontmatter(content) : { fields: {}, body: content };
+  const isMarkdown = /\.(md|mdc|markdown)$/i.test(relPath);
+  const { fields, body: rawBody } = isMarkdown ? parseFrontmatter(content) : { fields: {}, body: content };
+  const body = rawBody.replace(/<!--\s*memoir:session-block[^>]*-->[\s\S]*?<!--\s*\/memoir:session-block\s*-->/g, block => block.replace(/[^\r\n]/g, ''));
   const bodyLines = body.split(/\r?\n/);
   const headings = bodyLines.filter((l) => /^\s{0,3}#{1,6}\s/.test(l));
 
@@ -132,8 +144,10 @@ export function buildDoc({ path: relPath, content, tool, absPath, mtimeMs }) {
   if (fields.name) nameStrings.push(String(fields.name));
 
   return {
+    ...fields,
     path: relPath,
     absPath,
+    bodyStartLine: content.split(/\r?\n/).length - rawBody.split(/\r?\n/).length + 1,
     tool,
     mtimeMs: mtimeMs || 0,
     isMarkdown,
@@ -158,12 +172,14 @@ export function buildDoc({ path: relPath, content, tool, absPath, mtimeMs }) {
 
 // ── Scoring ──────────────────────────────────────────────────────
 
-function fieldScore(tfMap, term) {
+function fieldScore(tfMap, term, matches) {
   // Best match across the field's tokens: exact beats prefix; tf saturates.
   let best = 0;
   let count = 0;
-  for (const [token, n] of tfMap) {
-    const m = termMatch(term, token);
+  for (const [token, value] of matches || tfMap) {
+    const n = matches ? tfMap.get(token) : value;
+    if (!n) continue;
+    const m = matches ? value : termMatch(term, token);
     if (m > best) { best = m; count = n; }
     else if (m === best && m > 0) count += n;
   }
@@ -179,12 +195,12 @@ function fieldScore(tfMap, term) {
 // one-term match outrank a file that covered every term in the query.
 const TERM_CAP = 8;
 
-export function scoreDoc(doc, terms) {
+export function scoreDoc(doc, terms, matches) {
   let sum = 0;
   let matched = 0;
   const perTerm = {};
   for (const term of terms) {
-    const fieldScores = Object.keys(W).map((f) => W[f] * fieldScore(doc.tf[f], term)).sort((a, b) => b - a);
+    const fieldScores = Object.keys(W).map((f) => W[f] * fieldScore(doc.tf[f], term, matches?.get(term))).sort((a, b) => b - a);
     const s = Math.min(TERM_CAP, fieldScores[0] + 0.25 * fieldScores.slice(1).reduce((x, y) => x + y, 0));
     if (s > 0) matched++;
     perTerm[term] = s;
@@ -283,38 +299,63 @@ export function extractPassage(doc, terms, budget = PASSAGE_BUDGET) {
 // (absPath) -> { mtimeMs, size, doc }. The MCP server is a long-lived
 // process; memory files change rarely relative to how often recall runs.
 const docCache = new Map();
+const lexicalIndex = new LexicalIndex();
+const sourceChecks = new WeakMap();
+const sameFile = (a, b) => a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs && a.ino === b.ino && a.dev === b.dev && a.size === b.size;
 
-async function readDoc(absPath, relPath, tool) {
-  let st;
-  try { st = await fs.stat(absPath); } catch { return null; }
-  const hit = docCache.get(absPath);
-  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return hit.doc;
+async function readDoc(absPath, relPath, tool, root = path.dirname(absPath), inventory) {
+  let st, access;
+  try {
+    inventory ||= await createReadInventory(root);
+    access = await inventory.stat(path.relative(root, absPath));
+    st = access.stat;
+    absPath = access.full;
+  } catch { return null; }
+  // A file can be exposed under more than one adapter/project projection.
+  const key = JSON.stringify([absPath, relPath, tool]);
+  const hit = docCache.get(key);
+  if (hit && sameFile(hit.stat, st)) return hit.doc;
   let content;
-  try { content = await fs.readFile(absPath, 'utf8'); } catch { return null; }
+  try { content = (await readSafeFile(inventory.root, access.relative)).toString('utf8'); } catch { return null; }
   const doc = buildDoc({ path: relPath, content, tool, absPath, mtimeMs: st.mtimeMs });
-  docCache.set(absPath, { mtimeMs: st.mtimeMs, size: st.size, doc });
+  const match = tool === 'Claude CLI' ? relPath.match(/^projects\/([^/]+)\//) : null;
+  if (match) doc.claudeProjectKey = match[1];
+  docCache.set(key, { stat: st, doc });
+  sourceChecks.set(doc, { root: inventory.root, relative: access.relative, stat: st, key });
   return doc;
+}
+
+async function sourceUnchanged(doc) {
+  const source = sourceChecks.get(doc);
+  if (!source) return true; // Session documents have their own fresh read.
+  try {
+    const full = await safePath(source.root, source.relative);
+    const st = await fs.lstat(full);
+    return st.isFile() && !st.isSymbolicLink() && sameFile(source.stat, st);
+  } catch { return false; }
 }
 
 /** Test hook — drop every cached parse. */
 export function clearSearchCache() {
   docCache.clear();
-  projectIndex.at = 0;
-  projectIndex.files = [];
+  lexicalIndex.clear();
+  projectDirectories.clear();
 }
 
-const MEMORY_EXT = /\.(md|json|ya?ml)$/i;
+const MEMORY_EXT = /\.(md|mdc|json|toml|ya?ml)$/i;
 
 /**
  * Read every memory file an adapter owns, as parsed docs. Cached by mtime.
  */
 export async function readMemoryFiles(adapter) {
   const files = [];
+  let inventory;
+  try { inventory = await createReadInventory(adapter.source); } catch { return files; }
 
   if (adapter.customExtract) {
     for (const file of adapter.files) {
       const abs = path.join(adapter.source, file);
-      const doc = await readDoc(abs, file, adapter.name);
+      const doc = await readDoc(abs, file, adapter.name, adapter.source, inventory);
       if (doc) files.push(doc);
     }
     return files;
@@ -325,15 +366,19 @@ export async function readMemoryFiles(adapter) {
   const walk = async (dir, prefix = '') => {
     let entries;
     try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
-    for (const entry of entries) {
+    for (let offset = 0; offset < entries.length; offset += 24) {
+      await Promise.all(entries.slice(offset, offset + 24).map(async entry => {
       const fullPath = path.join(dir, entry.name);
       const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
         if (adapter.filter(fullPath)) await walk(fullPath, relPath);
-      } else if (MEMORY_EXT.test(entry.name) && adapter.filter(fullPath)) {
-        const doc = await readDoc(fullPath, relPath, adapter.name);
-        if (doc) files.push(doc);
+      } else if (entry.isFile() && MEMORY_EXT.test(entry.name) && adapter.filter(fullPath)) {
+        const doc = await readDoc(fullPath, relPath, adapter.name, adapter.source, inventory);
+        if (doc) {
+          files.push(doc);
+        }
       }
+      }));
     }
   };
 
@@ -341,47 +386,57 @@ export async function readMemoryFiles(adapter) {
   return files;
 }
 
-// Per-project AI config files. Discovery (the directory walk) is the
-// expensive part and changes rarely, so the found-path list is cached for
-// PROJECT_INDEX_TTL_MS; the files themselves go through readDoc's mtime cache.
+// Cache directory entries by metadata, not time: a newly created project
+// instruction file must be visible on the next recall without a minute's wait.
 const PROJECT_FILES = ['CLAUDE.md', 'GEMINI.md', 'CHATGPT.md', 'AGENTS.md', '.cursorrules', '.windsurfrules', '.clinerules'];
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.vercel', 'dist', 'build', '__pycache__', '.venv', 'venv', '.cache', 'Library', '.Trash', 'Applications', 'Downloads', 'Movies', 'Music', 'Pictures']);
-const PROJECT_INDEX_TTL_MS = 60_000;
 const PROJECT_SCAN_DEPTH = 3;
-const projectIndex = { at: 0, files: [] };
+const projectDirectories = new Map();
 
 async function discoverProjectFiles(root) {
   const found = [];
+  const visited = new Set();
   const scan = async (dir, depth) => {
     if (depth > PROJECT_SCAN_DEPTH) return;
     let entries;
-    try { entries = await fs.readdir(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      const stat = await fs.lstat(dir);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) return;
+      visited.add(dir);
+      const previous = projectDirectories.get(dir);
+      entries = previous && sameFile(previous.stat, stat) ? previous.entries : await fs.readdir(dir, { withFileTypes: true });
+      projectDirectories.set(dir, { stat, entries });
+    } catch { return; }
     const names = new Set(entries.filter((e) => e.isFile()).map((e) => e.name));
     for (const f of PROJECT_FILES) {
-      if (names.has(f)) found.push({ abs: path.join(dir, f), rel: `${path.basename(dir)}/${f}`, project: path.basename(dir) });
+      if (names.has(f)) found.push({ abs: path.join(dir, f), rel: `${path.basename(dir)}/${f}`, project: dir });
     }
+    const children = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       if (entry.name.startsWith('.') && entry.name !== '.github') continue;
       if (SKIP_DIRS.has(entry.name)) continue;
-      await scan(path.join(dir, entry.name), depth + 1);
+      children.push(path.join(dir, entry.name));
     }
+    for (let i = 0; i < children.length; i += 16) await Promise.all(children.slice(i, i + 16).map(child => scan(child, depth + 1)));
   };
   await scan(root, 0);
+  for (const dir of projectDirectories.keys()) if (!visited.has(dir)) projectDirectories.delete(dir);
   return found;
 }
 
 async function projectDocs(root = home) {
-  const now = Date.now();
-  if (now - projectIndex.at > PROJECT_INDEX_TTL_MS || projectIndex.root !== root) {
-    projectIndex.files = await discoverProjectFiles(root);
-    projectIndex.at = now;
-    projectIndex.root = root;
-  }
+  let inventory;
+  try { inventory = await createReadInventory(root); } catch { return []; }
+  const files = await discoverProjectFiles(inventory.root);
   const docs = [];
-  for (const f of projectIndex.files) {
-    const doc = await readDoc(f.abs, f.rel, `Project: ${f.project}`);
-    if (doc) docs.push(doc);
+  for (const f of files) {
+    const doc = await readDoc(f.abs, f.rel, `Project: ${f.project}`, inventory.root, inventory);
+    if (doc) {
+      const projected = { ...doc, project: projectIdentity(f.project) };
+      sourceChecks.set(projected, sourceChecks.get(doc));
+      docs.push(projected);
+    }
   }
   return docs;
 }
@@ -448,34 +503,74 @@ export function withFrontmatterLists(content, lists = {}) {
  * Search every memory file (all adapters + per-project configs).
  * Returns ranked results with a passage each. Never throws on a bad file.
  */
-export async function searchMemories(query, { limit = 10, root = home } = {}) {
+export async function searchMemories(query, { limit = 10, root = home, project, allProjects = false, budget = 6000, engine = 'indexed' } = {}) {
+  if (!['indexed', 'scan'].includes(engine)) throw new Error('Unknown retrieval engine');
   const terms = queryTerms(query);
   if (!terms.length) return { terms, results: [], total: 0 };
-
   const docs = [];
   for (const adapter of adapters) {
-    try { docs.push(...(await readMemoryFiles(adapter))); } catch {}
+    try { docs.push(...await readMemoryFiles(adapter)); } catch {}
   }
-  try { docs.push(...(await projectDocs(root))); } catch {}
-
-  const scored = [];
-  for (const doc of docs) {
-    const s = scoreDoc(doc, terms);
-    if (s.score > 0) scored.push({ doc, ...s });
-  }
-  scored.sort((a, b) => b.score - a.score || b.doc.mtimeMs - a.doc.mtimeMs);
-
-  const top = scored.slice(0, limit).map((r) => ({
-    tool: r.doc.tool,
-    path: r.doc.path,
-    type: r.doc.type,
-    description: r.doc.description,
-    score: r.score,
-    coverage: r.coverage,
-    matched: r.matched,
-    passage: extractPassage(r.doc, terms),
+  // Normal recall needs the active project's instructions, even when its
+  // checkout is deeper than the old three-level home-directory crawl.
+  const activePath = project || process.env.MEMOIR_PROJECT_ROOT || process.cwd();
+  const discoveryRoot = root === home && !allProjects && !/^(git|local):[a-f0-9]{32}$/.test(activePath)
+    ? path.resolve(activePath.replace(/^~/, home)) : root;
+  try { docs.push(...await projectDocs(discoveryRoot)); } catch {}
+  docs.push(...await readMemoryFiles({
+    name: 'Memoir', source: memoryRoot,
+    filter: full => path.dirname(full) === memoryRoot && /^[a-f0-9]{64}\.md$/.test(path.basename(full)),
   }));
-
+  const visible = memoryVisibility({ project, allProjects });
+  const state = await readSession();
+  for (const d of allDecisions(state)) {
+    if (!visible(d)) continue;
+    const doc = buildDoc({ path: 'decisions/' + (d.id || d.date || 'legacy') + '.md', tool: 'Memoir decisions', content: [d.text, d.why, d.rejected ? 'Rejected: ' + d.rejected : ''].filter(Boolean).join('\n') });
+    docs.push({ ...doc, id: d.id, project: d.project, type: 'decision', mtimeMs: Date.parse(d.date) || 0, source: 'session.json', evidence: { date: d.date, machine_id: d.machine_id } });
+  }
+  // Drop removed/unreadable source parses; an index never resurrects them.
+  const liveKeys = new Set(docs.map(doc => sourceChecks.get(doc)?.key).filter(Boolean));
+  for (const key of docCache.keys()) if (!liveKeys.has(key)) docCache.delete(key);
+  const candidates = docs.filter(visible);
+  lexicalIndex.sync(candidates);
+  const lookup = engine === 'indexed' ? lexicalIndex.lookup(terms) : null;
+  const scored = [];
+  for (const doc of candidates) {
+    if (lookup && !lookup.documents.has(doc)) continue;
+    const score = scoreDoc(doc, terms, lookup?.matches);
+    if (score.score > 0) scored.push({ doc, ...score });
+  }
+  // IDF improves rare-term discrimination while preserving field/coverage
+  // behavior. Document frequencies use the same matching rules as retrieval.
+  const df = new Map(terms.map(term => [term, scored.filter(r => r.perTerm[term] > 0).length]));
+  for (const r of scored) {
+    const idf = terms.reduce((sum, term) => sum + (r.perTerm[term] > 0 ? Math.log(1 + (candidates.length - df.get(term) + 0.5) / (df.get(term) + 0.5)) : 0), 0);
+    r.score *= idf / Math.max(1, r.matched);
+  }
+  scored.sort((a, b) => b.score - a.score || b.doc.mtimeMs - a.doc.mtimeMs || a.doc.path.localeCompare(b.doc.path));
+  let remaining = Math.max(256, Math.min(16000, Number(budget) || 6000));
+  const top = [];
+  const seen = new Set();
+  for (const r of scored) {
+    if (top.length >= limit || remaining < 80) break;
+    const key = r.doc.id || r.doc.absPath || r.doc.path;
+    if (seen.has(key)) continue;
+    // Parent proofs used during inventory are query-local. Validate the full
+    // source path again before returning any cached passage to the caller.
+    if (!await sourceUnchanged(r.doc)) continue;
+    seen.add(key);
+    const passage = extractPassage(r.doc, terms, Math.min(PASSAGE_BUDGET, remaining));
+    if (!passage.trim()) continue;
+    remaining -= passage.length;
+    top.push({
+      id: r.doc.id, project: r.doc.project || 'shared', tool: r.doc.tool,
+      path: r.doc.path, type: r.doc.type, description: r.doc.description,
+      score: r.score, coverage: r.coverage, matched: r.matched, passage,
+      source: r.doc.source || r.doc.path,
+      matchedLines: r.doc.bodyLines.flatMap((line, i) => lineMatches(line, terms) ? [r.doc.bodyStartLine + i] : []),
+      updated: r.doc.updated || null,
+    });
+  }
   return { terms, results: top, total: scored.length };
 }
 

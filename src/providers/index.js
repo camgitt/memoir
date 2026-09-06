@@ -4,6 +4,8 @@ import os from 'os';
 import chalk from 'chalk';
 import { execFileSync } from 'child_process';
 import { appendEvent } from '../events/log.js';
+import { listSafeFiles, readSafeFile, writeSafeFile, restoreFileSet } from '../security/files.js';
+import { withSessionLock } from '../session/lock.js';
 
 function sanitizeUrl(url) {
   // Reject URLs with shell metacharacters
@@ -13,38 +15,45 @@ function sanitizeUrl(url) {
   return url;
 }
 
-export async function syncToLocal(config, stagingDir, spinner) {
-  const destDir = config.localPath;
-  if (!destDir) throw new Error('Local path is not configured.');
+export async function withLocalBackupLock(config, fn) {
+  const dest = path.resolve(config.localPath.replace(/^~/, os.homedir()));
+  return withSessionLock(dest + '.memoir-lock', fn, { maxWaitMs: 5000 });
+}
 
-  const resolvedDest = destDir.replace(/^~/, os.homedir());
-
-  spinner.text = `Syncing files to local directory: ${chalk.cyan(resolvedDest)}`;
-  await fs.ensureDir(resolvedDest);
-
-  await fs.copy(stagingDir, resolvedDest);
-
-  // Prune orphaned encrypted blobs. Each encrypted push derives a fresh salt
-  // and therefore fresh HMAC filenames, so without this every push leaves the
-  // previous push's data/*.enc behind forever and localPath grows without
-  // bound. Only runs for a full encrypted sync (manifest.enc present in what
-  // we just wrote) — `memoir snapshot` also calls syncToLocal with a staging
-  // dir of a single handoff file, and blanket-emptying the destination there
-  // would delete the user's backup.
-  try {
-    const stagedManifest = path.join(stagingDir, 'manifest.enc');
-    const destData = path.join(resolvedDest, 'data');
-    if (await fs.pathExists(stagedManifest) && await fs.pathExists(destData)) {
-      const keep = new Set(await fs.readdir(path.join(stagingDir, 'data')).catch(() => []));
-      for (const f of await fs.readdir(destData)) {
-        if (!keep.has(f)) await fs.remove(path.join(destData, f)).catch(() => {});
-      }
+export async function syncToLocal(config, stagingDir, spinner, options = {}) {
+  if (!config.localPath) throw new Error('Local path is not configured.');
+  const dest = path.resolve(config.localPath.replace(/^~/, os.homedir()));
+  if (dest === path.parse(dest).root || dest === path.resolve(os.homedir()) || path.resolve(stagingDir).startsWith(dest + path.sep)) throw new Error('Choose a dedicated backup directory');
+  const sync = async () => {
+    const stat = await fs.lstat(dest).catch(err => { if (err.code !== 'ENOENT') throw err; return null; });
+    if (stat?.isSymbolicLink()) throw new Error('Backup destination must not be a symlink');
+    const encrypted = await fs.pathExists(path.join(stagingDir, 'manifest.enc'));
+    const exists = await fs.pathExists(dest);
+    const wasEncrypted = exists && await fs.pathExists(path.join(dest, 'manifest.enc'));
+    if (encrypted) {
+      if (exists && !wasEncrypted && (await fs.readdir(dest)).length && !options.verifiedReplacement) throw new Error('Use memoir push to verify and migrate this plaintext backup before replacing it.');
+      const parent = path.dirname(dest);
+      await fs.ensureDir(parent);
+      const next = await fs.mkdtemp(path.join(parent, '.memoir-sync-'));
+      const old = next + '-previous';
+      try {
+        await listSafeFiles(stagingDir);
+        await fs.copy(stagingDir, next);
+        if (exists) await fs.rename(dest, old);
+        try { await fs.rename(next, dest); }
+        catch (err) { if (exists) await fs.rename(old, dest); throw err; }
+        if (exists) await fs.remove(old);
+      } finally { await fs.remove(next).catch(() => {}); }
+    } else {
+      if (wasEncrypted) throw new Error('Cannot append plaintext to an encrypted backup. Use memoir push with encryption enabled.');
+      const files = [];
+      for (const rel of await listSafeFiles(stagingDir)) files.push({ path: rel, content: await readSafeFile(stagingDir, rel) });
+      await restoreFileSet(dest, files);
     }
-  } catch {
-    // Pruning is housekeeping — never fail a completed backup over it.
-  }
-
-  spinner.succeed(chalk.green('Sync complete! ') + chalk.gray(`(Saved to ${resolvedDest})`));
+  };
+  if (options.lockHeld) await sync();
+  else await withLocalBackupLock(config, sync);
+  spinner.succeed(chalk.green('Sync complete! ') + chalk.gray('(Saved to ' + dest + ')'));
   await appendEvent('sync_pushed', { provider: 'local' });
 }
 
@@ -73,6 +82,15 @@ export function cloneForSync(repoUrl, dir, { timeout = CLONE_TIMEOUT_MS } = {}) 
   execFileSync('git', ['clone', '--depth', '1', '--filter=blob:none', '--no-checkout', repoUrl, '.'], {
     cwd: dir, stdio: GIT_QUIET, timeout,
   });
+  // Memoir writes main; read that same branch even when remote HEAD is master.
+  const main = execFileSync('git', ['ls-remote', '--heads', 'origin', 'refs/heads/main'], {
+    cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout,
+  }).trim();
+  if (main) {
+    execFileSync('git', ['fetch', '--depth', '1', 'origin', 'refs/heads/main'], { cwd: dir, stdio: GIT_QUIET, timeout });
+    execFileSync('git', ['update-ref', 'refs/heads/main', 'FETCH_HEAD'], { cwd: dir, stdio: GIT_QUIET, timeout });
+    execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], { cwd: dir, stdio: GIT_QUIET, timeout });
+  }
 }
 
 // Does the remote HEAD carry `file`? Reads the tree only — no blob fetch.
@@ -104,7 +122,8 @@ export function classifyGitError(err) {
   const text = `${err?.message || ''}\n${err?.stderr || ''}`.toLowerCase();
   if (err?.code === 'ETIMEDOUT' || err?.signal === 'SIGTERM' || /timed? ?out/.test(text)) return 'timeout';
   if (/non-fast-forward|fetch first|\[rejected\]/.test(text)) return 'non_fast_forward';
-  if (/authentication failed|could not read username|could not read password|permission denied|terminal prompts disabled|invalid credentials|403/.test(text)) return 'auth';
+  // Match HTTP diagnostics, not a coincidental 403 in a path or timestamp.
+  if (/authentication failed|could not read username|could not read password|permission denied|terminal prompts disabled|invalid credentials|requested url returned error: 403\b|http(?:\/[\d.]+)?(?: error| status(?: code)?)?[: ]+403\b/.test(text)) return 'auth';
   if (/could not resolve host|unable to access|connection (?:refused|reset|timed)|network is unreachable|early eof|remote end hung up/.test(text)) return 'network';
   if (/repository not found|does not appear to be a git repository|does not exist|no such file/.test(text)) return 'not_found';
   if (/invalid characters/.test(text)) return 'bad_url';
@@ -155,7 +174,19 @@ export async function syncToGit(config, stagingDir, spinner, options = {}) {
 
     // Files the caller wants kept although staging lacks them: check them
     // out (one blob each) so `git add -A` below sees them in the tree.
-    for (const p of options.preserve || []) checkoutFromRemote(gitDir, p);
+    const preserved = [];
+    for (const p of options.preserve || []) {
+      if (!checkoutFromRemote(gitDir, p)) throw new Error('Could not preserve remote file');
+      preserved.push({ path: p, content: await readSafeFile(gitDir, p) });
+    }
+    if (!options.additive) {
+      // The merge peek may have materialized plaintext. A complete encrypted
+      // replacement must remove it from the current tree before adding blobs.
+      for (const entry of await fs.readdir(gitDir)) {
+        if (entry !== '.git') await fs.remove(path.join(gitDir, entry));
+      }
+    }
+
 
     if (options.additive) {
       // Populate the index from HEAD (trees only, no blobs) so everything
@@ -165,11 +196,14 @@ export async function syncToGit(config, stagingDir, spinner, options = {}) {
       try { execFileSync('git', ['read-tree', 'HEAD'], { cwd: gitDir, stdio: 'ignore', timeout: 30000 }); } catch {}
     }
 
+    const stagedFiles = await listSafeFiles(stagingDir);
     await fs.copy(stagingDir, gitDir);
+    for (const entry of preserved) await writeSafeFile(gitDir, entry.path, entry.content);
 
     if (options.additive) {
-      const tops = (await fs.readdir(stagingDir)).filter((n) => n !== '.git');
-      if (tops.length) execFileSync('git', ['add', '-A', '--', ...tops], { cwd: gitDir, stdio: 'ignore', timeout: 30000 });
+      if (stagedFiles.length) execFileSync('git', ['add', '--pathspec-from-file=-', '--pathspec-file-nul'], {
+        cwd: gitDir, input: Buffer.from(stagedFiles.join('\0') + '\0'), stdio: ['pipe', 'ignore', 'pipe'], timeout: 30000,
+      });
     } else {
       execFileSync('git', ['add', '-A'], { cwd: gitDir, stdio: 'ignore', timeout: 30000 });
     }
@@ -177,12 +211,12 @@ export async function syncToGit(config, stagingDir, spinner, options = {}) {
     execFileSync('git', ['config', 'user.email', 'bot@memoir.dev'], { cwd: gitDir, stdio: 'ignore', timeout: 5000 });
 
     const timestamp = new Date().toISOString().split('T')[0];
-    try {
-      execFileSync('git', ['commit', '-q', '-m', `memoir backup ${timestamp}`], { cwd: gitDir, stdio: 'ignore', timeout: 30000 });
-    } catch {
+    const changed = execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: gitDir, encoding: 'utf8', timeout: 30000 });
+    if (!changed.trim()) {
       spinner.succeed(chalk.green('Already up to date! ') + chalk.gray('No changes to push.'));
       return;
     }
+    execFileSync('git', ['commit', '-q', '-m', 'memoir backup ' + timestamp], { cwd: gitDir, stdio: GIT_QUIET, timeout: 30000 });
 
     spinner.text = `Pushing data to ${chalk.cyan(repoUrl)}...`;
     // HEAD:main pushes whatever branch the clone checked out (a master-

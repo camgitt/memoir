@@ -29,7 +29,7 @@ const {
 } = await import('./src/memory/search.js');
 
 // Fixture store: what the Claude adapter walks is ~/.claude/projects/**/*.md
-const memDir = path.join(scratchHome, '.claude', 'projects', '-scratch', 'memory');
+const memDir = path.join(scratchHome, '.claude', 'projects', scratchHome.replace(/[\\/:]/g, '-'), 'memory');
 await fs.ensureDir(memDir);
 
 const FM = (fields, body) => `---\n${fields}\n---\n\n${body}\n`;
@@ -93,8 +93,8 @@ await fs.writeFile(path.join(projDir, 'CLAUDE.md'), `# someproject\n\n## Surface
 
 // ── Tokenizing / morphology ───────────────────────────────────────
 console.log(`\n${BOLD}${CYAN}tokenize / normalize / termMatch${RESET}\n`);
-assert(JSON.stringify(tokenize('Hello, World! foo_bar baz-qux v3.10.2')) === JSON.stringify(['hello', 'world', 'foo_bar', 'baz', 'qux', 'v3', '10']),
-  'tokenize splits on punctuation and dots/dashes, keeps underscores');
+assert(JSON.stringify(tokenize('Hello, World! foo_bar baz-qux v3.10.2')) === JSON.stringify(['hello', 'world', 'foo_bar', 'baz', 'qux', 'v3', '10', '2']),
+  'tokenize splits on punctuation and dots/dashes, keeps underscores and numeric version components');
 assert(normalize('deploys') === 'deploy' && normalize('deploying') === 'deploy' && normalize('deployed') === 'deploy', 'normalize folds -s/-ing/-ed');
 assert(normalize('was') === 'was' && normalize('ring') === 'ring' && normalize('this') === 'thi' || normalize('this') === 'this', 'normalize leaves short words alone (no sub-4-char stems)');
 assert(normalize('policies') === 'policy' && normalize('classes') === 'class', 'normalize handles -ies and -sses');
@@ -130,7 +130,7 @@ assert(deployHit.passage.length <= 720, `passage respects the ~700 char budget (
 r = await searchMemories('databento limit', { root: scratchHome });
 assert(r.results[0]?.path.endsWith('legacy_bare.md') && /spending limit/.test(r.results[0].passage), 'legacy bare-markdown entries are searchable and yield a passage');
 
-r = await searchMemories('surfaces', { root: scratchHome });
+r = await searchMemories('surfaces', { root: scratchHome, project: projDir });
 assert(r.results.some((x) => x.tool.startsWith('Project:') && x.path.endsWith('CLAUDE.md')), 'per-project CLAUDE.md files are indexed');
 
 r = await searchMemories('zzzz qqqq', { root: scratchHome });

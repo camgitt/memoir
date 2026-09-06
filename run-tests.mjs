@@ -57,6 +57,11 @@ if (preExisting) {
 }
 
 const suites = [
+  { name: 'project view recovery (UI harness)', cmd: 'node', args: ['test-work-view-ui.mjs'] },
+  { name: 'local project view (integration)', cmd: 'node', args: ['test-work-view.mjs'] },
+  { name: 'project handoff adversarial (integration)', cmd: 'node', args: ['test-work-adversarial.mjs'] },
+  { name: 'project handoff (integration)', cmd: 'node', args: ['test-work-handoff.mjs'] },
+  { name: 'audit reliability (integration)', cmd: 'node', args: ['test-audit-reliability.mjs'] },
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
   { name: 'session (unit)', cmd: 'node', args: ['test-session.mjs'] },
   { name: 'capture-quality (unit)', cmd: 'node', args: ['test-capture-quality.mjs'] },
@@ -70,6 +75,7 @@ const suites = [
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
   { name: 'recall (unit)', cmd: 'node', args: ['test-recall.mjs'] },
+  { name: 'retrieval index (integration)', cmd: 'node', args: ['test-retrieval-index.mjs'] },
   { name: 'event-log (unit)', cmd: 'node', args: ['test-event-log.mjs'] },
   { name: 'parking-and-sync (unit)', cmd: 'node', args: ['test-parking-and-sync.mjs'] },
   { name: 'events-summary (unit)', cmd: 'node', args: ['test-events-summary.mjs'] },
