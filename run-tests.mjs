@@ -65,6 +65,7 @@ const suites = [
   { name: 'audit reliability (integration)', cmd: 'node', args: ['test-audit-reliability.mjs'] },
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
   { name: 'session (unit)', cmd: 'node', args: ['test-session.mjs'] },
+  { name: 'update (unit)', cmd: 'node', args: ['test-update.mjs'] },
   { name: 'capture-quality (unit)', cmd: 'node', args: ['test-capture-quality.mjs'] },
   { name: 'auto-activate (unit)', cmd: 'node', args: ['test-auto-activate.mjs'] },
   { name: 'tidy/lean-memory (unit)', cmd: 'node', args: ['test-tidy.mjs'] },
