@@ -8,6 +8,8 @@ import { recordWork, readWork, resumeWork, refreshWork, retractWork, runWorkChec
 import { backupWork, doctorWork, recoverWork } from './src/work/recovery.js';
 import { LEDGER, SNAPSHOT_DIR, SNAPSHOT_KEEP, digest, readSnapshot } from './src/work/snapshots.js';
 import { startWorkView } from './src/work/view.js';
+import { safePath } from './src/security/files.js';
+import { withSessionLock } from './src/session/lock.js';
 import { encryptBuffer } from './src/security/encryption.js';
 
 const scratch = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'memoir-work-recovery-')));
@@ -203,6 +205,36 @@ try {
     await apply(root);
     assert.equal((await resumeWork(root)).records.length,2);
     assert.ok(!await fs.pathExists(path.join(root,'.memoir/work.lock')));
+  });
+  await test('Windows delete-pending access errors retry without bypassing path or lock checks', async () => {
+    const root = await create(); await recordWork(root, source('first'));
+    const platform = Object.getOwnPropertyDescriptor(process,'platform'), lstat = fs.lstat, open = fs.openSync;
+    let inspectDenied = 0, openDenied = 0;
+    try {
+      Object.defineProperty(process,'platform',{...platform,value:'win32'});
+      fs.lstat = async (...args) => {
+        if (String(args[0]).endsWith('work.lock') && inspectDenied++ === 0) throw Object.assign(new Error('Synthetic delete-pending inspection'),{code:'EPERM'});
+        return lstat(...args);
+      };
+      fs.openSync = (...args) => {
+        if (String(args[0]).endsWith('work.lock') && openDenied++ === 0) throw Object.assign(new Error('Synthetic delete-pending open'),{code:'EPERM'});
+        return open(...args);
+      };
+      await recordWork(root, source('second')); assert.equal((await readWork(root)).revision,2);
+      assert.ok(inspectDenied > 1); assert.ok(openDenied > 1);
+      fs.lstat = async () => { throw Object.assign(new Error('Permanent access denial'),{code:'EACCES'}); };
+      await assert.rejects(safePath(root,'.memoir/work.json'),/Permanent access denial/);
+      fs.lstat = lstat; fs.openSync = open;
+      const lock = path.join(root,'.memoir/work.lock'); await fs.writeFile(lock,String(process.pid));
+      let entered = false;
+      await assert.rejects(withSessionLock(lock,async()=>{entered=true;},{maxWaitMs:80}),/busy/);
+      assert.equal(entered,false); await fs.remove(lock);
+    } finally { fs.lstat=lstat;fs.openSync=open;Object.defineProperty(process,'platform',platform); }
+    if (process.platform !== 'win32') {
+      await fs.symlink(path.join(root,LEDGER),path.join(root,'linked-ledger'));
+      try { Object.defineProperty(process,'platform',{...platform,value:'win32'});await assert.rejects(safePath(root,'linked-ledger'),/Symlinks/); }
+      finally { Object.defineProperty(process,'platform',platform); }
+    }
   });
   await test('concurrent saves retain every record and snapshot retention is bounded', async () => {
     const root = await create();

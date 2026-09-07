@@ -22,7 +22,7 @@ results must be checked against the actual release rather than this document.
 | Exercise | Result |
 | --- | --- |
 | Full local suite | 25 suites passed on macOS/Node 26.7.0; subsequent focused checks cover the added crash and browser-generation cases |
-| Recovery regression | 14 groups cover acknowledged snapshots, old-ledger upgrade, damaged/missing ledgers, exact preview conflicts, stale writers, concurrent recovery/check execution, all-branch encrypted round trips, malformed/secret-bearing imports, symlinks, failed writes, process crash, retention and CLI errors |
+| Recovery regression | 15 groups cover acknowledged snapshots, old-ledger upgrade, damaged/missing ledgers, exact preview conflicts, stale writers, concurrent recovery/check execution, all-branch encrypted round trips, malformed/secret-bearing imports, symlinks, failed writes, process crash, retention, CLI errors and Windows delete-pending retries |
 | Browser harness | 31 scenarios pass, including retaining an open draft's old generation until the recovered record is explicitly reviewed |
 | Existing regressions | 17 handoff groups, 21 adversarial scenarios and 14 browser API/security groups pass |
 | Installed tarball | CLI, project MCP, local view, encrypted export, damaged-ledger recovery, unchanged client settings and post-recovery MCP continuation passed in a synthetic home |
@@ -63,3 +63,9 @@ and quarantine are plaintext, and secret screening is heuristic. Losing the
 entire folder/disk needs a separately stored export. See the
 [recovery guide](PROJECT-RECOVERY.md) for downgrade restrictions, capacity,
 retention, filesystem boundaries and the remaining manual lock-repair case.
+
+The first expanded CI run caught a Windows/Node 18 delete-pending race on
+`work.lock`. Path inspection and exclusive lock acquisition now retry transient
+Windows access failures without skipping validation or entering without a lock.
+A deterministic denial/concurrency regression accompanies the fix. Manual
+publication also requires a version tag matching the package.
