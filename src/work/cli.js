@@ -1,7 +1,19 @@
 import { Command } from 'commander';
 import { recordWork, runWorkCheck, retractWork, refreshWork, formatWork } from './store.js';
 import { setupWork } from './setup.js';
+import { backupWork, doctorWork, recoverWork } from './recovery.js';
 import { readSafeFile } from '../security/files.js';
+
+async function recoveryPassphrase(confirm = false) {
+  if (process.env.MEMOIR_WORK_PASSPHRASE) return process.env.MEMOIR_WORK_PASSPHRASE;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('Set MEMOIR_WORK_PASSPHRASE through your secret manager, or run this command in an interactive terminal. Never put the passphrase in a command argument or project record.');
+  const { default: inquirer } = await import('inquirer');
+  const questions = [{ type: 'password', name: 'passphrase', message: 'Recovery passphrase (at least 12 characters):', mask: '*' }];
+  if (confirm) questions.push({ type: 'password', name: 'confirmation', message: 'Repeat recovery passphrase:', mask: '*' });
+  const answer = await inquirer.prompt(questions);
+  if (confirm && answer.confirmation !== answer.passphrase) throw new Error('Passphrases did not match. Nothing was exported.');
+  return answer.passphrase;
+}
 
 export async function workCli(argv) {
   const program = new Command('memoir work').description('Local project continuity for Codex and Cursor')
@@ -14,6 +26,25 @@ export async function workCli(argv) {
     const view = await refreshWork(project());
     console.log(options.json ? JSON.stringify(view, null, 2) : formatWork(view));
   });
+  program.command('doctor').description('Check the project handoff and recovery snapshots').action(async () => {
+    const result = await doctorWork(project());
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.healthy && result.state !== 'empty') process.exitCode = 1;
+  });
+  program.command('backup').description('Save a local snapshot, or export an encrypted project handoff')
+    .option('--output <path>', 'New encrypted backup file; never overwrites an existing file').action(async options => {
+      const passphrase = options.output ? await recoveryPassphrase(true) : undefined;
+      console.log(JSON.stringify(await backupWork(project(), { output: options.output, passphrase }), null, 2));
+    });
+  program.command('recover [snapshot]').description('Preview recovery first; apply only the reviewed fingerprint')
+    .option('--from <path>', 'Encrypted project handoff export')
+    .option('--apply', 'Apply the reviewed recovery and preserve the original')
+    .option('--expect <fingerprint>', 'Fingerprint returned by the recovery preview').action(async (snapshot, options) => {
+      const passphrase = options.from ? await recoveryPassphrase() : undefined;
+      const result = await recoverWork(project(), { ...options, snapshot, passphrase });
+      if (result.applied) await refreshWork(project());
+      console.log(JSON.stringify(result, null, 2));
+    });
   program.command('view').description('Review and correct project memory in a local browser')
     .option('--no-open', 'Print the local link without opening a browser').option('--port <number>', 'Local port; 0 chooses an available port', '0').action(async options => {
       const { startWorkView } = await import('./view.js');
@@ -54,8 +85,8 @@ export async function workCli(argv) {
       console.log(JSON.stringify(result, null, 2));
       if (result.exit_code !== 0 || result.timed_out || !result.inputs_stable) process.exitCode = 1;
     });
-  program.command('retract <id>').requiredOption('--revision <number>', 'Current record revision').option('--category <name>', 'record or check', 'record').action(async (id, options) => {
-    const result = await retractWork(project(), { id, expected_revision: Number(options.revision), category: options.category });
+  program.command('retract <id>').requiredOption('--revision <number>', 'Current record revision').option('--category <name>', 'record or check', 'record').option('--recovery <id>', 'Recovery generation returned by resume').action(async (id, options) => {
+    const result = await retractWork(project(), { id, expected_revision: Number(options.revision), category: options.category, expected_recovery: options.recovery });
     await refreshWork(project());
     console.log(JSON.stringify(result));
   });

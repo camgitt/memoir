@@ -11,7 +11,7 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
    matching `vX.Y.Z` tag so they can't diverge.
 4. **Push with tags** — `git push origin main --follow-tags`. **This is the
    release.** The tag push runs `.github/workflows/publish.yml`, which
-   re-runs the suite and publishes with provenance via npm trusted
+   first requires the full OS/Node CI matrix (including installed-package recovery), then publishes with provenance via npm trusted
    publishing — no local token, no OTP. Watch it at
    https://github.com/camgitt/memoir/actions/workflows/publish.yml and
    verify with step 6. (One-time setup on npmjs.com is described at the
@@ -30,3 +30,8 @@ The published tarball is an allowlist (`files` in package.json: `bin/`, `src/`,
 README, LICENSE, docs/, supabase/migrations/ and evals/). Tests at the
 repository root, local project memory, generated client settings and the
 `mcp-publisher` binary do not ship. Add new runtime paths to `files`.
+
+Project recovery changes must pass `test-work-recovery.mjs`, the complete suite,
+and `npm run test:packed`. After publication, run
+`MEMOIR_TEST_PACKAGE=memoir-cli@X.Y.Z npm run test:packed` against the exact
+registry artifact. Verify its provenance and latest tag separately.

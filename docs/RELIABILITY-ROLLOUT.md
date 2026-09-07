@@ -43,7 +43,7 @@ Random vault-key wrapping, enrollment, cross-device rotation, hardware-backed st
 - CI confirms the declared OS/Node matrix; a local macOS run cannot establish Windows readiness.
 - Real Claude Code, Codex, and Cursor installations accept configuration and complete save/recall/restart.
 - Hosted migration and account-isolation tests pass.
-- The package owner configures npm's trusted publisher for `camgitt/memoir`, workflow `publish.yml`. The old publication auth failure is not fixed by this source branch.
+- The npm trusted publisher for `camgitt/memoir`, workflow `publish.yml`, was verified for releases 3.14.0 and 3.15.0. Subsequent publication must pass the full CI matrix and retain provenance.
 - Select and synchronize the release version across package.json, lockfile, and server.json. Publish only the reviewed commit/tag, then repeat the smoke check against the registry artifact.
 
 The release gates above also apply to future deployments. The linked validation report records what was actually observed for this release. No independent security certification is implied.
@@ -55,3 +55,8 @@ Local locks fail when busy. A crash while reaping can leave a `.reaper` file req
 Cloud merges retained states, increasing download cost. It cannot recover versions already removed by retention. Strong concurrent-cloud consistency needs a server-side conditional commit/merge protocol and race-tested retention.
 
 Legacy scope migration, renamed projects, unusual remote aliases, and profile isolation remain work. Concurrent hostile parent-directory replacement requires further filesystem review: current validation/no-follow opens are not an openat-based sandbox.
+
+## Project handoff recovery
+
+The project-only ledger now has automatic local snapshots and encrypted export/recovery.
+These are separate from legacy/cloud backup storage. See [the project recovery guide](PROJECT-RECOVERY.md).

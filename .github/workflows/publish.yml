@@ -21,10 +21,15 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # OIDC token for npm trusted publishing + provenance
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
   publish:
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write   # Granted only to the publishing job after validation.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
