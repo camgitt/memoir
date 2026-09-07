@@ -2,24 +2,39 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Memoir · Project memory</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
 <body>
-<a class="skip-link" href="#section-title">Skip to project memory</a>
-<aside class="sidebar"><a class="brand" href="/" aria-label="Memoir home"><span class="mark">m</span> memoir</a><p class="eyebrow">PROJECT MEMORY</p><nav id="navigation" aria-label="Memory categories"></nav><div class="sidebar-note"><span class="local-dot"></span> On this computer<p>Your project context.<br>Your decisions to keep.</p></div></aside>
-<main>
-  <header class="topbar"><div id="project">Opening project…</div><button id="refresh" class="quiet">Refresh</button></header>
-  <section class="intro"><p class="eyebrow">A LITTLE CONTEXT GOES A LONG WAY</p><h1>Pick up where you left off.</h1><p class="subtitle">See what’s remembered. Keep what’s useful. Correct what isn’t.</p></section>
+<a id="skip-link" class="skip-link" href="#section-title">Skip to project memory</a>
+<header class="workspace-bar">
+  <a class="workspace-brand" href="/" aria-label="Memoir project home"><span aria-hidden="true">m</span> memoir</a>
+  <span class="workspace-divider" aria-hidden="true">/</span><div id="project">Opening project…</div>
+  <span class="workspace-local"><i></i> On this computer</span><button id="refresh" class="quiet">Refresh</button>
+</header>
+<main class="workspace">
+  <header class="workspace-heading"><div><h1>Project memory</h1><p class="subtitle">Answers, decisions and checks for your next coding session.</p></div><button id="add" class="primary" disabled>+ Add context</button></header>
   <div id="notice" role="status" aria-live="polite"></div>
-  <section id="goal" aria-label="Current goal"></section>
-  <div class="section-heading"><div><h2 id="section-title" tabindex="-1">Overview</h2><p id="section-description">The context your next session will use.</p></div><button id="add" class="primary" disabled>+ Add memory</button></div>
-  <label class="search-label"><span class="sr-only">Search saved project context</span><input id="search" type="search" placeholder="Find an answer, decision or next step…" autocomplete="off"></label>
-  <div id="content" aria-live="polite"></div>
-  <footer>Project records only. Check results cover their listed files; they don’t grant permission to publish. <span id="revision"></span></footer>
+  <div class="workspace-tools">
+    <label class="search-label"><span class="search-icon" aria-hidden="true"></span><span class="sr-only">Search saved project context</span><input id="search" type="search" placeholder="Search answers, decisions, files…" autocomplete="off"></label>
+    <div class="view-switch" aria-label="Project view"><button id="show-records" type="button" aria-pressed="true">Records</button><button id="show-map" type="button" aria-pressed="false">Map</button></div>
+  </div>
+  <nav id="navigation" aria-label="Memory categories"></nav>
+  <div class="review-summary"><section id="summary" class="summary-strip" aria-label="Project at a glance"></section><section id="goal" aria-label="Current goal"></section></div>
+  <div class="section-heading"><div><h2 id="section-title" tabindex="-1">Overview</h2><p id="section-description">What matters for your next session.</p></div><span id="view-caption">Saved context</span></div>
+  <section id="records-workspace" aria-label="Project records"><div id="content" aria-live="polite"></div></section>
+  <section id="map-workspace" hidden aria-label="Project knowledge map">
+    <div class="map-controls"><p>Choose an entry to follow its connections.</p><button id="map-suggestions" type="button" aria-pressed="false">Suggested links</button></div>
+    <div class="map-layout">
+      <div class="map-surface"><div class="canvas-caption"><span id="map-count">Opening project memory</span><button id="map-reset" type="button">Back to overview</button></div><div id="map-canvas" class="map-canvas" aria-label="Connected project entries"></div><div class="map-bottom"><div class="map-legend"><span><i class="line-solid"></i> Recorded</span><span id="map-suggested-legend" hidden><i class="line-dashed"></i> Suggested word match</span></div></div></div>
+      <aside id="map-inspector" class="map-inspector" aria-live="polite" aria-label="Selected context"></aside>
+    </div>
+    <p class="map-footnote">Recorded links show project membership, named records or covered files. Suggested links are optional word matches.</p>
+  </section>
+  <footer><span id="revision"></span><details><summary>Used by your coding tools</summary><p>Memoir’s CLI, connected coding tools and this view read the same local project record. Saved corrections are available the next time a tool reads it. You can close this page and keep working.</p><p>Personal memory is separate. Check results cover their listed files; changed files may need a new check. A saved record is never permission to run a command or publish.</p></details></footer>
 </main>
 <dialog id="editor" aria-labelledby="editor-title"><form id="edit-form">
   <div class="dialog-heading"><h2 id="editor-title">Correct memory</h2><button type="button" id="cancel-top" class="quiet" aria-label="Close editor">×</button></div>
   <label>Type<select id="kind"><option value="answer">Answered question</option><option value="decision">Decision</option><option value="next">Next step</option><option value="goal">Goal</option></select></label>
   <label><span id="text-label">Question</span><textarea id="text" rows="3" maxlength="2000" required></textarea></label>
   <label id="answer-label">Answer<textarea id="answer" rows="3" maxlength="2000"></textarea></label>
-  <label>Why this matters <span class="optional">(optional)</span><textarea id="why" rows="2" maxlength="2000"></textarea></label>
+  <label><span>Why this matters <span class="optional">(optional)</span></span><textarea id="why" rows="2" maxlength="2000"></textarea></label>
   <label id="status-label">Progress<select id="status"><option value="open">To do</option><option value="done">Done</option></select></label>
   <p class="hint">Only save project context. Keep credentials and personal details out. Corrections keep earlier versions.</p>
   <p id="form-error" class="form-error" role="alert"></p>
