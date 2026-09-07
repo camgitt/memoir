@@ -22,7 +22,12 @@ Memoir remains a CLI and tool integration. This optional browser companion reads
 the same project record; it is not a separate memory service. You can keep using
 the CLI, Codex or Cursor without opening the page.
 
-The default **Map** view connects the current branch's project entries. Select a
+The default **Records** view shows open actions, saved answers and check evidence.
+**Records** and **Map** share one workspace, search box and category navigation.
+Switching views keeps the search and category. Records use readable rows with
+short headings and expandable text; source history stays available on each entry.
+
+The **Map** view connects the current branch's project entries. Select a
 node to read its full text, source and history, and inspect connected entries.
 Solid lines show project membership, explicit record references, or a named file
 that a check declares as input. A file link does not prove the entry's claims.
@@ -40,15 +45,23 @@ selected entry. Search covers all active entries, including older ones, but the
 visible map and connection list are not exhaustive. No text leaves the browser
 to generate these connections.
 
-**Records** retains the overview and category lists for editing. The overview
-prioritizes open actions and checks that need review. Long entries expand with
+**Records** provides the overview and category lists for editing. The overview
+shows every open action as a short row; **Details** opens its explanation and
+controls. Saved answers and recent decisions start collapsed. Matching checks
+remain available from the summary and Checks category; only checks needing
+review appear in the overview. Long entries in category lists expand with
 **Read full entry**; completed actions remain under **Next actions**. Both views
-use the same correction controls and project record.
+use the same correction controls and project record. **Connections** opens a
+record in the map; **Open in Records** returns to that entry's category. Removed
+items use the Records recovery list and do not enter the active map.
 
 Selecting a map entry opens its details beside the map in wide windows and below
 it in narrow windows. Keyboard focus follows the selected context. Saving from
-the map selects the saved entry. Both views search covered file paths as well as
-record text and sources. See [the project map trial](PROJECT-MAP-TRIAL.md) for
+either view selects the saved entry, clears the old search and opens its category
+so a filter cannot hide a successful save. Both views search covered file paths as
+well as record text and sources. Overview search includes all matching records,
+including completed actions and goals, without the overview's two-per-group limit.
+See [the project map trial](PROJECT-MAP-TRIAL.md) for
 tested behavior and the limits of suggested connections.
 
 Run `memoir work view` in your project (or `node bin/memoir.js work view`

@@ -105,3 +105,45 @@ suggestions. At 390px, the seven node boxes did not overlap and the page had no
 horizontal overflow. Two new regression cases cover the overview limit and
 direct-neighbor filtering with opt-in suggestions, bringing the UI suite to 23
 scenarios. The underlying keyword-matching quality is unchanged by this cleanup.
+# Shared workspace follow-up — 6 September 2026
+
+Further feedback was that even the unified page required too much reading.
+The overview now shows all open actions as short rows with a **Details** button.
+Saved answers and recent decisions start collapsed; matching check receipts are
+available through the summary and Checks category. Only checks needing review
+appear in the overview. Existing action text was shortened and the explanation
+moved into its rationale; previous full text remains in local history. The npm
+action now reflects the observed password-confirmation screen in Chrome.
+
+The user reported that Map and Records still looked incoherent. The browser now
+opens Records first and uses one header, search, category navigation, color
+palette and correction dialog for both views. Records have a single column of
+readable rows. The former separate sidebar, duplicate introductions and light
+card grid are removed.
+
+Switching views preserves search and category. **Connections** opens the same
+record in the map; **Open in Records** returns to its category. A successful save
+reveals the saved entry and clears filters that could hide it. Overview search
+now includes every matching entry, including goals and completed actions.
+
+Observed in the actual local browser:
+
+- Found the existing privacy answer, opened its correction dialog and cancelled
+  without changing the answer, followed Connections and returned to Records.
+- Searched `src/work/ui/style.css` and found the same three check receipts in
+  Records and Map, including specific changed-input warnings.
+- A search with no results stayed empty after switching views.
+- Created the actual workspace-design decision while an empty search was active.
+  Saving cleared the search, opened Decisions and showed the saved entry.
+- Corrected that decision from Map and confirmed keyboard focus returned to
+  the visible Correct button. Returning to Records showed the correction and
+  its earlier version. Focus restoration now scopes itself to the active view.
+- Inspected Records at the normal window width and 390px, Map at 1280px, and the
+  shared dark editor at 1280px. At 390px the seven overview node boxes did not
+  overlap; the document had no horizontal overflow. Narrow category navigation
+  scrolls horizontally, and map details follow the graph in normal flow.
+
+The changed UI requires targeted UI/API and documentation rechecks. Unchanged
+CLI/MCP handoff and adversarial receipts remain reusable. This is local design
+and functional validation; it adds no independent-user or timed utility study.
+The npm publishing step remains separate from this local preview.
