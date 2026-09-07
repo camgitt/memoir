@@ -21,10 +21,15 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # OIDC token for npm trusted publishing + provenance
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
   publish:
+    needs: validate
+    permissions:
+      contents: read
+      id-token: write   # Granted only to the publishing job after validation.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +44,8 @@ jobs:
       - run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
-          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "$TAG" != "$PKG" ]; then
-            echo "tag v$TAG does not match package.json $PKG"; exit 1
+          if [ "${GITHUB_REF_TYPE}" != "tag" ] || [ "$TAG" != "$PKG" ]; then
+            echo "Publish only from a version tag matching package.json ($PKG)"; exit 1
           fi
       - run: npm test
       # prepublishOnly re-runs the suite and checks `npm whoami`; whoami has

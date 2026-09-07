@@ -7,6 +7,18 @@ export const MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
 export const MAX_SNAPSHOT_FILES = 50_000;
 
+// Windows can briefly report access denied while another process deletes a
+// file (notably the project lock). Retry the inspection, never skip it.
+export async function inspectFile(file) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await fs.lstat(file); }
+    catch (error) {
+      if (process.platform !== 'win32' || !['EPERM', 'EACCES'].includes(error.code) || attempt >= 5) throw error;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+}
+
 // Validate both Windows and POSIX paths regardless of the restoring OS.
 export function relativeFile(value) {
   if (typeof value !== 'string' || !value || /[\x00-\x1f:]/.test(value) || path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) throw new Error('Invalid relative memory path');
@@ -31,12 +43,12 @@ export async function safePath(root, relative, { createParents = false } = {}) {
   for (let i = 0; i < parts.length; i++) {
     current = path.join(current, parts[i]);
     let st;
-    try { st = await fs.lstat(current); }
+    try { st = await inspectFile(current); }
     catch (err) {
       if (err.code !== 'ENOENT') throw err;
       if (createParents && i < parts.length - 1) {
         await fs.mkdir(current, { mode: 0o700 }).catch(err => { if (err.code !== 'EEXIST') throw err; });
-        st = await fs.lstat(current);
+        st = await inspectFile(current);
       }
     }
     if (st?.isSymbolicLink()) throw new Error('Symlinks are not allowed in memory paths');

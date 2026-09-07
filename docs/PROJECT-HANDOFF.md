@@ -299,3 +299,7 @@ The saved `check.project-handoff` result (revision 5) still matched its declared
 A later resume carried forward `decision.client-route` (revision 10), whose source reports that Cursor's project connection was enabled, showed four tools, and successfully called `memoir_work_resume` on 2026-09-06. This is saved project evidence from the local client test; the documentation review did not repeat that test or inspect external app settings.
 
 In this Codex session, the configured MCP resume call returned “MCP tool call requires approval, but approval policy is never.” The documented CLI fallback succeeded. No policy or app setting was changed by this review. Successful CLI continuation does not establish successful Codex MCP use. Source labels are claims, not authentication, and saved client observations do not verify current external settings. Those settings and current client acceptance need verification before claiming they still work; such verification was outside this documentation-only continuation.
+
+## Backup and recovery
+
+Saves now include automatic local snapshots. Run `memoir work doctor` to check them. See [the recovery guide](PROJECT-RECOVERY.md) for encrypted exports, recovery previews, and the required post-recovery `expected_recovery` value.

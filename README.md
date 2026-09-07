@@ -8,14 +8,14 @@ The reliability changes are described in [the remediation record](docs/AUDIT-REM
 
 ## Continue between Codex and Cursor on this computer
 
-This branch adds a separate, project-only handoff. It carries answered questions,
+Memoir includes a separate, project-only handoff. It carries answered questions,
 decisions, next actions and receipts from checks actually run through Memoir. It
 does not import personal memory or transcripts.
 
-The project handoff and browser view require version 3.14.0 or later:
+The project handoff, browser view and recovery commands below require version 3.16.0 or later:
 
 ```sh
-npm install -g memoir-cli@3.14.0
+npm install -g memoir-cli@3.16.0
 cd /path/to/your/project
 memoir work setup
 memoir work resume
@@ -51,9 +51,14 @@ sync those files through GitHub or bridge different checkouts. See the
 privacy boundaries and when a check needs to run again. The feature runs locally even when installed from npm; publishing the package
 does not upload your project ledger.
 
+Project handoffs now have automatic local recovery snapshots. Run `memoir work
+doctor` to check them, or `memoir work backup --output /path/to/backup.memoir`
+for an encrypted copy outside the project. Recovery previews changes before
+applying them and preserves the original file. See [backup and recovery](docs/PROJECT-RECOVERY.md).
+
 ## Existing memory and backup workflow
 
-Node.js 18 or later is required.
+Node.js 18 or later can run the CLI. For production use, choose a maintained LTS release (Node 22 or 24); Node 18/20 remain compatibility-test targets. See the [Node release policy](https://nodejs.org/en/about/previous-releases).
 
 ```sh
 npm install -g memoir-cli
@@ -168,6 +173,6 @@ npm audit --omit=dev
 npm pack --ignore-scripts
 ```
 
-Tests use synthetic homes and local Git remotes. CI declares macOS/Linux/Windows with Node 18/20/22; shell suites skip Windows. See [remediation status](docs/AUDIT-REMEDIATION.md) and [release gates](docs/RELIABILITY-ROLLOUT.md) for verification limits.
+Tests use synthetic homes and local Git remotes. CI declares macOS/Linux/Windows with Node 18/20/22/24; shell suites skip Windows. See [remediation status](docs/AUDIT-REMEDIATION.md) and [release gates](docs/RELIABILITY-ROLLOUT.md) for verification limits.
 
 [MIT license](LICENSE)

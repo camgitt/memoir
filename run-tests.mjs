@@ -57,6 +57,7 @@ if (preExisting) {
 }
 
 const suites = [
+  { name: 'project handoff recovery (integration)', cmd: 'node', args: ['test-work-recovery.mjs'] },
   { name: 'project view recovery (UI harness)', cmd: 'node', args: ['test-work-view-ui.mjs'] },
   { name: 'local project view (integration)', cmd: 'node', args: ['test-work-view.mjs'] },
   { name: 'project handoff adversarial (integration)', cmd: 'node', args: ['test-work-adversarial.mjs'] },

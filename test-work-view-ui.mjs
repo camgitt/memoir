@@ -252,6 +252,17 @@ test('the overview files-match summary opens retained evidence without claiming 
  const b=await browser({load:false}),s=snapshot();s.checks=[{id:'check.fresh',title:'Matching files',freshness:'inputs-match',reasons:[],inputs:{},recorded_at:s.records[0].recorded_at,revision:8}];await b.respond(0,s);
  assert.match(b.nodes.get('summary').textContent,/1Checks match files/);assert.doesNotMatch(b.current(),/Matching files/);await b.nodes.get('summary').children[2].click();assert.match(b.current(),/Matching files/);assert.equal(b.requests.length,1);
 });
+test('an open draft keeps its old recovery generation until the restored version is reviewed',async()=>{
+ const b=await browser({load:false}),first={...snapshot(),recovery_id:randomUUID()};await b.respond(0,first);
+ await b.findButton('Correct').click();b.nodes.get('answer').value='Draft after recovery';
+ const save=b.nodes.get('edit-form').emit('submit');assert.equal(JSON.parse(b.requests[1].options.body).expected_recovery,first.recovery_id);
+ b.requests[1].reject(Error('Recovery conflict'));await save;
+ const compare=b.nodes.get('review-latest').click(),restored={...snapshot(1,'Recovered version'),recovery_id:randomUUID()};
+ await b.respond(2,restored);await compare;assert.equal(b.nodes.get('answer').value,'Draft after recovery');
+ await b.nodes.get('keep-draft').click();const retry=b.nodes.get('edit-form').emit('submit');
+ assert.equal(JSON.parse(b.requests[3].options.body).expected_recovery,restored.recovery_id);
+ await b.respond(3,{...restored,...snapshot(2,'Draft after recovery')});await retry;
+});
 let failures=0;
 for(const {name,fn} of cases){try{await fn();console.log('PASS '+name);}catch(error){failures++;console.error('FAIL '+name+'\n'+error.message);}}
 console.log(`${cases.length-failures}/${cases.length} UI recovery scenarios passed`);process.exitCode=failures?1:0;

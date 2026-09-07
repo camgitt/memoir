@@ -312,7 +312,7 @@ function edit(item) {
   editorOpener = document.activeElement; latestEdit = null;
   // Reuse a new record's ID after an uncertain response. A retry must conflict
   // with a committed save instead of creating a second copy of the same draft.
-  editing = { item, id: item?.id || 'record.' + crypto.randomUUID(), branch: state.branch };
+  editing = { item, id: item?.id || 'record.' + crypto.randomUUID(), branch: state.branch, expected_recovery: state.recovery_id };
   $('review-latest').hidden = true; $('comparison').hidden = true;
   $('editor-title').textContent = item ? 'Correct memory' : 'Add memory'; $('save').textContent = item ? 'Save correction' : 'Save memory';
   $('kind').value = item?.kind || 'answer'; $('kind').disabled = !!item;
@@ -326,17 +326,17 @@ async function action(input) {
   finally { busy = false; $('add').disabled = !state; $('refresh').disabled = false; }
 }
 async function remove(item, category = 'record') {
-  const branch = state.branch;
-  try { await action({ action:'remove', branch, id:item.id, category, expected_revision:item.revision }); notice('Removed from the handoff. Earlier versions are kept locally.', false, category === 'record' ? () => restore(item, branch) : undefined); }
+  const branch = state.branch, recovery = state.recovery_id;
+  try { await action({ action:'remove', branch, expected_recovery: recovery, id:item.id, category, expected_revision:item.revision }); notice('Removed from the handoff. Earlier versions are kept locally.', false, category === 'record' ? () => restore(item, branch, recovery) : undefined); }
   catch (error) { notice(error.message, true); }
 }
-async function restore(item, branch = state.branch) {
-  try { await action({ action:'restore', branch, id:item.id, expected_revision:item.revision }); notice('Restored to the handoff.'); }
+async function restore(item, branch = state.branch, recovery = state.recovery_id) {
+  try { await action({ action:'restore', branch, expected_recovery: recovery, id:item.id, expected_revision:item.revision }); notice('Restored to the handoff.'); }
   catch (error) { notice(error.message, true); }
 }
 function fields(item) { return { kind:item.kind, text:item.text, ...(item.answer ? {answer:item.answer} : {}), ...(item.why ? {why:item.why} : {}), status:item.status }; }
 async function changeStatus(item) {
-  try { await action({ action:'save', branch:state.branch, id:item.id, expected_revision:item.revision, fields:{...fields(item),status:item.status === 'done' ? 'open' : 'done'} }); notice(item.status === 'done' ? 'Step reopened.' : 'Step marked done.'); }
+  try { await action({ action:'save', branch:state.branch, expected_recovery: state.recovery_id, id:item.id, expected_revision:item.revision, fields:{...fields(item),status:item.status === 'done' ? 'open' : 'done'} }); notice(item.status === 'done' ? 'Step reopened.' : 'Step marked done.'); }
   catch (error) { notice(error.message, true); }
 }
 function editorSaving(saving) {
@@ -349,7 +349,7 @@ $('edit-form').addEventListener('submit', async event => {
   submitted.saving = true; editorSaving(true); $('form-error').textContent = '';
   try {
     const kind = $('kind').value;
-    await action({ action:'save', branch:submitted.branch, id:submitted.id, expected_revision:submitted.item?.revision || 0, fields:{kind,text:$('text').value, ...(kind === 'answer' ? {answer:$('answer').value} : {}), ...($('why').value ? {why:$('why').value} : {}),status:kind === 'next' ? $('status').value : 'open'} });
+    await action({ action:'save', branch:submitted.branch, expected_recovery: submitted.expected_recovery, id:submitted.id, expected_revision:submitted.item?.revision || 0, fields:{kind,text:$('text').value, ...(kind === 'answer' ? {answer:$('answer').value} : {}), ...($('why').value ? {why:$('why').value} : {}),status:kind === 'next' ? $('status').value : 'open'} });
     // A successful save must be visible even if the old search or category
     // would exclude it. Both views continue from the same saved entry.
     focusKey = 'record:' + submitted.id; selected = kind; $('search').value = ''; render();
@@ -368,7 +368,7 @@ $('review-latest').addEventListener('click', async () => {
     state = latest; renderAfterEditor = true;
     const item = latest.records.find(record => record.id === reviewed.id);
     if (!item) throw new Error(reviewed.item || latest.removed.some(record => record.item.id === reviewed.id) ? 'This item was removed. Your draft is still here. Close the editor and refresh, then use Removed to review or restore it.' : 'This new memory is not in the saved handoff yet. Your draft is kept. Try Save memory again.');
-    latestEdit = { item, id:item.id, branch: latest.branch };
+    latestEdit = { item, id:item.id, branch: latest.branch, expected_recovery: latest.recovery_id };
     $('latest-text').textContent = item.text + (item.answer ? '\n\n' + item.answer : '') + (item.why ? '\n\nWhy: ' + item.why : '') + (item.kind === 'next' ? '\nProgress: ' + item.status : '');
     $('comparison').hidden = false; $('keep-draft').focus();
   } catch (error) { if (editing === reviewed && generation === stateRequest) $('form-error').textContent = error.message; }

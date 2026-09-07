@@ -16,6 +16,7 @@ const actionSchema = z.object({
   branch: z.string().max(1024).nullable(),
   id: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/),
   expected_revision: z.number().int().nonnegative(),
+  expected_recovery: z.string().uuid().optional(),
   category: z.enum(['record', 'check']).default('record'),
   fields: z.object({ kind: z.enum(['goal', 'answer', 'decision', 'next']), text: z.string().min(1).max(2000), answer: z.string().max(2000).optional(), why: z.string().max(2000).optional(), status: z.enum(['open', 'done']).default('open') }).strict().optional(),
 }).strict();
@@ -68,7 +69,7 @@ export async function startWorkView(project, { port = 0 } = {}) {
       if (input.action === 'save') {
         if (input.category !== 'record' || !input.fields) return reply(res, 400, { error: 'Only project records can be edited.' });
         const { answer, why, ...fields } = input.fields;
-        await recordWork(root, { ...fields, ...(answer ? { answer } : {}), ...(why ? { why } : {}), id: input.id, expected_revision: input.expected_revision, scope: 'project', source: 'Saved in the local project view; previous versions remain in history.' }, guard);
+        await recordWork(root, { ...fields, ...(answer ? { answer } : {}), ...(why ? { why } : {}), id: input.id, expected_revision: input.expected_revision, expected_recovery: input.expected_recovery, scope: 'project', source: 'Saved in the local project view; previous versions remain in history.' }, guard);
       } else if (input.action === 'remove') {
         await retractWork(root, input, guard);
       } else {
@@ -78,7 +79,7 @@ export async function startWorkView(project, { port = 0 } = {}) {
       return reply(res, 200, await reviewWork(root));
     } catch (error) {
       const message = workErrorMessage(error);
-      const conflict = /branch changed|Record changed|Record was removed|expected revision|before retracting/.test(message);
+      const conflict = /handoff was recovered|branch changed|Record changed|Record was removed|expected revision|before retracting/.test(message);
       if (!res.headersSent && !res.destroyed) reply(res, 409, conflict
         ? { error: 'Another session changed this item or branch. Review the latest version before saving. Your draft has been kept.', code: 'refresh_required' }
         : { error: message });
