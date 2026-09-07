@@ -144,7 +144,7 @@ Common secret filenames and detected patterns are omitted and listed in the mani
 | Surface | Capability | Verification boundary |
 |---|---|---|
 | Claude Code | Project MCP setup, Memoir tools, instruction import/export | JSON preservation and real server startup tested |
-| Codex | Project TOML MCP setup, Memoir tools, AGENTS.md import/export | TOML round trip and server startup tested |
+| Codex | Project TOML MCP setup, Memoir tools, AGENTS.md import/export, pinned session block in `~/.codex/AGENTS.md` | TOML round trip and server startup tested |
 | Cursor | Project MCP setup, Memoir tools, rule import/export | JSON preservation and server startup tested |
 | Other existing adapters | Selected memory/config import/export | Adapter fixtures, not full native session continuity |
 | Generic MCP client | Memoir tool contract | Real stdio tests |
