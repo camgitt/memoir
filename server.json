@@ -6,12 +6,12 @@
     "url": "https://github.com/camgitt/memoir",
     "source": "github"
   },
-  "version": "3.15.0",
+  "version": "3.16.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "memoir-cli",
-      "version": "3.15.0",
+      "version": "3.16.0",
       "transport": {
         "type": "stdio"
       }
