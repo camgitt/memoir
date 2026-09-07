@@ -23,7 +23,7 @@ process.env.USERPROFILE = scratch; // Windows
 
 const state = await import('./src/session/state.js');
 const { renderSession, BLOCK_START, BLOCK_END } = await import('./src/session/render.js');
-const { applyBlock, injectInto, uninjectFrom, INJECTION_TARGETS } = await import('./src/session/inject.js');
+const { applyBlock, injectInto, uninjectFrom, INJECTION_TARGETS, detectAvailableTargets } = await import('./src/session/inject.js');
 
 // ── state.js ──────────────────────────────────────────────────────
 console.log(`\n${BOLD}${CYAN}state.js${RESET}\n`);
@@ -399,6 +399,25 @@ console.log(`\n${BOLD}${CYAN}inject.js${RESET}\n`);
   assert(after.includes('# Title'), 'title preserved');
   assert(after.includes('body text'), 'body preserved');
   assert(!after.includes(BLOCK_START), 'markers gone');
+}
+
+// 19. Codex: ~/.codex/AGENTS.md is a detected user-global target, and a
+//     pre-existing empty file (the state a fresh Codex install leaves behind)
+//     receives exactly one managed block, replaced in place on refresh.
+{
+  const codexTarget = INJECTION_TARGETS.codex;
+  assert(codexTarget === path.join(scratch, '.codex', 'AGENTS.md'), 'codex target is $HOME/.codex/AGENTS.md');
+  assert(!('codex' in detectAvailableTargets()), 'codex not detected before ~/.codex exists');
+  await fs.ensureDir(path.join(scratch, '.codex'));
+  await fs.writeFile(codexTarget, '');
+  assert(detectAvailableTargets().codex === codexTarget, 'codex detected once ~/.codex exists');
+  const first = await injectInto(codexTarget, renderSession(null));
+  const afterFirst = await fs.readFile(codexTarget, 'utf8');
+  assert(first.created === false && afterFirst.includes(BLOCK_START) && afterFirst.includes(BLOCK_END), 'empty AGENTS.md receives the managed block');
+  const second = await injectInto(codexTarget, renderSession(null));
+  const afterSecond = await fs.readFile(codexTarget, 'utf8');
+  assert(second.replaced === true, 'second inject replaces in place');
+  assert(afterSecond.split(BLOCK_START).length === 2, 'exactly one block after refresh');
 }
 
 // ── Cleanup ───────────────────────────────────────────────────────
