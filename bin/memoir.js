@@ -45,6 +45,7 @@ import { whyCommand } from '../src/commands/why.js';
 import { forgetCommand } from '../src/commands/forget.js';
 import { recallCommand } from '../src/commands/recall.js';
 import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
+import { updateCommand } from '../src/commands/update.js';
 import { validateCommand } from '../src/commands/validate.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
 import { capture as track, telemetryCommand } from '../src/telemetry.js';
@@ -395,43 +396,16 @@ program
 
 program
   .command('update')
-  .description('Update memoir to the latest version')
-  .action(async () => {
+  .description('Update the copy of memoir that is running (npm global, bun global, or a project-local install)')
+  .option('--dry-run', 'Show which install would be updated and the exact command, without running it')
+  .action(async (options) => {
     try {
-      const res = await fetch('https://registry.npmjs.org/memoir-cli/latest');
-      const data = await res.json();
-      const latest = data.version;
-
-      const currentParts = VERSION.split('.').map(Number);
-      const latestParts = String(latest).split('.').map(Number);
-      const newer = latestParts.some((n, i) => n > currentParts[i] && latestParts.slice(0, i).every((v, j) => v === currentParts[j]));
-      if (!newer) {
-        console.log('\n' + boxen(
-          chalk.green('✔ Already up to date!') + '\n' +
-          chalk.gray(`v${VERSION}`),
-          { padding: { top: 0, bottom: 0, left: 1, right: 1 }, borderStyle: 'round', borderColor: 'green', dimBorder: true }
-        ) + '\n');
-        return;
-      }
-
-      console.log('\n' + chalk.cyan(`Updating memoir ${VERSION} → ${chalk.green.bold(latest)}...`) + '\n');
-
-      const { execSync } = await import('child_process');
-      // Always use npm — bun installs to a different location and can cause PATH conflicts
-      const cmd = 'npm install -g memoir-cli';
-
-      execSync(cmd, { stdio: 'inherit' });
-
-      console.log('\n' + boxen(
-        gradient.pastel('  Updated!  ') + '\n\n' +
-        chalk.white(`memoir ${VERSION} → ${chalk.green.bold(latest)}`),
-        { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
-      ) + '\n');
-      process.exit(0); // Exit immediately — old process still has old VERSION
+      await updateCommand({ dryRun: options.dryRun }, { currentVersion: VERSION });
+      process.exit(0); // Exit immediately — this process still holds the old VERSION
     } catch (err) {
       console.error(chalk.red('\n✖ Update failed:'), err.message);
-      console.log(chalk.gray('Try manually: ') + chalk.cyan('npm install -g memoir-cli'));
-      process.exit(1);
+      console.log(chalk.gray('See which copy is running: ') + chalk.cyan('memoir update --dry-run'));
+      process.exit(err.exitCode || 1);
     }
   });
 
