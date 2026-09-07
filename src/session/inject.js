@@ -28,6 +28,7 @@ const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
 // Cursor:   ~/.cursor/rules/memoir-session.mdc (global user rules — auto-loaded)
 // Windsurf: {AppSupport}/Windsurf/User/memoir-session.md (user-global instructions)
 // Gemini:   ~/.gemini/GEMINI.md                (user-global)
+// Codex:    ~/.codex/AGENTS.md                 (user-global; Codex CLI reads it before any repo AGENTS.md)
 export const INJECTION_TARGETS = {
   claude:   path.join(home, '.claude', 'CLAUDE.md'),
   cursor:   path.join(home, '.cursor', 'rules', 'memoir-session.mdc'),
@@ -35,6 +36,7 @@ export const INJECTION_TARGETS = {
     ? path.join(appData, 'Windsurf', 'User', 'memoir-session.md')
     : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User', 'memoir-session.md'),
   gemini:   path.join(home, '.gemini', 'GEMINI.md'),
+  codex:    path.join(home, '.codex', 'AGENTS.md'),
 };
 
 // Returns the target paths whose parent infrastructure exists — i.e. the tool
@@ -48,6 +50,7 @@ export function detectAvailableTargets() {
       ? path.join(appData, 'Windsurf', 'User')
       : path.join(home, 'Library', 'Application Support', 'Windsurf', 'User'),
     gemini:   path.join(home, '.gemini'),
+    codex:    path.join(home, '.codex'),
   };
   const available = {};
   for (const [name, dir] of Object.entries(detectors)) {
@@ -83,13 +86,13 @@ export async function injectInto(targetPath, renderedBlock) {
   await writeSafeFile(path.dirname(targetPath), path.basename(targetPath), updated);
 
   // One event per target (this function is called once per detected tool —
-  // up to ~4x for a single session update). Deliberate: each call here IS a
+  // up to ~5x for a single session update). Deliberate: each call here IS a
   // successful write to one specific target file, and the payload is tiny
   // (just the filename, no content), so per-tool visibility is worth the 4x
   // over collapsing to one event per "session update." injectInto() only
   // receives a raw path (callers loop over detectAvailableTargets() by
   // value, discarding the tool-name key), so the filename itself
-  // (CLAUDE.md / memoir-session.mdc / memoir-session.md / GEMINI.md) is
+  // (CLAUDE.md / memoir-session.mdc / memoir-session.md / GEMINI.md / AGENTS.md) is
   // what's actually available here without a larger refactor.
   await appendEvent('memory_written', { target: path.basename(targetPath) });
 
