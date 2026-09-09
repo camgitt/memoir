@@ -45,6 +45,7 @@ import { whyCommand } from '../src/commands/why.js';
 import { forgetCommand } from '../src/commands/forget.js';
 import { recallCommand } from '../src/commands/recall.js';
 import { autoRefreshCommand } from '../src/commands/auto-refresh.js';
+import { buildSessionBrief } from '../src/session/hook-brief.js';
 import { updateCommand } from '../src/commands/update.js';
 import { validateCommand } from '../src/commands/validate.js';
 import { hooksInstallCommand, hooksUninstallCommand, hooksStatusCommand } from '../src/commands/hooks.js';
@@ -287,9 +288,16 @@ program
 
 program
   .command('auto-refresh')
-  .description('Re-render the pinned session block — called by the SessionStart hook')
+  .description('Re-render the pinned session block and print the session brief — called by the SessionStart hook')
   .option('-v, --verbose', 'Print what changed')
+  .option('--show-brief', 'Print the brief this hook would inject, then exit (preview; makes no changes)')
   .action(async (options) => {
+    if (options.showBrief) {
+      // Preview path — what SessionStart would put into the model's context.
+      const brief = await buildSessionBrief({});
+      console.log(brief || chalk.gray('No session brief — nothing recorded for this project yet.'));
+      return;
+    }
     try { await autoRefreshCommand(options); }
     catch (err) { if (options.verbose) console.error(chalk.red(err.message)); }
   });

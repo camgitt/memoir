@@ -100,7 +100,8 @@ export async function hooksInstallCommand(options = {}) {
     chalk.gray('  Stop:         ') + chalk.white(OUR_HOOKS.Stop.command) + '\n' +
     chalk.gray('                fires after every response; auto-pushes (debounced 30s)') + '\n\n' +
     chalk.gray('  SessionStart: ') + chalk.white(OUR_HOOKS.SessionStart.command) + '\n' +
-    chalk.gray('                fires at session open; refreshes pinned block from session.json') + '\n\n' +
+    chalk.gray('                fires at session open; refreshes the pinned block and feeds') + '\n' +
+    chalk.gray('                the session brief straight into the model\'s context') + '\n\n' +
     chalk.gray('  Your existing settings (including other hooks) will be preserved.'),
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
   ) + '\n');
