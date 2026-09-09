@@ -77,6 +77,7 @@ const suites = [
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
   { name: 'project-scope-home (unit)', cmd: 'node', args: ['test-project-scope-home.mjs'] },
+  { name: 'agent-transcripts (unit)', cmd: 'node', args: ['test-agent-transcripts.mjs'] },
   { name: 'recall (unit)', cmd: 'node', args: ['test-recall.mjs'] },
   { name: 'retrieval index (integration)', cmd: 'node', args: ['test-retrieval-index.mjs'] },
   { name: 'event-log (unit)', cmd: 'node', args: ['test-event-log.mjs'] },

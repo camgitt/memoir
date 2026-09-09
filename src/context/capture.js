@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import { execFileSync } from 'child_process';
 import { scanForSecrets, redactSecrets } from '../security/scanner.js';
+import { isSideCarDir, isUserTranscript } from './transcripts.js';
 
 const home = os.homedir();
 
@@ -47,9 +48,9 @@ export function findClaudeSessions() {
         // agent-<id>.jsonl, not *subagent*), so USER_NOTE_RE minted
         // decisions out of system prompts. Live proof: three of the
         // author's own pinned decisions were subagent-prompt fragments.
-        if (entry.name === 'subagents' || entry.name === 'workflows' || entry.name === 'tool-results') continue;
+        if (isSideCarDir(entry.name)) continue;
         scanDir(full);
-      } else if (entry.name.endsWith('.jsonl') && !entry.name.includes('subagent') && !entry.name.startsWith('agent-')) {
+      } else if (isUserTranscript(entry.name)) {
         try {
           const stat = fs.statSync(full);
           // Skip files older than 7 days for performance
