@@ -8,6 +8,7 @@ import os from 'os';
 import chalk from 'chalk';
 import { shouldIgnoreProject } from '../context/capture.js';
 import { vscodeUserDir, vscodeGlobalStorage, xdgConfigDir } from '../utils/platform.js';
+import { isSideCarDir } from '../context/transcripts.js';
 
 const home = os.homedir();
 
@@ -57,8 +58,8 @@ export const adapters = [
         // Allow directory traversal but skip dirs that only contain session data
         try {
           if (nodeFs.statSync(src).isDirectory()) {
-            // Skip subagents and UUID-named session dirs (contain large .jsonl files, no .md)
-            if (basename === 'subagents') return false;
+            // Skip agent side-car and UUID-named session dirs (contain large .jsonl files, no .md)
+            if (isSideCarDir(basename)) return false;
             // UUID pattern: 8-4-4-4-12 hex chars
             if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(basename)) return false;
             return true;

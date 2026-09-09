@@ -8,6 +8,7 @@ import gradient from 'gradient-string';
 import { getConfig, getGeminiApiKey } from '../config.js';
 import { syncToLocal, syncToGit } from '../providers/index.js';
 import { saveHandoff } from '../context/handoffs.js';
+import { isSideCarDir, isUserTranscript } from '../context/transcripts.js';
 
 const home = os.homedir();
 
@@ -22,8 +23,12 @@ function findClaudeSessions() {
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
+        // Same side-car directories capture.js refuses. Without this, every
+        // agent-<id>.jsonl under subagents/ is collected and its orchestrator
+        // prompt is sent to the summariser as "what they asked for".
+        if (isSideCarDir(entry.name)) continue;
         scanDir(full);
-      } else if (entry.name.endsWith('.jsonl') && !entry.name.includes('subagent')) {
+      } else if (isUserTranscript(entry.name)) {
         const stat = fs.statSync(full);
         sessions.push({ path: full, mtime: stat.mtimeMs, size: stat.size });
       }
