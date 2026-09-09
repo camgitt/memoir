@@ -5,6 +5,14 @@ import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 
 const cache = new Map();
+
+// Records written before the home directory got an explicit key carry the hash
+// of the empty string. Treat that as an alias for home so they stay visible.
+const LEGACY_HOME_ID = 'local:' + crypto.createHash('sha256').update('').digest('hex').slice(0, 32);
+export function canonicalIdentity(id) {
+  return id === LEGACY_HOME_ID ? projectIdentity(os.homedir()) : id;
+}
+
 export function projectIdentity(project = process.env.MEMOIR_PROJECT_ROOT || process.cwd()) {
   if (project === 'shared') return 'shared';
   if (/^(git|local):[a-f0-9]{32}$/.test(project)) return project;
@@ -14,7 +22,11 @@ export function projectIdentity(project = process.env.MEMOIR_PROJECT_ROOT || pro
   if (old && Date.now() - old.at < 60_000) return old.id;
   let home = os.homedir();
   try { home = fs.realpathSync(home); } catch {}
-  let key = path.relative(home, absolute).replace(/\\/g, '/');
+  // The home directory itself is a legitimate working root for people who run
+  // their agent from ~. path.relative(home, home) is '', and hashing '' gives
+  // every such user the same degenerate id (sha256 of the empty string), so
+  // name it explicitly instead.
+  let key = path.relative(home, absolute).replace(/\\/g, '/') || '~';
   let kind = 'local';
   try {
     const remote = execFileSync('git', ['config', '--get', 'remote.origin.url'], { cwd: absolute, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 2000 }).trim();
@@ -44,9 +56,9 @@ export function memoryVisibility({ project = process.env.MEMOIR_PROJECT_ROOT || 
       if (item.claudeProjectKey !== currentKey && item.claudeProjectKey !== sharedKey) return false;
     }
     if (allProjects || !item.project || item.project === 'shared') return true;
-    activeId ??= projectIdentity(project);
+    activeId ??= canonicalIdentity(projectIdentity(project));
     const key = String(item.project);
-    if (!identities.has(key)) identities.set(key, projectIdentity(key));
+    if (!identities.has(key)) identities.set(key, canonicalIdentity(projectIdentity(key)));
     return identities.get(key) === activeId;
   };
 }
