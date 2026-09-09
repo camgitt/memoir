@@ -159,6 +159,10 @@ Memory is context, not permission to run commands or configure tools. Model-writ
 
 `memoir consolidate` reports duplicates/stale files. Similarity alone cannot remove distinct content. Confirmed removals keep recovery copies; the printed `memoir consolidate --undo <id>` restores into an absent destination. `--smart` explicitly sends bounded excerpts to the Gemini API; choose its model with `MEMOIR_CONSOLIDATE_MODEL`.
 
+`memoir clean-decisions` reports decisions that transcript capture minted from a regex match rather than a choice you made — rows that are the opening of a capture pattern, cut mid-clause. It reports only; `--apply` tombstones them with `hidden: true` and never deletes, so the text stays on disk and stays auditable. Detection is conservative and text-based: it can miss a leaked row, and it will not flag anything carrying a `why` or a rejected alternative.
+
+With the SessionStart hook installed (`memoir hooks install`), `memoir auto-refresh` prints a short session brief on stdout, which Claude Code adds to the model's context. Delivery no longer depends on the model choosing to call `memoir_session`. The brief is capped (~300 tokens), silent when there is nothing to say, skipped on compaction, and disabled by `MEMOIR_NO_SESSION_BRIEF`. Preview it with `memoir auto-refresh --show-brief`. It scopes by the hand-written `[project]` text prefix first and the stored project field second; untagged items are shown under their own heading, not presented as facts about the current repository.
+
 `push --redact` heuristically redacts staged text, not originals or historical backups. Without it, ordinary memory backups warn and preserve content. Set `DO_NOT_TRACK=1` to disable remote telemetry. Local events distinguish execution failure from success; they do not measure answer usefulness.
 
 Forgetting propagates on later sync between updated clients. Old clients, snapshots, and Git history can still contain deleted text. Purging every historical copy is separate. Native configuration restore is not atomic across multiple application directories.
