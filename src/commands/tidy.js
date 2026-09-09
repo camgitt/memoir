@@ -1,7 +1,13 @@
-// Lean-memory: keep the loaded memory index (MEMORY.md) under a line budget so
-// the AI loads ALL of it (Claude Code reads only ~200 lines) and wastes no
-// context on bloat. When over budget, the fattest *inline* sections are moved
-// into a dated archive file and replaced with one-line pointers.
+// Lean-memory: keep the loaded memory index (MEMORY.md) under a budget so the
+// AI loads ALL of it and wastes no context on bloat. When over budget, the
+// fattest sections are moved into a dated archive file and replaced with
+// one-line pointers.
+//
+// Two budgets, both enforced: lines (Claude Code reads only ~200) and
+// characters (what the index actually costs in tokens). Characters were added
+// after a real 19,450-character index sat at 84 lines — under half the line
+// budget — and was therefore never tidied once, while costing ~5,000 tokens on
+// every session.
 //
 // Guarantees: archive-not-delete (nothing lost), never touches the critical
 // behavior-rules section or the preamble, idempotent, dry-run capable,
@@ -12,6 +18,19 @@ import path from 'path';
 import { appendEvent } from '../events/log.js';
 
 export const DEFAULT_BUDGET = 180; // Claude loads ~200 lines of MEMORY.md; leave headroom.
+
+// Lines were the wrong unit. A real index (19,450 chars in 84 lines) sat at
+// less than half the line budget and was never tidied once, because the cost
+// that matters is characters — those 84 lines were ~5,000 tokens, 12% of every
+// session's opening prompt. Both budgets are enforced now; whichever is
+// exceeded first triggers a tidy.
+export const DEFAULT_BUDGET_CHARS = 12000; // ~3,000 tokens of loaded index.
+
+// A pointer is only cheap if it is actually short. `- [Title](file.md) — hook`
+// is a pointer; the same shape carrying 400 characters of summary is inline
+// content wearing a pointer's costume, and treating it as weightless is what
+// let the index grow unbounded while every section scored zero.
+const POINTER_MAX_CHARS = 160;
 
 // Split into ## sections — but a "## " INSIDE a fenced code block (``` or ~~~)
 // is content, not a header, so we never split there (would orphan content +
@@ -46,6 +65,8 @@ function isPointer(t) {
   return false;
 }
 
+// Lines of inline (non-pointer, non-header) content — the original metric,
+// kept because the line budget still uses it.
 function inlineWeight(section) {
   return section.lines.filter(l => {
     const t = l.trim();
@@ -54,6 +75,20 @@ function inlineWeight(section) {
     if (isPointer(t)) return false;
     return true;
   }).length;
+}
+
+// Characters a section costs to load. Headers are free (they stay either way).
+// A short pointer is free; an over-long one is charged in full, because that is
+// exactly the line the old metric scored at zero.
+function charWeight(section) {
+  let total = 0;
+  for (const line of section.lines) {
+    const t = line.trim();
+    if (!t || /^#{2,3}\s/.test(t)) continue;
+    if (isPointer(t) && t.length <= POINTER_MAX_CHARS) continue;
+    total += line.length + 1; // + the newline it costs
+  }
+  return total;
 }
 
 const PROTECTED = (header) => /critical behavior rules/i.test(header) || header === '(preamble)';
@@ -74,10 +109,10 @@ async function atomicWrite(filePath, content) {
 }
 
 /**
- * Tidy MEMORY.md down under `budgetLines`.
- * @returns { overBudget, lineCount, newLineCount?, budgetLines, archived[], archiveFile?, dryRun? } | { ok:false, reason }
+ * Tidy MEMORY.md down under `budgetLines` AND `budgetChars`.
+ * @returns { overBudget, lineCount, charCount, newLineCount?, newCharCount?, budgetLines, budgetChars, archived[], archiveFile?, dryRun? } | { ok:false, reason }
  */
-export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRun = false, stamp = 'archive' } = {}) {
+export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, budgetChars = DEFAULT_BUDGET_CHARS, dryRun = false, stamp = 'archive' } = {}) {
   const mdPath = path.join(memoryDir, 'MEMORY.md');
   let text;
   try {
@@ -88,7 +123,10 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
   }
 
   const lineCount = text.split('\n').length;
-  if (lineCount <= budgetLines) return { overBudget: false, lineCount, budgetLines, archived: [] };
+  const charCount = text.length;
+  if (lineCount <= budgetLines && charCount <= budgetChars) {
+    return { overBudget: false, lineCount, charCount, budgetLines, budgetChars, archived: [] };
+  }
 
   const sections = splitSections(text);
   const archiveFile = `memory_index_archive_${stamp}.md`;
@@ -98,19 +136,21 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
   let priorArchive = '';
   try { if (await fs.pathExists(archivePath)) priorArchive = await fs.readFile(archivePath, 'utf8'); } catch {}
 
-  // Fattest inline sections first; skip empty headers (would make `- []()`) and
-  // protected sections.
+  // Skip empty headers (would make `- []()`) and protected sections.
+  // A section is worth archiving if it is fat in EITHER unit. Ranked by
+  // characters, since that is what the loaded index actually costs.
   const candidates = sections
-    .map((s, i) => ({ i, s, weight: inlineWeight(s) }))
-    .filter(c => c.weight >= 6 && c.s.header.trim().length > 0 && !PROTECTED(c.s.header))
-    .sort((a, b) => b.weight - a.weight);
+    .map((s, i) => ({ i, s, weight: inlineWeight(s), chars: charWeight(s) }))
+    .filter(c => (c.weight >= 6 || c.chars >= 600) && c.s.header.trim().length > 0 && !PROTECTED(c.s.header))
+    .sort((a, b) => b.chars - a.chars || b.weight - a.weight);
 
   const removeIdx = new Map();
   const archived = [];
   let toAppend = '';
   let projected = lineCount;
+  let projectedChars = charCount;
   for (const c of candidates) {
-    if (projected <= budgetLines) break;
+    if (projected <= budgetLines && projectedChars <= budgetChars) break;
     const body = c.s.lines.join('\n');
     const key = body.trim();
     // Only append content not already archived — dedup prevents bloat; the
@@ -119,13 +159,15 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
     if (key && !priorArchive.includes(key) && !toAppend.includes(key)) {
       toAppend += body + '\n\n';
     }
-    removeIdx.set(c.i, `- [${c.s.header}](${archiveFile}) — moved out of the index ${stamp} (full detail in file)`);
-    archived.push({ section: c.s.header, lines: c.s.lines.length });
+    const pointer = `- [${c.s.header}](${archiveFile}) — moved out of the index ${stamp} (full detail in file)`;
+    removeIdx.set(c.i, pointer);
+    archived.push({ section: c.s.header, lines: c.s.lines.length, chars: c.chars });
     projected -= (c.s.lines.length - 1);
+    projectedChars -= (body.length - pointer.length);
   }
 
-  if (!archived.length) return { overBudget: true, lineCount, budgetLines, archived: [], note: 'over budget but no fat inline sections found' };
-  if (dryRun) return { overBudget: true, lineCount, projectedLines: projected, budgetLines, wouldArchive: archived, dryRun: true };
+  if (!archived.length) return { overBudget: true, lineCount, charCount, budgetLines, budgetChars, archived: [], note: 'over budget but no fat inline sections found' };
+  if (dryRun) return { overBudget: true, lineCount, charCount, projectedLines: projected, projectedChars, budgetLines, budgetChars, wouldArchive: archived, dryRun: true };
 
   const out = [];
   for (let i = 0; i < sections.length; i++) {
@@ -137,16 +179,26 @@ export async function tidyIndex(memoryDir, { budgetLines = DEFAULT_BUDGET, dryRu
     out.push(MEMORY_SCHEMA_MARKER);
   }
 
-  const fm = `---\nname: Memory index archive (${stamp})\ndescription: Fat inline sections moved out of MEMORY.md to keep the loaded index under ${budgetLines} lines. Nothing deleted; pointers remain in MEMORY.md.\nmetadata:\n  type: reference\n---\n`;
+  const fm = `---\nname: Memory index archive (${stamp})\ndescription: Fat sections moved out of MEMORY.md to keep the loaded index under ${budgetLines} lines and ${budgetChars} characters. Nothing deleted; pointers remain in MEMORY.md.\nmetadata:\n  type: reference\n---\n`;
   const base = priorArchive || fm;
   if (toAppend) await atomicWrite(archivePath, base.trimEnd() + '\n\n' + toAppend.trimEnd() + '\n');
-  await atomicWrite(mdPath, out.join('\n'));
+  const newText = out.join('\n');
+  await atomicWrite(mdPath, newText);
 
   // Only reached when tidyIndex actually changed something (both earlier
   // no-op paths — under budget, or over budget with nothing archivable —
   // return before this point, and dryRun never writes). The event should
   // mean "something happened," not "this function was called."
-  await appendEvent('tidy_ran', { archived_count: archived.length, from_lines: lineCount, to_lines: out.length });
+  await appendEvent('tidy_ran', {
+    archived_count: archived.length,
+    from_lines: lineCount, to_lines: out.length,
+    from_chars: charCount, to_chars: newText.length,
+  });
 
-  return { overBudget: true, lineCount, newLineCount: out.length, budgetLines, archived, archiveFile };
+  return {
+    overBudget: true,
+    lineCount, newLineCount: out.length,
+    charCount, newCharCount: newText.length,
+    budgetLines, budgetChars, archived, archiveFile,
+  };
 }

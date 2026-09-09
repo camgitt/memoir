@@ -99,6 +99,48 @@ const detail = (n, p = 'detail line') => Array.from({ length: n }, (_, i) => `- 
   await fs.remove(dir);
 }
 
+
+// ── E. character budget: the unit that actually costs tokens ──
+// A real index sat at 84 lines (under half the 180-line budget) while costing
+// 19,450 characters — ~5,000 tokens on every session — so tidy never once ran.
+// The lines were `- [text](file)` pointers carrying 400 characters of summary,
+// which the old weight function scored at zero.
+{
+  console.log(`\n${BOLD}${CYAN}E. character budget${RESET}\n`);
+  const fatPointer = n => `- [${'x'.repeat(380)}](file${n}.md) — hook`;
+  const dir = await mk([
+    '# Project Memory', '',
+    '## Critical behavior rules (load first)', '- [Rule](r.md) — keep', '',
+    '## Fat pointers A', ...Array.from({ length: 5 }, (_, i) => fatPointer(i)), '',
+    '## Fat pointers B', ...Array.from({ length: 5 }, (_, i) => fatPointer(100 + i)), '',
+    '## Genuinely short', '- [A](a.md) — x', '- [B](b.md) — y',
+  ]);
+  const mdPath = path.join(dir, 'MEMORY.md');
+  const before = await fs.readFile(mdPath, 'utf8');
+
+  const lineOnly = await tidyIndex(dir, { budgetLines: 180, budgetChars: Infinity, dryRun: true, stamp: 'E' });
+  assert(lineOnly.overBudget === false,
+    'the old line budget alone sees no problem — this is the bug, reproduced');
+
+  const dry = await tidyIndex(dir, { budgetLines: 180, budgetChars: 2000, dryRun: true, stamp: 'E' });
+  assert(dry.overBudget === true, 'the character budget catches what the line budget cannot');
+  assert(dry.charCount === before.length, 'reports the real character count');
+  assert(dry.projectedChars < dry.charCount, 'projects a smaller file');
+
+  const res = await tidyIndex(dir, { budgetLines: 180, budgetChars: 2000, stamp: 'E' });
+  const after = await fs.readFile(mdPath, 'utf8');
+  assert(after.length <= 2000, `tidied under the character budget (${after.length} <= 2000)`);
+  assert(res.newCharCount === after.length, 'reports the character count it actually wrote');
+  assert(/Critical behavior rules/.test(after), 'never archives the protected rules section');
+  assert(/- \[A\]\(a\.md\) — x/.test(after), 'leaves genuinely short pointers in place');
+
+  const archive = await fs.readFile(path.join(dir, 'memory_index_archive_E.md'), 'utf8');
+  assert(archive.includes('x'.repeat(380)), 'archives the content rather than deleting it');
+
+  const again = await tidyIndex(dir, { budgetLines: 180, budgetChars: 2000, stamp: 'E' });
+  assert(again.overBudget === false || !again.archived.length, 'idempotent — a second run has nothing left to do');
+}
+
 await fs.remove(eventsScratchHome);
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
