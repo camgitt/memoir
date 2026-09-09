@@ -108,22 +108,40 @@ export function displayName(root) {
   return absolute === path.resolve(os.homedir()) ? '~' : path.basename(absolute) || absolute;
 }
 
+// The `[gathered] …` / `[algothesis — Opus] …` prefix people write by hand.
+// Per the recorded decision "Do not retroactively write project fields onto
+// memoir session items … filter them with the [project] text prefix instead",
+// this is the project signal most items actually carry, and memoir_session's
+// `tag` argument (PR #18) already matches on it. Same shape here.
+const TAG = /^\s*\[([^\]]+)\]/;
+const tagOf = item => (String(item?.text || '').match(TAG)?.[1] || '').toLowerCase();
+
 /**
- * Split items into the ones recorded against THIS project and the ones with no
- * project stamp at all.
+ * Split items into the ones that belong to THIS project and the ones carrying
+ * no project signal at all.
  *
- * memoir's own visibility filter treats an unstamped item as visible in every
- * project (scope.js: `!item.project` → true). That is the right call for
- * recall, where the human asked and can judge the answer. It is the wrong call
- * for an automatic injection, where presenting another project's goal under
- * this project's heading is a straightforward lie. Items written by current
- * memoir versions always carry a project; the unstamped ones are legacy, so
- * they get shown — labelled and last — rather than dropped or misattributed.
+ * Two signals, in order: the stored `project` field, then the hand-written
+ * `[tag]` prefix. An item whose tag names a DIFFERENT project is excluded —
+ * the tag is a deliberate marker, so honouring it is the whole point.
+ *
+ * Untagged, unstamped items are visible everywhere by design (scope.js:
+ * `!item.project` → true), and that is deliberate: the decision above notes
+ * Cam runs Claude Code from ~ and tagging those items would hide them from the
+ * only place he reads them. So they are shown, but under their own heading —
+ * an automatic injection must not present them as facts about this repo.
  */
-function partition(items, activeId) {
+function partition(items, activeId, projectName) {
+  const want = String(projectName || '').toLowerCase();
   const mine = [], carried = [];
   for (const item of items || []) {
     if (!item?.text) continue;
+    const tag = tagOf(item);
+    if (tag) {
+      // Loose containment both ways: "[algothesis — Opus]" in ~/Documents/algothesis.
+      if (want && want !== '~' && (tag.includes(want) || want.includes(tag.split(/[\s—-]/)[0]))) mine.push(item);
+      else if (want === '~') carried.push(item);
+      continue;
+    }
     if (!item.project) carried.push(item);
     else if (projectIdentity(String(item.project)) === activeId) mine.push(item);
   }
@@ -141,15 +159,16 @@ const asDecision = d => '- ' + clamp(d.text) + (d.why ? ' — ' + clamp(d.why, 9
 function sections(view, root) {
   const activeId = projectIdentity(root);
   // `next_actions` is append-ordered; the newest are the live ones.
-  const goals = partition(view.current.goals, activeId);
-  const next = partition([...view.current.next_actions].reverse(), activeId);
-  const questions = partition(view.current.open_questions, activeId);
-  const decisions = partition(view.current.decisions, activeId);
+  const name = displayName(root);
+  const goals = partition(view.current.goals, activeId, name);
+  const next = partition([...view.current.next_actions].reverse(), activeId, name);
+  const questions = partition(view.current.open_questions, activeId, name);
+  const decisions = partition(view.current.decisions, activeId, name);
 
   // Each section is {head, lines} so the budget squeeze can shed individual
   // lines before giving up on a whole section — see `fit()`.
   const out = [];
-  const head = ['Project: ' + displayName(root)];
+  const head = ['Project: ' + name];
   if (goals.mine[0]) head.push('Goal: ' + clamp(goals.mine[0].text));
   out.push({ head: head.join('\n'), lines: [], required: true });
 
@@ -165,7 +184,7 @@ function sections(view, root) {
   if (goals.carried[0]) carried.push('- goal: ' + clamp(goals.carried[0].text, 120));
   for (const a of next.carried.slice(0, 2)) carried.push('- next: ' + clamp(a.text, 120));
   for (const d of decisions.carried.slice(0, 2)) carried.push('- decision: ' + clamp(d.text, 120));
-  section('Carried over from earlier sessions (no project recorded — may belong elsewhere):', carried);
+  section('Not tagged to this project (visible everywhere by design):', carried);
 
   return out;
 }
@@ -199,7 +218,14 @@ function fit(parts, budget, assemble) {
  */
 export async function buildSessionBrief({ project, budget = DEFAULT_BRIEF_BUDGET } = {}) {
   const root = project || process.env.MEMOIR_PROJECT_ROOT || process.cwd();
-  const view = sessionView(await readSession(), { project: root });
+  // `allProjects` relaxes ONLY the project filter — hidden, deleted, superseded
+  // and not-yet/no-longer-valid items are still dropped, so tombstones hold.
+  // Scoping is then done in partition(), which consults the hand-written [tag]
+  // BEFORE the stored project field. That order matters: an item tagged
+  // "[memoir]" but stamped to the home directory (because it was written from
+  // ~) is about memoir, and sessionView's project filter would otherwise hide
+  // it from the memoir repo entirely.
+  const view = sessionView(await readSession(), { allProjects: true });
 
   const hasContent = Boolean(
     view.current.goals[0] ||
