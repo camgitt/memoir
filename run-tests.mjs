@@ -68,6 +68,7 @@ const suites = [
   { name: 'update (unit)', cmd: 'node', args: ['test-update.mjs'] },
   { name: 'capture-quality (unit)', cmd: 'node', args: ['test-capture-quality.mjs'] },
   { name: 'auto-activate (unit)', cmd: 'node', args: ['test-auto-activate.mjs'] },
+  { name: 'hook-brief (unit)', cmd: 'node', args: ['test-hook-brief.mjs'] },
   { name: 'tidy/lean-memory (unit)', cmd: 'node', args: ['test-tidy.mjs'] },
   { name: 'encryption (unit)', cmd: 'node', args: ['test-encryption.mjs'] },
   { name: 'cloud (unit)', cmd: 'node', args: ['test-cloud.mjs'] },
