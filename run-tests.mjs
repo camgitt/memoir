@@ -76,6 +76,7 @@ const suites = [
   { name: 'session-lock (unit)', cmd: 'node', args: ['test-session-lock.mjs'] },
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },
+  { name: 'project-scope-home (unit)', cmd: 'node', args: ['test-project-scope-home.mjs'] },
   { name: 'recall (unit)', cmd: 'node', args: ['test-recall.mjs'] },
   { name: 'retrieval index (integration)', cmd: 'node', args: ['test-retrieval-index.mjs'] },
   { name: 'event-log (unit)', cmd: 'node', args: ['test-event-log.mjs'] },

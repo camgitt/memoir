@@ -297,11 +297,20 @@
     },
     {
       "name": "memoir_session",
-      "description": "Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided.",
+      "description": "Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided. Pass project to narrow it to one project, or tag to narrow it to items whose text carries a [tag] prefix.",
       "inputSchema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
-        "properties": {}
+        "properties": {
+          "project": {
+            "description": "Project directory or identity. Defaults to the current working project.",
+            "type": "string"
+          },
+          "tag": {
+            "description": "Show only items whose text starts with a bracketed tag, e.g. \"gathered\" matches \"[gathered — CAM] …\". Case-insensitive.",
+            "type": "string"
+          }
+        }
       },
       "execution": {
         "taskSupport": "forbidden"

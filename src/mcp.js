@@ -483,15 +483,28 @@ server.tool(
 
 server.tool(
   'memoir_session',
-  'Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided.',
-  {},
-  async () => {
-    const state = sessionView(await readSession());
+  'Show the current session state — goals, next actions, open questions, recent decisions, recent sessions across machines. Use this to catch up at the start of a session, or when you need to orient yourself on what was decided. Pass project to narrow it to one project, or tag to narrow it to items whose text carries a [tag] prefix.',
+  {
+    project: z.string().optional().describe('Project directory or identity. Defaults to the current working project.'),
+    tag: z.string().optional().describe('Show only items whose text starts with a bracketed tag, e.g. "gathered" matches "[gathered — CAM] …". Case-insensitive.'),
+  },
+  async ({ project, tag }) => {
+    const state = sessionView(await readSession(), project ? { project } : {});
     const machine = await getMachineId();
-    const goals = state.current.goals.map(g => `- ${g.text}`).join('\n') || '(none)';
-    const nexts = state.current.next_actions.map(n => `- [ ] ${n.text}`).join('\n') || '(none)';
-    const questions = state.current.open_questions.map(q => `- ${q.text}`).join('\n') || '(none)';
-    const decisions = state.current.decisions.filter(d => visibleMemory(d)).slice(0, 5).map(d => {
+    // Untagged items are visible in every project by design; a [tag] prefix in
+    // the text is the only project signal many sessions actually carry.
+    const tagged = items => {
+      if (!tag) return items;
+      const want = tag.toLowerCase().replace(/^\[|\]$/g, '');
+      return items.filter(i => {
+        const m = String(i?.text || '').match(/^\s*\[([^\]]+)\]/);
+        return m && m[1].toLowerCase().includes(want);
+      });
+    };
+    const goals = tagged(state.current.goals).map(g => `- ${g.text}`).join('\n') || '(none)';
+    const nexts = tagged(state.current.next_actions).map(n => `- [ ] ${n.text}`).join('\n') || '(none)';
+    const questions = tagged(state.current.open_questions).map(q => `- ${q.text}`).join('\n') || '(none)';
+    const decisions = tagged(state.current.decisions.filter(d => visibleMemory(d, project ? { project } : {}))).slice(0, 5).map(d => {
       let line = `- ${d.text}`;
       if (d.why) line += ` — *${d.why}*`;
       return line;
