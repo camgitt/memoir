@@ -743,6 +743,20 @@ program
   });
 
 program
+  .command('clean-decisions')
+  .description('Find decisions the transcript extractor minted from a regex match, not from a real choice')
+  .option('--apply', 'Tombstone them (hidden, never deleted). Without this the command only reports.')
+  .action(async (options) => {
+    try {
+      const { cleanDecisionsCommand } = await import('../src/commands/clean-decisions.js');
+      await cleanDecisionsCommand(options);
+    } catch (err) {
+      console.error(chalk.red('\n✖ Error cleaning decisions:'), err.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command('mcp')
   .description('Start the MCP server (for Claude Code, Cursor, VS Code integration)')
   .action(async () => {

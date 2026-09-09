@@ -25,7 +25,7 @@ import {
   getMachineId,
 } from './session/state.js';
 import { appendEvent } from './events/log.js';
-import { renderSession } from './session/render.js';
+import { renderSession, isContentFreeSummary } from './session/render.js';
 import { injectInto, detectAvailableTargets } from './session/inject.js';
 import { findDecisions } from './commands/why.js';
 import { matchDecisions, hideDecision } from './session/state.js';
@@ -509,13 +509,21 @@ server.tool(
       if (d.why) line += ` — *${d.why}*`;
       return line;
     }).join('\n') || '(none)';
-    const history = state.history.slice(0, 5).map(h => {
+    // Same filter the pinned block uses (render.js). Without it this tool
+    // showed rows the block deliberately hides — "0 file(s) touched" five times
+    // over — so the two views of one store disagreed about what counts as a
+    // session worth reporting.
+    const history = state.history.filter(h => !isContentFreeSummary(h?.summary)).slice(0, 5).map(h => {
       const date = (h.date || '').slice(0, 10);
       const label = state.machines?.[h.machine_id]?.label || '?';
       return `- ${date} ${label}: ${h.summary || '—'}`;
     }).join('\n') || '(none)';
+    // A machine's stored label is only refreshed when something WRITES, so a
+    // hostname change (DHCP renaming the box, joining a new network) leaves the
+    // list showing the old name while the header above shows the live one —
+    // one Mac reading as two. Prefer the live label for the current machine.
     const machineList = Object.entries(state.machines || {})
-      .map(([id, m]) => `- ${m.label} (last seen: ${(m.last_seen || '').slice(0, 10)})`)
+      .map(([id, m]) => `- ${id === machine.id ? machine.label : m.label} (last seen: ${(m.last_seen || '').slice(0, 10)})`)
       .join('\n') || '(just this one)';
 
     const text = [

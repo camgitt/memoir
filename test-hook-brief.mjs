@@ -98,10 +98,10 @@ await writeSession(raw);
 const scoped = await buildSessionBrief({ project });
 assert(!scoped.includes('FOREIGN'), 'never shows an item stamped with a different project');
 assert(scoped.includes('LEGACY'), 'still surfaces unstamped legacy items — nothing is silently lost');
-assert(/Carried over from earlier sessions/.test(scoped),
-  'labels unstamped items as not necessarily belonging to this project');
-assert(scoped.indexOf('Carried over') > scoped.indexOf('Project:'),
-  'puts the unstamped items last, so the budget drops them first');
+assert(/Not tagged to this project/.test(scoped),
+  'labels untagged items rather than claiming they belong to this project');
+assert(scoped.indexOf('Not tagged') > scoped.indexOf('Project:'),
+  'puts the untagged items last, so the budget drops them first');
 
 const { displayName } = await import('./src/session/hook-brief.js');
 assert(displayName(project) === 'proj', 'names the project readably, not as a storage hash');
@@ -112,6 +112,33 @@ raw.current.decisions = [{ id: 'foreign2', text: 'another repo entirely', projec
 await writeSession(raw);
 assert(await buildSessionBrief({ project }) === null,
   'emits nothing when every item belongs to another project');
+
+// ── the [tag] prefix, which is the signal people actually write ────────────
+// Recorded decision: "Do not retroactively write project fields onto memoir
+// session items … filter them with the [project] text prefix instead." So the
+// brief honours the hand-written tag the same way memoir_session's `tag`
+// argument does, and does NOT treat an untagged item as a defect.
+raw.current.decisions = [];
+raw.current.next_actions = [
+  { id: 'n1', text: '[proj — Opus] Wire the tagged action' },
+  { id: 'n2', text: '[algothesis] Something for a different repo' },
+  { id: 'n3', text: 'An untagged action with no project field' },
+];
+await writeSession(raw);
+
+const tagged = await buildSessionBrief({ project });
+assert(tagged.includes('Wire the tagged action'),
+  'treats a [tag] matching the directory name as this project');
+assert(!tagged.includes('different repo'),
+  "excludes an item whose [tag] names another project — the tag is a deliberate marker");
+assert(/Not tagged to this project[\s\S]*untagged action/.test(tagged),
+  'shows an untagged item under its own heading rather than as a fact about this repo');
+
+// From ~ nothing is filtered out by tag (the carried list is still capped, so
+// this checks the scoping rule, not how many lines survive the budget).
+const fromHome = await buildSessionBrief({ project: os.homedir() });
+assert(fromHome.includes('different repo'),
+  'from ~ an item tagged for another project is still shown — the decision notes ~ is the only place Cam reads it');
 
 // ── when it should and should not fire ─────────────────────────────────────
 assert(shouldInject({ hook_event_name: 'SessionStart', source: 'startup' }) === true, 'injects on startup');
