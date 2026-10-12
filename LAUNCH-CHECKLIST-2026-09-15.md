@@ -8,8 +8,8 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] Account-data deletion checks every destructive response and stops on failure.
 - [x] Account-data deletion uses the hosted Storage deletion request shape already validated for backup deletion.
 - [x] CLI no longer claims the authentication identity was deleted when the client cannot prove that.
-- [ ] Add regression tests for subscription 401/403/429/500/timeouts and verify zero retention deletions.
-- [ ] Add regression tests that fail each account-data deletion stage and verify no false success message.
+- [x] Add regression tests for subscription 401/403/429/500/timeouts and verify zero retention deletions.
+- [x] Add regression tests that fail each account-data deletion stage and verify no false success message.
 - [ ] Add a privileged hosted endpoint for complete Auth-user deletion, with reauthentication and an auditable retryable workflow.
 
 ## P0 — cloud transaction recovery
