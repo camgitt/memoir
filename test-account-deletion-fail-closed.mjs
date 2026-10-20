@@ -105,6 +105,8 @@ function validatePostgrestColumns(urlStr) {
 function classify(url, method) {
   const u = String(url);
   if (method === 'GET' && u.includes('/rest/v1/backups') && u.includes('select=')) return 'list';
+  if (method === 'GET' && u.includes('/rest/v1/subscriptions') && u.includes('select=*')) return 'plan';
+  if (method === 'GET' && u.includes('/rest/v1/shared_links') && u.includes('backup_id')) return 'shared-list';
   if (method === 'GET' && u.includes('/rest/v1/shared_links')) return 'shared-check';
   if (method === 'GET' && u.includes('/rest/v1/subscriptions')) return 'subscription-check';
   if (method === 'DELETE' && u.includes(`/storage/v1/object/${STORAGE_BUCKET}`)) return 'object';
@@ -142,6 +144,16 @@ function defaultHandler(failKind, failStatus = 500) {
     if (entry.kind === 'auth-identity') {
       return respond({ ok: true, status: 200, body: {} });
     }
+    if (entry.kind === 'plan') {
+      // Production gives every user a subscriptions row; Stripe sets status.
+      if (failKind === 'plan-fail') return respond({ ok: false, status: failStatus, body: { message: 'plan lookup failed' } });
+      const status = failKind === 'plan-pro' ? 'pro' : 'free';
+      return respond({ ok: true, status: 200, body: [{ user_id: session.user.id, status }] });
+    }
+    if (entry.kind === 'shared-list') {
+      if (failKind === 'shared-list') return respond({ ok: false, status: failStatus, body: { message: 'shared-link list failed' } });
+      return respond({ ok: true, status: 200, body: [{ id: 'share-1', backup_id: `${session.user.id}/shares/share-1.gz` }] });
+    }
     if (entry.kind === 'list') {
       if (failKind === 'list') return respond({ ok: false, status: failStatus, body: { message: 'list failed' } });
       return respond({ ok: true, status: 200, body: backups });
@@ -153,6 +165,9 @@ function defaultHandler(failKind, failStatus = 500) {
       }
       if (failKind === 'object-second' && objectDeletes === 2) {
         return respond({ ok: false, status: failStatus, body: 'object delete failed' });
+      }
+      if (failKind === 'shared-object' && objectDeletes === 3) {
+        return respond({ ok: false, status: failStatus, body: 'shared bundle delete failed' });
       }
       return respond({ ok: true, status: 200, body: [{ name: 'deleted' }] });
     }
@@ -229,6 +244,8 @@ const STAGES = [
   { failKind: 'list', failStatus: 500, name: 'backup enumeration (GET 500)', stopBefore: ['object', 'row', 'shared', 'subscription'] },
   { failKind: 'object', failStatus: 500, name: 'backup object deletion (DELETE 500)', stopBefore: ['shared', 'subscription'] },
   { failKind: 'row', failStatus: 403, name: 'backup metadata deletion (DELETE 403)', stopBefore: ['shared', 'subscription'] },
+  { failKind: 'shared-list', failStatus: 503, name: 'shared-link enumeration (GET 503)', stopBefore: ['shared', 'subscription'] },
+  { failKind: 'shared-object', failStatus: 500, name: 'shared bundle deletion (DELETE 500)', stopBefore: ['shared', 'subscription'] },
   { failKind: 'shared', failStatus: 429, name: 'shared-link deletion (DELETE 429)', stopBefore: ['subscription'] },
   { failKind: 'subscription', failStatus: 401, name: 'subscription deletion (DELETE 401)', stopBefore: [] },
 ];
@@ -292,6 +309,9 @@ for (const rlsCase of RLS_ZERO_ROW_CASES) {
 {
   await seedAuthFile();
   const { calls, restore } = installDeleteStub((entry, respond) => {
+    if (entry.kind === 'plan') {
+      return respond({ ok: true, status: 200, body: [{ user_id: session.user.id, status: 'free' }] });
+    }
     if (entry.kind === 'list') {
       return respond({
         ok: true,
@@ -325,6 +345,37 @@ for (const rlsCase of RLS_ZERO_ROW_CASES) {
     assert(rowCalls.length === 1, 'second object deletion failure: does not delete the second metadata row');
     assert(!calls.some(c => c.kind === 'shared' || c.kind === 'subscription'),
       'second object deletion failure: does not continue past backups');
+  } finally { restore(); }
+}
+
+console.log(`\n${BOLD}${CYAN}deleteAccount: a paying or unreadable plan stops before any delete${RESET}\n`);
+
+const DESTRUCTIVE = ['object', 'row', 'shared', 'subscription', 'auth-identity'];
+for (const planCase of [
+  { failKind: 'plan-pro', name: 'active Pro subscription', message: /hello@memoir\.sh/ },
+  { failKind: 'plan-fail', failStatus: 503, name: 'plan lookup failure (GET 503)', message: /503/ },
+]) {
+  await seedAuthFile();
+  const { calls, restore } = installDeleteStub(defaultHandler(planCase.failKind, planCase.failStatus));
+  try {
+    let err = null;
+    try { await deleteAccount(session); } catch (e) { err = e; }
+    assert(!!err, `${planCase.name}: throws`);
+    assert(/Nothing was deleted/.test(String(err?.message || '')), `${planCase.name}: says nothing was deleted`);
+    assert(planCase.message.test(String(err?.message || '')), `${planCase.name}: error explains the stop`);
+    assert(!calls.some(c => DESTRUCTIVE.includes(c.kind)), `${planCase.name}: makes no destructive call`);
+    assert(await fs.pathExists(AUTH_FILE), `${planCase.name}: local session is retained`);
+  } finally { restore(); }
+}
+
+{
+  await seedAuthFile();
+  const { calls, restore } = installDeleteStub(defaultHandler('shared-object', 500));
+  try {
+    try { await deleteAccount(session); } catch {}
+    assert(calls.some(c => c.kind === 'shared-list'), 'shared bundles: rows are listed before anything is deleted');
+    assert(!calls.some(c => c.kind === 'shared'),
+      'shared bundle deletion failure: shared_links rows are kept so a retry can find the bundle');
   } finally { restore(); }
 }
 

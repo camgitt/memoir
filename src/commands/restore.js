@@ -6,13 +6,12 @@ import ora from 'ora';
 import boxen from 'boxen';
 import gradient from 'gradient-string';
 import inquirer from 'inquirer';
-import { readSafeFile, writeSafeFile, relativeFile } from '../security/files.js';
+import { readSafeFile, writeSafeFile } from '../security/files.js';
 import { getConfig, autoSetup } from '../config.js';
 import { fetchFromLocal, fetchFromGit } from '../providers/restore.js';
 import { decryptDirectory, verifyPassphrase } from '../security/encryption.js';
 import { detectLocalHomeKey } from '../adapters/restore.js';
 import { restoreWorkspace } from '../workspace/tracker.js';
-import { getSession } from '../cloud/auth.js';
 import { unbundleToDir, readBoundedResponse } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 import { readSession, writeSession, mergeSessions, paths as sessionPaths } from '../session/state.js';
@@ -372,16 +371,40 @@ async function restoreFromShare(options) {
     // Download the backup
     spinner.start(chalk.gray('Downloading share bundle...'));
 
-    // Try authenticated first, fall back to anon key
-    const session = await getSession();
-    const authHeaders = session
-      ? { 'Authorization': `Bearer ${session.access_token}`, 'apikey': SUPABASE_ANON_KEY }
-      : { 'apikey': SUPABASE_ANON_KEY };
-
-    const dlRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${relativeFile(shareLink.backup_id).split('/').map(encodeURIComponent).join('/')}`, {
-      headers: authHeaders,
+    // Share bundles are not readable through Storage directly: a read rule
+    // for recipients would also let anyone list every bundle name, and each
+    // name contains its token. The share-download function checks the exact
+    // token, uses up one use, and returns a short-lived signed URL.
+    const grantRes = await fetch(`${SUPABASE_URL}/functions/v1/share-download`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token: rawToken }),
     });
+    if (grantRes.status === 404) {
+      spinner.stop();
+      console.log('\n' + boxen(
+        chalk.red('✖ Share link no longer available\n\n') +
+        chalk.gray('It may have expired, been used up, or been deleted.'),
+        { padding: 1, borderStyle: 'round', borderColor: 'red' }
+      ) + '\n');
+      return;
+    }
+    if (!grantRes.ok) {
+      throw new Error(`Download failed (${grantRes.status})`);
+    }
+    const grant = await grantRes.json();
+    const signedUrl = typeof grant?.url === 'string' ? new URL(grant.url) : null;
+    if (!signedUrl
+      || signedUrl.origin !== new URL(SUPABASE_URL).origin
+      || !signedUrl.pathname.startsWith(`/storage/v1/object/sign/${STORAGE_BUCKET}/`)) {
+      throw new Error('Download failed: unexpected download URL');
+    }
 
+    const dlRes = await fetch(signedUrl);
     if (!dlRes.ok) {
       throw new Error(`Download failed: ${await dlRes.text()}`);
     }
@@ -445,20 +468,6 @@ async function restoreFromShare(options) {
       throw err;
     } finally {
       await fs.remove(decryptedDir);
-    }
-
-    // Increment use_count via token-scoped RPC
-    try {
-      const rpcHeaders = { 'apikey': SUPABASE_ANON_KEY, 'Content-Type': 'application/json' };
-      if (session) rpcHeaders['Authorization'] = `Bearer ${session.access_token}`;
-
-      await fetch(`${SUPABASE_URL}/rest/v1/rpc/memoir_consume_shared_link`, {
-        method: 'POST',
-        headers: rpcHeaders,
-        body: JSON.stringify({ link_token: rawToken }),
-      });
-    } catch {
-      // Best-effort — don't fail restore if count update fails
     }
 
     spinner.stop();

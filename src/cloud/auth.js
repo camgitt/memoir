@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
-import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from './constants.js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET, SUPPORT_EMAIL } from './constants.js';
 
 const isWin = process.platform === 'win32';
 const configDir = isWin
@@ -183,6 +183,19 @@ export async function deleteAccount(session) {
     'Prefer': 'return=representation',
   };
 
+  // Deleting data does not cancel a Stripe subscription, and the billing
+  // webhook re-creates the subscription row on the next renewal. Stop before
+  // deleting anything while the account is paying, or while the plan can't be read.
+  let sub;
+  try {
+    sub = await getSubscription(session);
+  } catch (error) {
+    throw new Error(`Could not check your plan (${error.message.replace(/ Existing backups were not pruned\.$/, '')}). Nothing was deleted; retry account deletion.`);
+  }
+  if (sub.status === 'pro') {
+    throw new Error(`Your Pro subscription is still active, and deleting your data would not stop billing. Email ${SUPPORT_EMAIL} to cancel it, then run this again. Nothing was deleted.`);
+  }
+
   const backupsRes = await fetch(
     `${SUPABASE_URL}/rest/v1/backups?select=*&user_id=eq.${encodeURIComponent(session.user.id)}`,
     { headers }
@@ -213,19 +226,20 @@ export async function deleteAccount(session) {
     await requireRowDelete(rowRes, 'Backup metadata deletion', { expectedMinRows: 1 });
   }
 
-  const sharedRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/shared_links?created_by=eq.${encodeURIComponent(session.user.id)}`,
-    { method: 'DELETE', headers: deleteHeaders }
+  // Share bundles go before their rows, like backups above: if a bundle
+  // delete fails, the row is still there for the retry to find.
+  const linksRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/shared_links?select=id,backup_id&created_by=eq.${encodeURIComponent(session.user.id)}`,
+    { headers }
   );
-  const deletedLinks = await requireRowDelete(sharedRes, 'Shared-link deletion');
-  if (deletedLinks.length === 0) {
-    await verifyNoneRemaining(
-      `/rest/v1/shared_links?select=id&created_by=eq.${encodeURIComponent(session.user.id)}&limit=1`,
-      headers,
-      'Shared-link deletion'
-    );
+  if (!linksRes.ok) {
+    throw new Error(`Could not enumerate shared links (${linksRes.status}). Nothing else was reported as deleted; retry account deletion.`);
   }
-  for (const link of deletedLinks) {
+  const links = await linksRes.json();
+  if (!Array.isArray(links)) {
+    throw new Error('Could not enumerate shared links. Nothing else was reported as deleted; retry account deletion.');
+  }
+  for (const link of links) {
     if (typeof link?.backup_id === 'string' && link.backup_id.startsWith(session.user.id + '/')) {
       const shareObjRes = await fetch(`${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}`, {
         method: 'DELETE',
@@ -237,6 +251,19 @@ export async function deleteAccount(session) {
       });
       await requireDelete(shareObjRes, 'Shared bundle object deletion');
     }
+  }
+
+  const sharedRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/shared_links?created_by=eq.${encodeURIComponent(session.user.id)}`,
+    { method: 'DELETE', headers: deleteHeaders }
+  );
+  const deletedLinks = await requireRowDelete(sharedRes, 'Shared-link deletion');
+  if (deletedLinks.length < links.length) {
+    await verifyNoneRemaining(
+      `/rest/v1/shared_links?select=id&created_by=eq.${encodeURIComponent(session.user.id)}&limit=1`,
+      headers,
+      'Shared-link deletion'
+    );
   }
 
   const subRes = await fetch(

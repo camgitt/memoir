@@ -7,3 +7,6 @@ export const STORAGE_BUCKET = 'memoir-backups';
 // Free is a safety net; Pro is "full version history" (memoir.sh pricing).
 export const MAX_BACKUPS_FREE = 10;
 export const MAX_BACKUPS_PRO = 100;
+// Public contact on memoir.sh (forwards via ImprovMX). Used where the CLI
+// can't finish a job itself, e.g. cancelling a Pro subscription.
+export const SUPPORT_EMAIL = 'hello@memoir.sh';

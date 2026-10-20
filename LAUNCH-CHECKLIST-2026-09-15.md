@@ -22,6 +22,16 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] `shared_links` policies: anyone can read every row, and "Anyone can increment use count" lets anyone UPDATE any column of any row. `memoir share` uploads to `shares/<uid>/…`, which the storage INSERT policy appears to reject (first folder must be the uid). 0 shared links exist.
 - [x] `src/cloud/auth.js` and `src/commands/login.js` were collapsed into very long single lines, and the comment explaining why GoTrue needs `redirect_to` as a query parameter (the 3.12.0 fix) was deleted. Restore the comment.
 
+### Found 2026-10-19 (review of 3.17.4, checked against production) — fixed in 3.17.5
+
+- [x] 3.17.4's delete rules work in production: an owner deletes their own shared link and subscription row; another user can neither read nor delete them (simulated as two real users in a rolled-back transaction).
+- [x] 3.17.4's storage rule "Recipients read active shared bundles" let anyone list every active share bundle, and each bundle name contains its share token (proved as `anon` in a rolled-back probe). 3.17.5 downloads through the `share-download` edge function instead: exact token in, one use consumed, 120-second signed URL out. The CLI only fetches signed URLs on the project's own origin.
+- [ ] **Production:** drop that storage rule and its helper function, and stop `anon`/`authenticated` calling `memoir_consume_shared_link` (`202610190001`). Then record `202610180001` (applied by hand for 3.17.4) and `202610190001` in the migration history. Needs Cam: the Supabase connector refuses writes from Claude Code, and reading the CLI login from the keychain was blocked.
+- [x] Account deletion stops before deleting anything when the plan is Pro (deleting data doesn't stop Stripe billing, and the webhook re-creates the row on renewal) or when the plan can't be read.
+- [x] Share bundles are deleted before their rows, so a failed bundle delete leaves the row for the retry to find.
+- [ ] There is no way to cancel Pro inside the product (no Stripe billing portal). The CLI points paying users to hello@memoir.sh.
+- [ ] `supabase db push` mis-pairs this repo's 12-digit migration names with production's 14-digit history and would re-run `202609050001`. Apply by SQL, or switch new migrations to 14-digit names.
+
 ## P0 — cloud transaction recovery
 
 - [ ] Give each logical cloud push a persistent operation/idempotency ID.
@@ -40,6 +50,7 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] CI green on Linux/macOS/Windows and supported Node matrix.
 - [x] Install the exact packed artifact in a clean temporary home and complete setup → remember → fresh session → recall → backup → restore.
 - [x] Verify the npm registry version and trusted-publisher workflow after release.
+- [ ] The MCP registry still lists `io.github.camgitt/memoir` at **3.2.2** (published 2026-03-28; found 2026-10-19). `publish.yml` runs `npm publish` but not `mcp-publisher`, so `server.json` bumps never reach the registry. Add an `mcp-publisher` step (GitHub OIDC) and check the registry version after each release.
 
 ## P1 — onboarding / landing
 
