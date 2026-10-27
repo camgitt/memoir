@@ -27,7 +27,10 @@ const {
   selectPurgeableShares,
   purgeExpiredShares,
   secretsEqual,
+  dueShareOrFilter,
   SHARE_BUCKET,
+  PURGE_PAGE_SIZE,
+  REMOVE_BATCH_SIZE,
 } = await import('./supabase/functions/purge-expired-shares/logic.js');
 const { normalizeShareExpiresHours, MAX_SHARE_EXPIRES_HOURS } = await import('./src/commands/share.js');
 
@@ -74,6 +77,8 @@ console.log(`\n${BOLD}${CYAN}expired/exhausted share purge (Storage API)${RESET}
 
 assert(SHARE_BUCKET === 'memoir-backups', 'purge targets the memoir-backups bucket');
 assert(canonicalSharePath(owner, token) === `${owner}/shares/${token}.gz`, 'canonical path is created_by/shares/token.gz');
+assert(canonicalSharePath(owner, '../etc/passwd') === null, 'canonical path rejects a non-UUID token');
+assert(canonicalSharePath('not-a-uuid', token) === null, 'canonical path rejects a non-UUID created_by');
 assert(isTrustedSharePath(link()), 'row whose backup_id matches created_by/token is trusted');
 assert(!isTrustedSharePath(link({ backup_id: `${victim}/shares/${victimToken}.gz` })),
   'row pointing at another user path is not trusted');
@@ -169,6 +174,65 @@ assert(normalizeShareExpiresHours('99999') === MAX_SHARE_EXPIRES_HOURS, '--expir
   assert(/storage\.from\(SHARE_BUCKET\)\.remove/.test(fn), 'edge function removes objects via the Storage API');
   assert(/x-memoir-purge-secret/.test(fn), 'edge function requires the shared-secret header');
   assert(/MEMOIR_PURGE_SECRET/.test(fn), 'edge function reads MEMOIR_PURGE_SECRET');
+  assert(/dueShareOrFilter/.test(fn), 'edge function filters expired/exhausted rows in the query');
+  assert(/listSharePage/.test(fn) && /\.gt\("id"/.test(fn), 'edge function pages candidate rows by id');
+}
+
+assert(PURGE_PAGE_SIZE === 1000 && REMOVE_BATCH_SIZE === 1000, 'purge pages and remove batches are 1000');
+{
+  const filter = dueShareOrFilter(now);
+  assert(/expires_at\.lt\."2026-10-27T12:00:00.000Z"/.test(filter), 'query filter includes expires_at < now');
+  assert(/use_count\.gte\.1/.test(filter), 'query filter includes used (possibly exhausted) rows');
+}
+
+{
+  function tok(n) {
+    return `cccccccc-cccc-4ccc-8ccc-${String(n).padStart(12, '0')}`;
+  }
+  function rid(n) {
+    return `dddddddd-dddd-4ddd-8ddd-${String(n).padStart(12, '0')}`;
+  }
+  const many = Array.from({ length: 1001 }, (_, i) => link({
+    id: rid(i),
+    token: tok(i),
+    expires_at: '2026-10-01T00:00:00.000Z',
+  }));
+  const pageCalls = [];
+  const removedCalls = [];
+  const deletedIds = [];
+  const pageSize = 1000;
+  const result = await purgeExpiredShares({
+    now,
+    pageSize,
+    removeBatchSize: 1000,
+    listSharePage: async ({ afterId, limit }) => {
+      pageCalls.push({ afterId, limit });
+      const start = afterId ? many.findIndex((r) => r.id === afterId) + 1 : 0;
+      return { rows: many.slice(start, start + limit) };
+    },
+    removeObjects: async (paths) => {
+      removedCalls.push(paths.slice());
+      return { removed: paths };
+    },
+    deleteShareRows: async (ids) => {
+      deletedIds.push(...ids);
+      return {};
+    },
+  });
+  assert(pageCalls.length >= 2, 'paging: more than 1000 due rows are fetched in multiple pages');
+  assert(pageCalls[0].afterId == null && pageCalls[1].afterId === many[999].id,
+    'paging: second page keysets after the last id of the first page');
+  assert(removedCalls.length === 2 && removedCalls[0].length === 1000 && removedCalls[1].length === 1,
+    'batch remove: 1001 due paths are removed in batches of 1000');
+  assert(result.due === 1001 && result.deleted_links === 1001 && deletedIds.length === 1001,
+    'paging: every due row is removed after Storage confirms');
+}
+
+{
+  const sql = await fs.readFile(path.join(root, 'supabase', 'migrations', '20261027200000_shared_links_expires_at_not_null.sql'), 'utf8');
+  assert(/expires_at is null/i.test(sql), 'expires_at migration backfills nulls');
+  assert(/created_at.*30 days|interval '30 days'/i.test(sql), 'expires_at nulls backfill to created_at + 30 days');
+  assert(/set not null/i.test(sql), 'expires_at migration sets NOT NULL');
 }
 
 {

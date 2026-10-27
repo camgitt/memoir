@@ -10,7 +10,7 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] CLI claims Auth-user deletion only after the hosted `account-delete` function reports `deleted: true`.
 - [x] Add regression tests for subscription 401/403/429/500/timeouts and verify zero retention deletions.
 - [x] Add regression tests that fail each account-data deletion stage and verify no false success message.
-- [x] Hosted `account-delete` edge function (JWT subject only; service role stays on the server). Refuses `status=pro` and wipes `${uid}/` in Storage before `deleteUser`. **Production:** deploy `supabase/functions/account-delete` with JWT verification on; end-to-end: test account → backups and shares gone → auth user gone → `memoir login` fails.
+- [x] Hosted `account-delete` edge function (JWT subject only; service role stays on the server). Refuses `status=pro` and wipes `${uid}/` by recursively listing and batch-removing objects (not a prefixes DELETE) before `deleteUser`. **Production:** deploy with JWT verification on. Test account with an extra untracked object under `${uid}/` must list empty afterwards; backups and shares gone; auth user gone; `memoir login` fails; Pro gets 409.
 - [x] Expired/exhausted share purge uses the Storage API then deletes rows (`supabase/functions/purge-expired-shares`). **Production:** set `MEMOIR_PURGE_SECRET`, deploy with `verify_jwt=false`, schedule a daily POST with header `x-memoir-purge-secret`. Prove a test share is gone after expiry and after exhaustion. Do not `DELETE FROM storage.objects`.
 
 ### Found 2026-10-18 (review of 3.17.2–3.17.3, checked against production)

@@ -1,14 +1,22 @@
 // Scheduled cleanup for expired or exhausted share bundles.
 //
-// Lists shared_links, keeps only rows whose backup_id equals
-// created_by/shares/<token>.gz, removes those objects through the Storage API,
-// then deletes the rows. Never DELETE FROM storage.objects.
+// Pages filtered shared_links rows (expired or used), keeps only rows whose
+// backup_id equals created_by/shares/<token>.gz, removes those objects through
+// the Storage API in batches of 1000, then deletes the matching rows.
+// Never DELETE FROM storage.objects.
 //
-// MANUAL STEP: set MEMOIR_PURGE_SECRET, deploy with verify_jwt = false, and
-// schedule a daily POST that sends header x-memoir-purge-secret.
+// OWNER: set MEMOIR_PURGE_SECRET (and the same value in Vault), deploy with
+// verify_jwt = false, and schedule a daily pg_cron + pg_net POST that sends
+// header x-memoir-purge-secret from vault.decrypted_secrets. See the PR body.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { SHARE_BUCKET, purgeExpiredShares, secretsEqual } from "./logic.js";
+import {
+  SHARE_BUCKET,
+  PURGE_PAGE_SIZE,
+  dueShareOrFilter,
+  purgeExpiredShares,
+  secretsEqual,
+} from "./logic.js";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -32,12 +40,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     const result = await purgeExpiredShares({
-      listShares: async () => {
-        const { data, error } = await supabase
+      listSharePage: async ({ afterId, limit, now }) => {
+        let q = supabase
           .from("shared_links")
-          .select("id, token, backup_id, created_by, expires_at, use_count, max_uses");
-        if (error) throw error;
-        return data || [];
+          .select("id, token, backup_id, created_by, expires_at, use_count, max_uses")
+          .or(dueShareOrFilter(now))
+          .order("id", { ascending: true })
+          .limit(limit ?? PURGE_PAGE_SIZE);
+        if (afterId) q = q.gt("id", afterId);
+        const { data, error } = await q;
+        if (error) return { rows: [], error };
+        return { rows: data || [] };
       },
       removeObjects: async (paths) => {
         const { error } = await supabase.storage.from(SHARE_BUCKET).remove(paths);

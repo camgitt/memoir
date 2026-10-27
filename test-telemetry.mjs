@@ -269,6 +269,10 @@ await resetFlags();
   assert(!/Local only/.test(upgradeSrc), 'upgrade screen does not describe Free as local-only');
   assert(!/Priority support/.test(upgradeSrc), 'upgrade screen does not claim Pro priority support');
   assert(!/Auto snapshots/.test(upgradeSrc), 'upgrade screen does not claim Pro auto snapshots');
+  assert(!/Any machine/.test(upgradeSrc), 'upgrade screen does not repeat Any machine on Free and Pro');
+  assert(/MAX_BACKUPS_FREE/.test(upgradeSrc) && /MAX_BACKUPS_PRO/.test(upgradeSrc) && /retained backups/.test(upgradeSrc),
+    'upgrade screen states retained backups from MAX_BACKUPS_FREE / MAX_BACKUPS_PRO');
+  assert(/Sync across machines/.test(upgradeSrc), 'upgrade screen states Pro sync across machines');
 }
 
 {
