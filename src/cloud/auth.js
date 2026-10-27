@@ -288,16 +288,19 @@ export async function deleteAccount(session) {
     },
     body: '{}',
   });
+  const identityText = await identityRes.text().catch(() => '');
+  let identityBody = {};
+  try { identityBody = identityText ? JSON.parse(identityText) : {}; } catch { identityBody = {}; }
   if (!identityRes.ok) {
-    let detail = '';
-    try { detail = (await identityRes.text()).trim(); } catch {}
+    if (identityRes.status === 409 && identityBody.error === 'subscription_active') {
+      throw new Error(identityBody.message || `Your Pro subscription is still active. Email ${SUPPORT_EMAIL} to cancel it, then run this again. Nothing else was reported as deleted; retry account deletion.`);
+    }
+    const detail = identityBody.message || identityText.trim();
     throw new Error(
       `Auth identity deletion failed (${identityRes.status})${detail ? ': ' + detail : ''}. ` +
       'Cloud data for this account was already removed; retry account deletion to finish removing the login.'
     );
   }
-  let identityBody = {};
-  try { identityBody = await identityRes.json(); } catch { identityBody = {}; }
   if (identityBody?.deleted !== true) {
     throw new Error(
       'Auth identity deletion failed: unexpected response. ' +

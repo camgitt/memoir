@@ -36,7 +36,7 @@ const memoirDir = process.platform === 'win32'
   ? path.join(scratch, 'AppData', 'Roaming', 'memoir')
   : path.join(scratch, '.config', 'memoir');
 
-const { isEnabled, capture, telemetryCommand } = await import('./src/telemetry.js');
+const { isEnabled, capture, telemetryCommand, POSTHOG_PROJECT_KEY } = await import('./src/telemetry.js');
 
 function envFor(extra = {}) {
   const env = {
@@ -93,6 +93,9 @@ globalThis.fetch = async (url, opts) => {
 };
 
 console.log(`\n${BOLD}${CYAN}telemetry — default off / on / off / status / env${RESET}\n`);
+
+assert(typeof POSTHOG_PROJECT_KEY === 'string' && POSTHOG_PROJECT_KEY.startsWith('phc_'),
+  'PostHog project key is a single exported constant (owner rotation is one line)');
 
 await resetFlags();
 assert(isEnabled() === false, 'default: isEnabled() is false (no opt-in file)');
@@ -175,10 +178,23 @@ assert(fetches.length === 0, 'after opt-out, capture() makes no network calls');
 await resetFlags();
 await fs.ensureDir(memoirDir);
 await fs.writeFile(path.join(memoirDir, 'telemetry-id'), 'already-had-an-id');
+await fs.writeFile(path.join(memoirDir, 'telemetry-disclosed'), 'old-consent');
 assert(isEnabled() === false, 'existing install with only telemetry-id stays OFF');
 fetches.length = 0;
 await capture('mcp_server_start');
 assert(fetches.length === 0, 'existing install: no network on first run after the opt-in change');
+assert(!(await fs.pathExists(path.join(memoirDir, 'telemetry-id'))), 'existing install: leftover telemetry-id is deleted while off');
+assert(!(await fs.pathExists(path.join(memoirDir, 'telemetry-disclosed'))), 'existing install: leftover telemetry-disclosed is deleted while off');
+
+{
+  await resetFlags();
+  await fs.ensureDir(memoirDir);
+  await fs.writeFile(path.join(memoirDir, 'telemetry-id'), 'already-had-an-id');
+  await capturedLogs(() => telemetryCommand('on'));
+  const minted = await fs.readFile(path.join(memoirDir, 'telemetry-id'), 'utf8');
+  assert(minted.trim() && minted.trim() !== 'already-had-an-id', '`telemetry on` mints a fresh install id');
+  assert(!(await fs.pathExists(path.join(memoirDir, 'telemetry-disclosed'))), '`telemetry on` clears the old disclosure marker');
+}
 
 // Env opt-in without a file.
 await resetFlags();
@@ -250,6 +266,9 @@ await resetFlags();
   assert(encHits.length >= 3, 'upgrade screen lists E2E encryption on Free, Pro, and Teams — not Pro-only');
   assert(!/chalk\.gray\('—'\)\s*,\s*chalk\.white\('E2E encryption'\)/.test(upgradeSrc),
     'upgrade screen does not show a dash in Free against encryption in Pro');
+  assert(!/Local only/.test(upgradeSrc), 'upgrade screen does not describe Free as local-only');
+  assert(!/Priority support/.test(upgradeSrc), 'upgrade screen does not claim Pro priority support');
+  assert(!/Auto snapshots/.test(upgradeSrc), 'upgrade screen does not claim Pro auto snapshots');
 }
 
 {

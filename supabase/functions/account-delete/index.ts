@@ -1,11 +1,11 @@
-// Delete the caller's Supabase Auth identity.
+// Delete the caller's Supabase Auth identity after refusing active Pro
+// billing and wiping `${uid}/` in Storage.
 //
-// The CLI removes user-owned backups/shares/subscriptions first, then POSTs
-// here with the user's JWT. This function uses the service role only to call
-// auth.admin.deleteUser on the JWT subject — never a body-supplied id, and
-// never from the CLI. Deploy with verify_jwt = true.
+// Uses the service role only for this JWT subject — never a body-supplied id.
+// Deploy with verify_jwt = true.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
+import { STORAGE_BUCKET, SUPPORT_EMAIL, isProSubscription, userStoragePrefix } from "./logic.js";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -39,9 +39,42 @@ Deno.serve(async (req: Request) => {
   const user = userData?.user;
   if (userErr || !user?.id) return json(401, { error: "unauthorized" });
 
+  const prefix = userStoragePrefix(user.id);
+  if (!prefix) return json(400, { error: "bad_user" });
+
   const admin = createClient(url, service, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const { data: subs, error: subErr } = await admin
+    .from("subscriptions")
+    .select("status")
+    .eq("user_id", user.id);
+  if (subErr) {
+    console.error("subscription lookup failed:", subErr.message);
+    return json(502, { error: "plan_lookup_failed" });
+  }
+  if (isProSubscription(subs)) {
+    return json(409, {
+      error: "subscription_active",
+      message: `Cancel your Pro subscription before deleting your account. Email ${SUPPORT_EMAIL}.`,
+    });
+  }
+
+  const wipe = await fetch(`${url}/storage/v1/object/${STORAGE_BUCKET}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${service}`,
+      apikey: service,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ prefixes: [prefix] }),
+  });
+  if (!wipe.ok && wipe.status !== 404) {
+    console.error("storage wipe failed:", wipe.status, await wipe.text().catch(() => ""));
+    return json(502, { error: "storage_wipe_failed" });
+  }
+
   const { error: delErr } = await admin.auth.admin.deleteUser(user.id);
   if (delErr && !alreadyGone(delErr)) {
     console.error("auth delete failed:", delErr.message);

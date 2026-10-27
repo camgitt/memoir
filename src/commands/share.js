@@ -13,6 +13,16 @@ import { encryptDirectory, createVerifyToken } from '../security/encryption.js';
 import { bundleDir } from '../cloud/storage.js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, STORAGE_BUCKET } from '../cloud/constants.js';
 
+// Privacy §8: shares are purged within 30 days of expiry or exhaustion.
+// Cap lifetime so a single --expires value cannot outrun that window by years.
+export const MAX_SHARE_EXPIRES_HOURS = 24 * 30;
+
+export function normalizeShareExpiresHours(raw) {
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n <= 0) return 24;
+  return Math.min(n, MAX_SHARE_EXPIRES_HOURS);
+}
+
 export async function shareCommand(options = {}) {
   // Must be logged in to share
   const session = await getSession();
@@ -107,7 +117,7 @@ export async function shareCommand(options = {}) {
     }
 
     // Parse options
-    const expiresHours = parseInt(options.expires) || 24;
+    const expiresHours = normalizeShareExpiresHours(options.expires);
     const maxUses = parseInt(options.uses) || 5;
     const expiresAt = new Date(Date.now() + expiresHours * 60 * 60 * 1000).toISOString();
 

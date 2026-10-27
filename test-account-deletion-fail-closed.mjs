@@ -149,6 +149,13 @@ function defaultHandler(failKind, failStatus = 500) {
     if (entry.kind === 'account-delete') {
       if (failKind === 'account-delete') return respond({ ok: false, status: failStatus, body: { error: 'delete_failed' } });
       if (failKind === 'account-delete-shape') return respond({ ok: true, status: 200, body: { ok: true } });
+      if (failKind === 'account-delete-pro') {
+        return respond({
+          ok: false,
+          status: 409,
+          body: { error: 'subscription_active', message: 'Cancel your Pro subscription before deleting your account.' },
+        });
+      }
       return respond({ ok: true, status: 200, body: { deleted: true, id: session.user.id } });
     }
     if (entry.kind === 'plan') {
@@ -436,6 +443,19 @@ console.log(`\n${BOLD}${CYAN}deleteAccount: success deletes Auth identity via ho
     assert(/unexpected response/i.test(String(err?.message || '')), 'identity response without deleted:true: names the shape failure');
     assert(await fs.pathExists(AUTH_FILE), 'identity response without deleted:true: local session is retained');
     assert(!calls.some(c => c.kind === 'auth-identity'), 'identity response without deleted:true: still no Auth admin call');
+  } finally { restore(); }
+}
+
+{
+  await seedAuthFile();
+  const { restore } = installDeleteStub(defaultHandler('account-delete-pro'));
+  try {
+    let err = null;
+    try { await deleteAccount(session); } catch (e) { err = e; }
+    assert(!!err, 'hosted function 409 subscription_active: throws');
+    assert(/Cancel your Pro subscription/i.test(String(err?.message || '')),
+      'hosted function 409: tells the user to cancel Pro first');
+    assert(await fs.pathExists(AUTH_FILE), 'hosted function 409: local session is retained');
   } finally { restore(); }
 }
 

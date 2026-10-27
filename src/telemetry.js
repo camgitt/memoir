@@ -18,10 +18,12 @@ const VERSION = (() => {
   try { return require('../package.json').version; } catch { return 'unknown'; }
 })();
 
-// PostHog PROJECT API key (phc_…). This is a PUBLIC client key — safe to ship in
-// the package, same model as posthog-js in a web app. Set MEMOIR_POSTHOG_KEY or
-// paste the project key here. Empty → telemetry is a silent no-op.
-const POSTHOG_KEY = process.env.MEMOIR_POSTHOG_KEY || 'phc_vS7ZKfmZAcGnaCE7Zt4hvwFioJBs6jr8gutyapDpqFXW';
+// PostHog PROJECT API key (phc_…). PUBLIC client key — same model as posthog-js.
+// Owner: rotating the project is a one-line change of POSTHOG_PROJECT_KEY (and
+// retiring the old PostHog project). MEMOIR_POSTHOG_KEY overrides at runtime.
+// Empty → telemetry is a silent no-op.
+export const POSTHOG_PROJECT_KEY = 'phc_vS7ZKfmZAcGnaCE7Zt4hvwFioJBs6jr8gutyapDpqFXW';
+const POSTHOG_KEY = process.env.MEMOIR_POSTHOG_KEY || POSTHOG_PROJECT_KEY;
 const POSTHOG_HOST = process.env.MEMOIR_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 const CONFIG_DIR = process.platform === 'win32'
@@ -62,13 +64,22 @@ export function isEnabled() {
   return envForcesOn() || fileOptedIn();                            // default off
 }
 
+function discardStaleIdentity() {
+  try { fs.removeSync(ID_FILE); } catch {}
+  try { fs.removeSync(DISCLOSED_FILE); } catch {}
+}
+
+function mintInstallId() {
+  const id = randomUUID();
+  try { fs.ensureDirSync(CONFIG_DIR); fs.writeFileSync(ID_FILE, id); } catch {}
+  return id;
+}
+
 function getInstallId() {
   try {
     if (fs.existsSync(ID_FILE)) return fs.readFileSync(ID_FILE, 'utf8').trim();
   } catch {}
-  const id = randomUUID();
-  try { fs.ensureDirSync(CONFIG_DIR); fs.writeFileSync(ID_FILE, id); } catch {}
-  return id;
+  return mintInstallId();
 }
 
 function discloseOnce() {
@@ -87,7 +98,10 @@ function discloseOnce() {
 // touches stdout. Callers may await (CLI) or not (MCP) — both are safe.
 export async function capture(event, properties = {}) {
   try {
-    if (!isEnabled()) return;
+    if (!isEnabled()) {
+      discardStaleIdentity();
+      return;
+    }
     discloseOnce();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 1500);
@@ -118,6 +132,7 @@ export async function telemetryCommand(action = 'status') {
       await fs.writeFile(OPTOUT_FILE, '1');
       await fs.remove(OPTIN_FILE);
     } catch {}
+    discardStaleIdentity();
     console.log('  Telemetry disabled. memoir will not send any usage events.');
     return;
   }
@@ -127,6 +142,8 @@ export async function telemetryCommand(action = 'status') {
       await fs.writeFile(OPTIN_FILE, '1');
       await fs.remove(OPTOUT_FILE);
     } catch {}
+    discardStaleIdentity();
+    mintInstallId();
     const blocked = envForcesOff();
     if (blocked) {
       console.log(`  Telemetry opted in, but currently OFF — ${blocked}.`);
@@ -140,6 +157,7 @@ export async function telemetryCommand(action = 'status') {
     : envForcesOff()
     || (fileOptedOut() ? 'opted out (`memoir telemetry off`)' : null);
   if (reason) {
+    discardStaleIdentity();
     console.log(`  Telemetry: OFF — ${reason}.`);
     return;
   }
@@ -147,5 +165,6 @@ export async function telemetryCommand(action = 'status') {
     console.log('  Telemetry: ON — anonymous usage events (no PII). Disable with `memoir telemetry off`.');
     return;
   }
+  discardStaleIdentity();
   console.log('  Telemetry: OFF — off by default. Enable with `memoir telemetry on`.');
 }

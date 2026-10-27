@@ -67,12 +67,12 @@ export async function upgradeCommand() {
   const sep = chalk.gray('─'.repeat(col1 + col2 + 18));
 
   const rows = [
-    [chalk.gray('10 cloud backups'),   chalk.white('100 backups'),        chalk.white('100 backups')],
-    [chalk.gray('Local only'),        chalk.white('Unlimited machines'), chalk.white('Shared team context')],
-    [chalk.gray('Manual snapshots'),  chalk.white('Auto snapshots'),     chalk.white('Team dashboard')],
-    [chalk.gray('Community support'), chalk.white('Priority support'),   chalk.white('Audit log')],
-    [chalk.white('E2E encryption'),   chalk.white('E2E encryption'),     chalk.white('E2E encryption')],
-    [chalk.gray('—'),                 chalk.white('Version history'),    chalk.white('SSO & RBAC')],
+    [chalk.gray('10 cloud backups'),   chalk.white('100 cloud backups'),  chalk.white('100 cloud backups')],
+    [chalk.white('Any machine'),       chalk.white('Any machine'),        chalk.white('Shared team context')],
+    [chalk.gray('Community support'),  chalk.white('Community support'),  chalk.white('Team dashboard')],
+    [chalk.white('E2E encryption'),    chalk.white('E2E encryption'),     chalk.white('E2E encryption')],
+    [chalk.gray('—'),                  chalk.white('Version history'),    chalk.white('Audit log')],
+    [chalk.gray('—'),                  chalk.gray('—'),                   chalk.white('SSO & RBAC')],
   ];
 
   const tableRows = rows.map(([a, b, c]) =>
