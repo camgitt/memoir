@@ -66,6 +66,7 @@ const suites = [
   { name: 'cross-machine (unit)', cmd: 'node', args: ['test-cross-machine.mjs'] },
   { name: 'session (unit)', cmd: 'node', args: ['test-session.mjs'] },
   { name: 'update (unit)', cmd: 'node', args: ['test-update.mjs'] },
+  { name: 'telemetry (unit)', cmd: 'node', args: ['test-telemetry.mjs'] },
   { name: 'capture-quality (unit)', cmd: 'node', args: ['test-capture-quality.mjs'] },
   { name: 'auto-activate (unit)', cmd: 'node', args: ['test-auto-activate.mjs'] },
   { name: 'hook-brief (unit)', cmd: 'node', args: ['test-hook-brief.mjs'] },

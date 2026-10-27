@@ -81,7 +81,8 @@ const server = new McpServer({
 // Wrap server.tool ONCE so every registered handler emits an anonymous, no-PII
 // "mcp_tool_used" event on call — the only place that proves memory was actually
 // used (the North Star's activation event). Fire-and-forget; can't block or
-// break a tool response. No-op unless a telemetry key is configured.
+// break a tool response. No-op unless the user has opted in and a telemetry
+// key is configured.
 track('mcp_server_start');
 const _registerTool = server.tool.bind(server);
 server.tool = (name, ...rest) => {

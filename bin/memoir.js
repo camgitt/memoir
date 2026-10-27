@@ -766,7 +766,7 @@ program
 
 program
   .command('telemetry [action]')
-  .description('Anonymous usage telemetry: `on`, `off`, or `status` (default)')
+  .description('Anonymous usage telemetry (off by default): `on`, `off`, or `status`')
   .action(async (action) => {
     try {
       await telemetryCommand(action || 'status');
@@ -778,8 +778,8 @@ program
 
 program.hook('postAction', async (thisCommand, actionCommand) => {
   await checkForUpdate();
-  // Anonymous, opt-out usage event. postAction already awaits a network call
-  // (checkForUpdate), so this adds no perceived latency; no-op without a key.
+  // Anonymous, opt-in usage event. postAction already awaits a network call
+  // (checkForUpdate), so this adds no perceived latency; no-op unless opted in.
   try { await track('cli_command', { command: actionCommand?.name?.() || 'unknown' }); } catch {}
   // Local twin (events.jsonl): command name only, so `memoir recall`/`why`
   // reads are visible next to the writes and syncs already logged there.

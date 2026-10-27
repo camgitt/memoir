@@ -57,7 +57,7 @@ export async function upgradeCommand() {
 
   const freeLabel = currentPlan === 'free' ? 'Free (current)' : 'Free';
   const proLabel = currentPlan === 'pro' ? 'Pro (current)' : 'Pro $15/mo';
-  const teamsLabel = 'Teams $29/seat';
+  const teamsLabel = 'Teams (coming soon)';
 
   const header =
     pad(chalk.bold.white(freeLabel), col1) +

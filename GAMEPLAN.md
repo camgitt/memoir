@@ -18,7 +18,7 @@ Distinct anonymous install IDs that fired a **real memory event** in the trailin
 ### Phase 1 — Measure before driving traffic
 *(every later move needs a denominator)*
 - Lock North Star + definitions (this section).
-- Instrument the CLI via the `postAction` hook (bin/memoir.js:695) — **NOT** npm postinstall (CI blocks it + poisons the zero-knowledge brand). Anonymous install UUID, opt-out (`DO_NOT_TRACK`/`CI`/`memoir telemetry off`), first-run disclosure.
+- Instrument the CLI via the `postAction` hook (bin/memoir.js:695) — **NOT** npm postinstall (CI blocks it + poisons the zero-knowledge brand). Anonymous install UUID, **opt-in** (`memoir telemetry on`; `DO_NOT_TRACK`/`CI`/`MEMOIR_TELEMETRY=0`/`memoir telemetry off` always force it off). Off by default for new and existing installs; no network on first run.
 - Emit the **activation event from inside the MCP tool handlers** (src/mcp.js) — the only place that proves memory was *used*.
 - Wire PostHog into memoir.sh; `install_cmd_copied` = the site conversion event.
 - Verify Google Search Console + Bing Webmaster Tools; fire IndexNow on deploy (the missing "did Google see it" loop).
@@ -156,7 +156,7 @@ Cannibalization backfire (dedupe-first guards it) · zero-authority domain (~11�
 |------|-------|--------|--------|
 | **Free** | $0/forever | 3 cloud backups, local unlimited, 1 machine | Solo devs trying it out |
 | **Pro** | $15/month | 50 cloud backups, unlimited machines, version history | Power users, multi-machine devs |
-| **Teams** | $29/seat/month | Shared team context, dashboard, audit log, 200 backups/team | Dev teams (5-20 people) |
+| **Teams** | coming soon | Shared team context, dashboard, audit log, 200 backups/team | Dev teams (5-20 people) |
 | **Enterprise** | $99/seat/month | SSO, SLA, API access, compliance docs, unlimited backups | Companies (20+) |
 
 ---
@@ -274,7 +274,7 @@ memoir analytics        # Show your usage stats (local)
 - [ ] `memoir upgrade` command
 - [x] Pricing page on memoir.sh
 - [x] Email capture for Teams waitlist on memoir.sh
-- [ ] PostHog analytics on CLI (anonymous, opt-out available)
+- [ ] PostHog analytics on CLI (anonymous, opt-in; off by default)
 - [ ] PostHog analytics on memoir.sh
 - [ ] Post in 3 subreddits about memoir
 - [x] E2E encryption (AES-256-GCM, async scrypt)
