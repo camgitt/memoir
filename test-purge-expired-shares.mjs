@@ -231,7 +231,8 @@ assert(PURGE_PAGE_SIZE === 1000 && REMOVE_BATCH_SIZE === 1000, 'purge pages and 
 {
   const sql = await fs.readFile(path.join(root, 'supabase', 'migrations', '20261027200000_shared_links_expires_at_not_null.sql'), 'utf8');
   assert(/expires_at is null/i.test(sql), 'expires_at migration backfills nulls');
-  assert(/created_at.*30 days|interval '30 days'/i.test(sql), 'expires_at nulls backfill to created_at + 30 days');
+  assert(/least\(coalesce\(created_at, now\(\)\) \+ interval '30 days', now\(\)\)/i.test(sql),
+    'expires_at nulls backfill to least(created_at + 30 days, now())');
   assert(/set not null/i.test(sql), 'expires_at migration sets NOT NULL');
 }
 
