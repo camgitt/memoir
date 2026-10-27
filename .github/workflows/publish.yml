@@ -1,4 +1,6 @@
-# Publish memoir-cli to npm from a version tag, with provenance.
+# Publish memoir-cli to npm from a version tag, with provenance, then
+# publish server.json to the official MCP Registry
+# (registry.modelcontextprotocol.io).
 #
 # Why: three releases in a row (3.10.1, 3.11.0, 3.12.0) stalled on an expired
 # local npm token + 2FA OTP, and the agentscores.xyz scan flags the package
@@ -10,8 +12,20 @@
 # publish.yml, environment blank. Until that exists this job fails at
 # `npm publish` with an auth error and nothing is published — safe.
 #
+# MCP Registry: after npm succeeds, this job installs the official
+# mcp-publisher CLI from modelcontextprotocol/registry (pinned release,
+# Sigstore-verified) and logs in with GitHub OIDC (`id-token: write`).
+# No registry secret. Official guide:
+# https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/github-actions.mdx
+#
 # Release = `npm version <patch|minor|major>` locally (RELEASE.md), then
 # `git push origin main --follow-tags`. The tag push runs this workflow.
+#
+# Catch-up (workflow_dispatch): a tag cannot be republished, so a version
+# already on npm (e.g. 3.17.5) is published to the MCP Registry by running
+# this workflow from that commit on main. Dispatch skips npm publish and
+# only runs mcp-publisher. Confirm afterwards:
+#   curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.camgitt/memoir"
 name: Publish
 
 on:
@@ -29,8 +43,12 @@ jobs:
     needs: validate
     permissions:
       contents: read
-      id-token: write   # Granted only to the publishing job after validation.
+      id-token: write   # npm trusted publishing AND mcp-publisher login github-oidc
     runs-on: ubuntu-latest
+    env:
+      # Pin deliberately (official docs: do not use the mutable releases/latest URL).
+      # v1.8.6 is the current mcp-publisher release; bump this when upgrading.
+      MCP_PUBLISHER_VERSION: v1.8.6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,8 +58,11 @@ jobs:
       # Trusted publishing needs npm >= 11.5; Node 22 ships an older npm.
       - run: npm install -g npm@latest
       - run: npm ci
-      # The tag must match package.json — never publish a version the tag lies about.
-      - run: |
+      # Tag pushes must match package.json — never publish a version the tag lies about.
+      # workflow_dispatch is MCP-Registry catch-up only and skips this check.
+      - name: Require a matching version tag
+        if: github.event_name == 'push'
+        run: |
           TAG="${GITHUB_REF_NAME#v}"
           PKG="$(node -p "require('./package.json').version")"
           if [ "${GITHUB_REF_TYPE}" != "tag" ] || [ "$TAG" != "$PKG" ]; then
@@ -50,6 +71,70 @@ jobs:
       - run: npm test
       # prepublishOnly re-runs the suite and checks `npm whoami`; whoami has
       # no meaning under OIDC, so the guard is told to skip that one check.
-      - run: npm publish --provenance --access public
+      - name: Publish to npm
+        if: github.event_name == 'push'
+        run: npm publish --provenance --access public
         env:
           MEMOIR_SKIP_NPM_AUTH_CHECK: '1'
+      # Official GitHub Actions recipe: pin mcp-publisher, verify its Sigstore
+      # bundle, then `mcp-publisher login github-oidc` + `mcp-publisher publish`.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          archive="mcp-publisher_${os}_${arch}.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+      # The registry fetches package.json from npm to check mcpName. npm can lag
+      # a minute after `npm publish` (3.17.5 did); wait rather than 404.
+      - name: Wait until npm has this version
+        run: |
+          set -euo pipefail
+          PKG="$(node -p "require('./package.json').version")"
+          for i in $(seq 1 12); do
+            if npm view "memoir-cli@${PKG}" version 2>/dev/null | grep -qx "$PKG"; then
+              echo "npm has memoir-cli@${PKG}"
+              exit 0
+            fi
+            echo "waiting for npm to show memoir-cli@${PKG} ($i/12)"
+            sleep 15
+          done
+          echo "memoir-cli@${PKG} not visible on npm yet"
+          exit 1
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish server to MCP Registry
+        run: ./mcp-publisher publish
+      - name: Confirm MCP Registry lists this version
+        run: |
+          set -euo pipefail
+          PKG="$(node -p "require('./package.json').version")"
+          NAME="$(node -p "require('./package.json').mcpName")"
+          for i in $(seq 1 8); do
+            body="$(curl --fail --silent --show-error --get \
+              --data-urlencode "search=${NAME}" \
+              "https://registry.modelcontextprotocol.io/v0.1/servers")"
+            if echo "$body" | grep -E "\"version\"[[:space:]]*:[[:space:]]*\"${PKG}\""; then
+              echo "MCP Registry lists ${NAME}@${PKG}"
+              exit 0
+            fi
+            echo "waiting for MCP Registry to show ${NAME}@${PKG} ($i/8)"
+            sleep 10
+          done
+          echo "MCP Registry search does not yet show ${NAME}@${PKG}"
+          echo "$body"
+          exit 1

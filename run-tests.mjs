@@ -78,6 +78,7 @@ const suites = [
   { name: 'share download (unit)', cmd: 'node', args: ['test-share-download.mjs'] },
   { name: 'secret-scan (unit)', cmd: 'node', args: ['test-secret-scan.mjs'] },
   { name: 'mcp-contract (unit)', cmd: 'node', args: ['test-mcp-contract.mjs'] },
+  { name: 'server.json registry contract (unit)', cmd: 'node', args: ['test-server-json.mjs'] },
   { name: 'session-lock (unit)', cmd: 'node', args: ['test-session-lock.mjs'] },
   { name: 'schema-migration (unit)', cmd: 'node', args: ['test-schema-migration.mjs'] },
   { name: 'decisions-hidden (unit)', cmd: 'node', args: ['test-decisions-hidden.mjs'] },

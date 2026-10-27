@@ -12,11 +12,16 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
 4. **Push with tags** — `git push origin main --follow-tags`. **This is the
    release.** The tag push runs `.github/workflows/publish.yml`, which
    first requires the full OS/Node CI matrix (including installed-package recovery), then publishes with provenance via npm trusted
-   publishing — no local token, no OTP. Watch it at
+   publishing — no local token, no OTP — and then publishes `server.json` to
+   the official MCP Registry (`mcp-publisher login github-oidc` +
+   `mcp-publisher publish`, also via OIDC). Watch it at
    https://github.com/camgitt/memoir/actions/workflows/publish.yml and
    verify with step 6. (One-time setup on npmjs.com is described at the
    top of the workflow file; until it exists the job fails harmlessly at
    `npm publish` and you fall back to step 5.)
+   A version already on npm (no new tag) can be listed on the MCP Registry
+   by running **Actions → Publish → Run workflow** on that commit
+   (`workflow_dispatch` skips npm and only runs `mcp-publisher`).
 5. **Manual publish (fallback only)** — `npm whoami` FIRST. It 401s more often than not between
    releases (the token silently expires — 3.10.1, 3.11.0, 3.12.0 all hit
    it), and a dead token makes `npm publish` run the whole suite and then
@@ -25,6 +30,8 @@ memoir-cli ships to npm. Follow this every time so git and npm never drift
    authenticator OTP). `prepublishOnly` now checks `whoami` before the suite
    and says so plainly (`scripts/check-clean-for-publish.mjs`).
 6. **Verify** — `npm view memoir-cli version` matches `git describe --tags`.
+   The MCP Registry listing should show the same version:
+   `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.camgitt/memoir"`
 
 The published tarball is an allowlist (`files` in package.json: `bin/`, `src/`,
 README, LICENSE, docs/, supabase/migrations/ and evals/). Tests at the

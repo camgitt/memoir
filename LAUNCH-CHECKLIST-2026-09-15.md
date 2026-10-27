@@ -50,7 +50,7 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] CI green on Linux/macOS/Windows and supported Node matrix.
 - [x] Install the exact packed artifact in a clean temporary home and complete setup → remember → fresh session → recall → backup → restore.
 - [x] Verify the npm registry version and trusted-publisher workflow after release.
-- [ ] The MCP registry still lists `io.github.camgitt/memoir` at **3.2.2** (published 2026-03-28; found 2026-10-19). `publish.yml` runs `npm publish` but not `mcp-publisher`, so `server.json` bumps never reach the registry. Add an `mcp-publisher` step (GitHub OIDC) and check the registry version after each release.
+- [ ] The MCP registry still lists `io.github.camgitt/memoir` at **3.2.2** (published 2026-03-28; found 2026-10-19). `publish.yml` now runs official `mcp-publisher` (GitHub OIDC) after npm on each version tag. **Catch-up for 3.17.5:** merge the workflow PR, then Actions → Publish → Run workflow on `main` (`workflow_dispatch` skips npm). Confirm `curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.camgitt/memoir"` shows 3.17.5.
 
 ## P1 — onboarding / landing
 
