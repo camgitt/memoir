@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // P0 data-safety regression: each account-data deletion stage must be checked.
-// A failed stage must not produce a success message, and the CLI must never
-// claim the Auth identity was deleted when the client cannot prove that.
+// A failed stage must not produce a success message. Auth identity deletion
+// goes through POST /functions/v1/account-delete (never Auth admin from the
+// CLI); the CLI claims the login was removed only after that function confirms.
 //
 // No real network: globalThis.fetch is stubbed. HOME is shimmed before any
 // ./src import so auth.js binds AUTH_FILE inside the scratch directory.
@@ -113,6 +114,7 @@ function classify(url, method) {
   if (method === 'DELETE' && u.includes('/rest/v1/backups?id=eq.')) return 'row';
   if (method === 'DELETE' && u.includes('/rest/v1/shared_links')) return 'shared';
   if (method === 'DELETE' && u.includes('/rest/v1/subscriptions')) return 'subscription';
+  if (method === 'POST' && u.includes('/functions/v1/account-delete')) return 'account-delete';
   if (u.includes('/auth/v1/admin') || (method === 'DELETE' && u.includes('/auth/v1/'))) return 'auth-identity';
   return 'other';
 }
@@ -142,7 +144,12 @@ function defaultHandler(failKind, failStatus = 500) {
   let rowDeletes = 0;
   return (entry, respond) => {
     if (entry.kind === 'auth-identity') {
-      return respond({ ok: true, status: 200, body: {} });
+      throw new Error('CLI must not call Auth admin APIs; use /functions/v1/account-delete');
+    }
+    if (entry.kind === 'account-delete') {
+      if (failKind === 'account-delete') return respond({ ok: false, status: failStatus, body: { error: 'delete_failed' } });
+      if (failKind === 'account-delete-shape') return respond({ ok: true, status: 200, body: { ok: true } });
+      return respond({ ok: true, status: 200, body: { deleted: true, id: session.user.id } });
     }
     if (entry.kind === 'plan') {
       // Production gives every user a subscriptions row; Stripe sets status.
@@ -246,8 +253,9 @@ const STAGES = [
   { failKind: 'row', failStatus: 403, name: 'backup metadata deletion (DELETE 403)', stopBefore: ['shared', 'subscription'] },
   { failKind: 'shared-list', failStatus: 503, name: 'shared-link enumeration (GET 503)', stopBefore: ['shared', 'subscription'] },
   { failKind: 'shared-object', failStatus: 500, name: 'shared bundle deletion (DELETE 500)', stopBefore: ['shared', 'subscription'] },
-  { failKind: 'shared', failStatus: 429, name: 'shared-link deletion (DELETE 429)', stopBefore: ['subscription'] },
-  { failKind: 'subscription', failStatus: 401, name: 'subscription deletion (DELETE 401)', stopBefore: [] },
+  { failKind: 'shared', failStatus: 429, name: 'shared-link deletion (DELETE 429)', stopBefore: ['subscription', 'account-delete'] },
+  { failKind: 'subscription', failStatus: 401, name: 'subscription deletion (DELETE 401)', stopBefore: ['account-delete'] },
+  { failKind: 'account-delete', failStatus: 502, name: 'auth identity deletion (POST 502)', stopBefore: [] },
 ];
 
 console.log(`\n${BOLD}${CYAN}deleteAccount: each failed stage stops and does not log out${RESET}\n`);
@@ -269,7 +277,10 @@ for (const stage of STAGES) {
     for (const kind of stage.stopBefore) {
       assert(!calls.some(c => c.kind === kind), `${stage.name}: does not continue to ${kind} deletion`);
     }
-    assert(!calls.some(c => c.kind === 'auth-identity'), `${stage.name}: does not attempt Auth-user deletion`);
+    assert(!calls.some(c => c.kind === 'auth-identity'), `${stage.name}: does not call Auth admin APIs`);
+    if (stage.failKind !== 'account-delete') {
+      assert(!calls.some(c => c.kind === 'account-delete'), `${stage.name}: does not delete the Auth identity after a failed data stage`);
+    }
     assert(String(err?.message || '').includes(String(stage.failStatus)), `${stage.name}: error names HTTP ${stage.failStatus}`);
   } finally { restore(); }
 }
@@ -350,7 +361,7 @@ for (const rlsCase of RLS_ZERO_ROW_CASES) {
 
 console.log(`\n${BOLD}${CYAN}deleteAccount: a paying or unreadable plan stops before any delete${RESET}\n`);
 
-const DESTRUCTIVE = ['object', 'row', 'shared', 'subscription', 'auth-identity'];
+const DESTRUCTIVE = ['object', 'row', 'shared', 'subscription', 'account-delete', 'auth-identity'];
 for (const planCase of [
   { failKind: 'plan-pro', name: 'active Pro subscription', message: /hello@memoir\.sh/ },
   { failKind: 'plan-fail', failStatus: 503, name: 'plan lookup failure (GET 503)', message: /503/ },
@@ -379,16 +390,22 @@ for (const planCase of [
   } finally { restore(); }
 }
 
-console.log(`\n${BOLD}${CYAN}deleteAccount: success does not claim Auth-user deletion${RESET}\n`);
+console.log(`\n${BOLD}${CYAN}deleteAccount: success deletes Auth identity via hosted function${RESET}\n`);
 
 {
   await seedAuthFile();
   const { calls, restore } = installDeleteStub(defaultHandler(null));
   try {
     const result = await deleteAccount(session);
-    assert(result && result.authUserDeleted === false, 'success result sets authUserDeleted: false');
-    assert(result && result.localDataDeleted === true, 'success result reports local/cloud data deletion only');
-    assert(!calls.some(c => c.kind === 'auth-identity'), 'success path never calls Auth admin/user deletion');
+    assert(result && result.authUserDeleted === true, 'success result sets authUserDeleted: true');
+    assert(result && result.localDataDeleted === true, 'success result reports cloud data deletion');
+    const identityCall = calls.find(c => c.kind === 'account-delete');
+    assert(!!identityCall, 'success path POSTs /functions/v1/account-delete');
+    assert(identityCall.url === `${SUPABASE_URL}/functions/v1/account-delete`, 'identity deletion uses the hosted account-delete function');
+    assert(String(identityCall.headers.Authorization || '').includes(session.access_token), 'identity deletion sends the user JWT, not a service-role key');
+    assert(!calls.some(c => c.kind === 'auth-identity'), 'success path never calls Auth admin APIs from the CLI');
+    assert(calls.findIndex(c => c.kind === 'account-delete') > calls.findIndex(c => c.kind === 'subscription'),
+      'identity deletion runs after data deletion');
     assert(!await fs.pathExists(AUTH_FILE), 'success path signs this device out locally');
 
     const sharedCall = calls.find(c => c.kind === 'shared');
@@ -409,21 +426,34 @@ console.log(`\n${BOLD}${CYAN}deleteAccount: success does not claim Auth-user del
   } finally { restore(); }
 }
 
-console.log(`\n${BOLD}${CYAN}deleteAccountCommand: no false success message${RESET}\n`);
+{
+  await seedAuthFile();
+  const { calls, restore } = installDeleteStub(defaultHandler('account-delete-shape'));
+  try {
+    let err = null;
+    try { await deleteAccount(session); } catch (e) { err = e; }
+    assert(!!err, 'identity response without deleted:true: throws');
+    assert(/unexpected response/i.test(String(err?.message || '')), 'identity response without deleted:true: names the shape failure');
+    assert(await fs.pathExists(AUTH_FILE), 'identity response without deleted:true: local session is retained');
+    assert(!calls.some(c => c.kind === 'auth-identity'), 'identity response without deleted:true: still no Auth admin call');
+  } finally { restore(); }
+}
+
+console.log(`\n${BOLD}${CYAN}deleteAccountCommand: success claims identity deletion only after the function confirms${RESET}\n`);
 
 {
   await seedAuthFile();
   const { restore } = installDeleteStub(defaultHandler(null));
   try {
     const output = await captureLogs(() => deleteAccountCommand({ confirm: true }));
-    assert(/authentication identity may still exist/i.test(stripAnsi(output)),
-      'success output warns that the Auth identity may still exist');
-    assert(!/hosted account-deletion service/i.test(stripAnsi(output)),
-      'success output does not claim a non-existent hosted account-deletion service');
-    assert(!claimsAuthIdentityDeleted(output),
-      'success output does not claim the Auth identity was deleted');
-    assert(!/✔\s*Account deleted\.?/i.test(stripAnsi(output)),
-      'success output does not use the old "Account deleted." headline');
+    const text = stripAnsi(output);
+    assert(/✔\s*Account deleted/i.test(text), 'success output reports the account was deleted');
+    assert(/login were removed/i.test(text.replace(/\s+/g, ' ')), 'success output says the login was removed');
+    assert(!/may still exist/i.test(text), 'success output does not warn that the Auth identity may still exist');
+    assert(!/hosted account-deletion service/i.test(text),
+      'success output does not claim a vaguely named hosted account-deletion service');
+    assert(claimsAuthIdentityDeleted(output),
+      'success output claims the account/login was deleted');
   } finally { restore(); }
 }
 
@@ -438,6 +468,13 @@ for (const stage of STAGES) {
     assert(!claimsAuthIdentityDeleted(output), `${stage.name}: CLI does not claim the Auth identity was deleted`);
     assert(await fs.pathExists(AUTH_FILE), `${stage.name}: CLI failure keeps the local session`);
   } finally { restore(); }
+}
+
+{
+  const fnSrc = await fs.readFile(new URL('./supabase/functions/account-delete/index.ts', import.meta.url), 'utf8');
+  assert(/auth\.admin\.deleteUser\(user\.id\)/.test(fnSrc), 'hosted function deletes only the JWT subject');
+  assert(!/body\?\.id|body\?\.user/.test(fnSrc), 'hosted function does not take a user id from the request body');
+  assert(/SUPABASE_SERVICE_ROLE_KEY/.test(fnSrc), 'hosted function holds the service role on the server');
 }
 
 await fs.remove(scratch);

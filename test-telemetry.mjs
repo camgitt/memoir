@@ -246,6 +246,23 @@ await resetFlags();
   const upgradeSrc = await fs.readFile(path.join(__dirname, 'src', 'commands', 'upgrade.js'), 'utf8');
   assert(!/\$29/.test(upgradeSrc), 'CLI upgrade output does not claim a Teams $29 price');
   assert(/Teams \(coming soon\)/.test(upgradeSrc), 'CLI upgrade labels Teams as coming soon');
+  const encHits = upgradeSrc.match(/E2E encryption/g) || [];
+  assert(encHits.length >= 3, 'upgrade screen lists E2E encryption on Free, Pro, and Teams — not Pro-only');
+  assert(!/chalk\.gray\('—'\)\s*,\s*chalk\.white\('E2E encryption'\)/.test(upgradeSrc),
+    'upgrade screen does not show a dash in Free against encryption in Pro');
+}
+
+{
+  const mcpSrc = await fs.readFile(path.join(__dirname, 'src', 'mcp.js'), 'utf8');
+  const pkg = await fs.readJson(path.join(__dirname, 'package.json'));
+  assert(/from '\.\/telemetry\.js'/.test(mcpSrc), 'MCP server uses src/telemetry.js (opt-in, default off)');
+  assert(pkg.bin['memoir-mcp'] === 'src/mcp.js', 'published memoir-mcp bin is src/mcp.js');
+  assert(Array.isArray(pkg.files) && pkg.files.includes('src/'), 'npm package ships src/ (shared telemetry module)');
+  const smithery = path.join(__dirname, '.smithery', 'shttp', 'module.js');
+  if (await fs.pathExists(smithery)) {
+    const bundled = await fs.readFile(smithery, 'utf8');
+    assert(!/posthog|phc_/i.test(bundled), 'smithery bundle does not embed PostHog telemetry');
+  }
 }
 
 globalThis.fetch = origFetch;

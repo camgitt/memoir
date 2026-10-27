@@ -7,10 +7,10 @@ This checklist separates what source code can prove from hosted/product gates th
 - [x] Subscription lookup failures fail closed; an unknown plan cannot be treated as Free for retention cleanup.
 - [x] Account-data deletion checks every destructive response and stops on failure.
 - [x] Account-data deletion uses the hosted Storage deletion request shape already validated for backup deletion.
-- [x] CLI no longer claims the authentication identity was deleted when the client cannot prove that.
+- [x] CLI claims Auth-user deletion only after the hosted `account-delete` function reports `deleted: true`.
 - [x] Add regression tests for subscription 401/403/429/500/timeouts and verify zero retention deletions.
 - [x] Add regression tests that fail each account-data deletion stage and verify no false success message.
-- [ ] Add a privileged hosted endpoint for complete Auth-user deletion, with reauthentication and an auditable retryable workflow.
+- [x] Hosted `account-delete` edge function (JWT subject only; service role stays on the server). **Production:** deploy `supabase/functions/account-delete` with JWT verification on.
 
 ### Found 2026-10-18 (review of 3.17.2–3.17.3, checked against production)
 

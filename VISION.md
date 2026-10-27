@@ -640,9 +640,9 @@ GitHub stores your code. memoir stores everything your AI knows about your code.
 
 | Tier | Price | Features |
 |------|-------|----------|
-| **Free** | $0 | 3 snapshots, 2 devices, local sync, git sync |
-| **Pro** | $8/mo | 50 snapshots, unlimited devices, cloud sync, E2E encryption, time travel |
-| **Team** | $12/user/mo | Everything in Pro + shared contexts, team onboarding, admin controls |
+| **Free** | $0 | 3 snapshots, 2 devices, local sync, git sync, E2E encryption |
+| **Pro** | $8/mo | 50 snapshots, unlimited devices, cloud sync, time travel |
+| **Team** | coming soon | Everything in Pro + shared contexts, team onboarding, admin controls |
 
 ### Fundable Signals
 

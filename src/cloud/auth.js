@@ -170,9 +170,10 @@ async function verifyNoneRemaining(endpoint, headers, label) {
   }
 }
 
-// Deletes the data the current user is authorized to delete. Auth-user removal
-// itself requires a privileged server-side endpoint and must never be attempted
-// with a service-role key from this CLI.
+// Deletes the data the current user is authorized to delete, then asks the
+// hosted `account-delete` function to remove the Auth login. That function
+// uses the service role on the server to delete only the JWT subject. This
+// CLI never sends a service-role key or a caller-chosen user id.
 export async function deleteAccount(session) {
   const headers = {
     'Authorization': `Bearer ${session.access_token}`,
@@ -279,8 +280,33 @@ export async function deleteAccount(session) {
     );
   }
 
+  const identityRes = await fetch(`${SUPABASE_URL}/functions/v1/account-delete`, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  });
+  if (!identityRes.ok) {
+    let detail = '';
+    try { detail = (await identityRes.text()).trim(); } catch {}
+    throw new Error(
+      `Auth identity deletion failed (${identityRes.status})${detail ? ': ' + detail : ''}. ` +
+      'Cloud data for this account was already removed; retry account deletion to finish removing the login.'
+    );
+  }
+  let identityBody = {};
+  try { identityBody = await identityRes.json(); } catch { identityBody = {}; }
+  if (identityBody?.deleted !== true) {
+    throw new Error(
+      'Auth identity deletion failed: unexpected response. ' +
+      'Cloud data for this account was already removed; retry account deletion to finish removing the login.'
+    );
+  }
+
   await logout();
-  return { localDataDeleted: true, authUserDeleted: false };
+  return { localDataDeleted: true, authUserDeleted: true };
 }
 
 export { AUTH_FILE, supaFetch };

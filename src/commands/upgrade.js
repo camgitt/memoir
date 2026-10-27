@@ -71,8 +71,8 @@ export async function upgradeCommand() {
     [chalk.gray('Local only'),        chalk.white('Unlimited machines'), chalk.white('Shared team context')],
     [chalk.gray('Manual snapshots'),  chalk.white('Auto snapshots'),     chalk.white('Team dashboard')],
     [chalk.gray('Community support'), chalk.white('Priority support'),   chalk.white('Audit log')],
-    [chalk.gray('—'),                 chalk.white('E2E encryption'),     chalk.white('SSO & RBAC')],
-    [chalk.gray('—'),                 chalk.white('Version history'),    chalk.white('Priority onboarding')],
+    [chalk.white('E2E encryption'),   chalk.white('E2E encryption'),     chalk.white('E2E encryption')],
+    [chalk.gray('—'),                 chalk.white('Version history'),    chalk.white('SSO & RBAC')],
   ];
 
   const tableRows = rows.map(([a, b, c]) =>

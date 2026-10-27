@@ -76,6 +76,7 @@ const suites = [
   { name: 'cloud (unit)', cmd: 'node', args: ['test-cloud.mjs'] },
   { name: 'subscription fail-closed (unit)', cmd: 'node', args: ['test-subscription-fail-closed.mjs'] },
   { name: 'account-deletion fail-closed (unit)', cmd: 'node', args: ['test-account-deletion-fail-closed.mjs'] },
+  { name: 'expired-share purge (unit)', cmd: 'node', args: ['test-purge-expired-shares.mjs'] },
   { name: 'share download (unit)', cmd: 'node', args: ['test-share-download.mjs'] },
   { name: 'secret-scan (unit)', cmd: 'node', args: ['test-secret-scan.mjs'] },
   { name: 'mcp-contract (unit)', cmd: 'node', args: ['test-mcp-contract.mjs'] },

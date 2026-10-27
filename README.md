@@ -113,7 +113,7 @@ Local pushes lock the complete read/merge/write operation. Git rejects conflicti
 
 ### Cloud
 
-New cloud writes require a user-held secret of at least 12 characters in `MEMOIR_CLOUD_PASSPHRASE` (or `MEMOIR_PASSPHRASE`). It is not derived from account identity or sent in metadata.
+New cloud writes require a user-held secret of at least 12 characters in `MEMOIR_CLOUD_PASSPHRASE` (or `MEMOIR_PASSPHRASE`). It is not derived from account identity or sent in metadata. Client-side encryption is available on every plan; it is not Pro-only.
 
 ```sh
 memoir cloud push

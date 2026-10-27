@@ -161,7 +161,7 @@ export async function deleteAccountCommand(options = {}) {
     const answer = await inquirer.prompt([{
       type: 'input',
       name: 'confirmation',
-      message: 'Type DELETE to remove your Memoir cloud data and sign out:',
+      message: 'Type DELETE to remove your Memoir account (cloud data and login):',
     }]);
 
     if (answer.confirmation !== 'DELETE') {
@@ -171,12 +171,14 @@ export async function deleteAccountCommand(options = {}) {
   }
 
   try {
-    await deleteAccount(session);
+    const result = await deleteAccount(session);
+    if (!result?.authUserDeleted) {
+      throw new Error('Account deletion did not confirm that the login was removed.');
+    }
     console.log('\n' + boxen(
       gradient.pastel('  memoir cloud  ') + '\n\n' +
-      chalk.green('✔ Memoir cloud data deleted and this device signed out.') + '\n' +
-      chalk.gray('Backups, shared links, and subscription data accessible to this account were removed.') + '\n\n' +
-      chalk.yellow('Your authentication identity may still exist in Supabase Auth (removing the login record requires server-side admin access).'),
+      chalk.green('✔ Account deleted. Cloud data and this login were removed, and this device was signed out.') + '\n' +
+      chalk.gray('Backups, shared links, subscription data, and the authentication identity for this account were removed.'),
       { padding: 1, borderStyle: 'round', borderColor: 'green', dimBorder: true }
     ) + '\n');
   } catch (error) {
