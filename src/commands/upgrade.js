@@ -56,7 +56,7 @@ export async function upgradeCommand() {
   };
 
   const freeLabel = currentPlan === 'free' ? 'Free (current)' : 'Free';
-  const proLabel = currentPlan === 'pro' ? 'Pro (current)' : 'Pro $15/mo';
+  const proLabel = currentPlan === 'pro' ? 'Pro (current)' : 'Pro';
   const teamsLabel = 'Teams (coming soon)';
 
   const header =
@@ -101,28 +101,13 @@ export async function upgradeCommand() {
     { padding: 1, borderStyle: 'round', borderColor: 'cyan', dimBorder: true }
   ));
 
-  // If free and logged in, open Stripe checkout
+  // Paid plans are paused: no checkout session is created and no checkout
+  // network call is made. createCheckoutSession/openUrl are kept so this is
+  // easy to reverse.
   if (session && currentPlan === 'free') {
-    const spinner = ora(chalk.cyan('  Creating checkout session...')).start();
-
-    try {
-      const url = await createCheckoutSession(session);
-      spinner.succeed(chalk.green('  Opening Stripe checkout...'));
-
-      openUrl(url);
-
-      console.log(
-        '\n' + chalk.gray('  Complete payment in your browser.') + '\n' +
-        chalk.gray('  Your plan updates automatically — run ') +
-        chalk.cyan('memoir upgrade') +
-        chalk.gray(' again to verify.') + '\n'
-      );
-    } catch (err) {
-      spinner.fail(chalk.red('  ' + err.message));
-      console.log(chalk.gray('\n  Fallback: visit ') + chalk.cyan('https://memoir.sh/#pricing') + '\n');
-    }
+    console.log('\n' + chalk.gray('  Paid plans are paused right now.') + '\n');
   } else if (!session) {
-    console.log('\n' + chalk.gray('  Run ') + chalk.cyan('memoir login') + chalk.gray(' to create an account, then ') + chalk.cyan('memoir upgrade') + chalk.gray(' to subscribe.') + '\n');
+    console.log('\n' + chalk.gray('  Run ') + chalk.cyan('memoir login') + chalk.gray(' to create a free account. Paid plans are paused right now.') + '\n');
   } else {
     console.log();
   }
